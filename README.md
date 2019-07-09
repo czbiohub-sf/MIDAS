@@ -1,3 +1,3 @@
-#Microbiome - Integrated Gut Genome Tools
+# Microbiome - Integrated Gut Genome Tools
 
 For up to date information, please see https://github.com/czbiohub/microbiome-igg/wiki
