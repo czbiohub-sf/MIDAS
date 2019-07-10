@@ -1,9 +1,9 @@
 from setuptools import setup
-from iggtools import __version__
+from iggtools import version
 
 
 setup(name='iggtools',
-      version=__version__,
+      version=version,
       summary='Integrated Gut Genome Tools',
       description='https://github.com/czbiohub/iggtools/wiki',
       url='http://github.com/czbiohub/iggtools',
