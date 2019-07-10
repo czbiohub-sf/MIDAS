@@ -3,7 +3,7 @@ import sys
 assert sys.version_info >= (3, 7), "Python version >= 3.7 is required."
 
 from argparse import ArgumentParser
-from __init__ import version
+from iggtools import version
 
 def main():
     wiki = "https://github.com/czbiohub/iggtools/wiki"
