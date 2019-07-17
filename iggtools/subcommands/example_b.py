@@ -13,14 +13,16 @@
 
 
 from iggtools.common import argparser
+from iggtools.common.utils import tsprint
 
 
 def main(args):
-    print("Doing important work in example subcommand B.")
-    print(args)
+    tsprint(f"Doing important work in subcommand example_b.")
+    tsprint(vars(args))
+    assert args.subcommand == "example_b"
 
 
-def register_argparser(singleton=[None]):  # pylint: disable-dangerous-default
+def register_argparser(singleton=[None]):  # pylint: disable=dangerous-default-value
     subparser = singleton[0]
     if not subparser:
         subparser = argparser.get().subparsers.add_parser('example_b', help='run subcommand example_b')

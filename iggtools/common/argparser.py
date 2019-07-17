@@ -10,7 +10,9 @@ def get(singleton=[None]):  # pylint: disable=dangerous-default-value
         summary = f"Integrated Gut Genome Tools, Version {version}"
         parser = ArgumentParser(prog="iggtools", description=summary, epilog=f"For more information, see {wiki}")
         parser.add_argument('-v', '--version', action='version', version=summary)
-        parser.subparsers = parser.add_subparsers(help="run specified subcommand", dest='subcommand', required=True)
+        parser.subparsers = parser.add_subparsers(
+            help="specify subcommand",
+            dest='subcommand', required=True)
         singleton[0] = parser
     return parser
 
