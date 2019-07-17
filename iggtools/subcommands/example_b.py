@@ -5,7 +5,7 @@
 #     from iggtools.subcommands import example_b
 #
 # Doing so will immediately expose "example_b" as a subcommand with optional argument "-2".
-# You can confirm this by running "pythong3 -m iggtools -h".
+# You can confirm this by running "python3 -m iggtools -h".
 # Running "python3 -m iggtools example_b" will execute the main() function below.
 # Adding "-2" to that will set args.test_value to 2.
 #

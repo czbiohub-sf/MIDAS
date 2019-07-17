@@ -5,7 +5,7 @@
 #     from iggtools.subcommands import example_a
 #
 # Doing so will immediately expose "example_a" as a subcommand with optional argument "-1".
-# You can confirm this by running "pythong3 -m iggtools -h".
+# You can confirm this by running "python3 -m iggtools -h".
 # Running "python3 -m iggtools example_a" will execute the main() function below.
 # Adding "-1" to that will set args.test_value to 1.
 #
