@@ -41,6 +41,9 @@ RUN git clone https://github.com/tseemann/prokka.git && /usr/local/prokka/bin/pr
 RUN ln -sf /usr/local/prokka/bin/prokka /usr/local/bin/prokka
 RUN prokka --version
 
+# AWS instance setup
+RUN apt-get install -y mdadm xfsprogs htop
+
 # Cleanup
 RUN rm -rf /tmp/*
 
