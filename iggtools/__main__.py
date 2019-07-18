@@ -9,19 +9,19 @@
 # with their own set of command line arguments and subcommand help text.
 #
 # The help text and broad description for the overall iggtools application is found in
-# iggtools.common.argparser.
+# iggtools.common.argparser, and also there are defined any and all arguments that
+# are shared across all subcommands.
 #
-from iggtools.subcommands import aws_batch_init, prokka  # pylint: disable=unused-import
-
-
+from iggtools.subcommands import aws_batch_init, init, prokka  # pylint: disable=unused-import
 from iggtools.common import argparser
 
 
 def main():
-    # The one and only subcommand specified by the user will be invoked with its parsed args.
-    args = argparser.parse_args()
+    parser = argparser.get()
+    args = parser.parse_args()
+    # Invoke subcommand specified in args.
     subcommand_main = args.subcommand_main
-    del args.subcommand_main  # Remove function pointer from args in case someone tries to print args.
+    del args.subcommand_main  # Remove unserializable function pointer from args.
     return subcommand_main(args)
 
 

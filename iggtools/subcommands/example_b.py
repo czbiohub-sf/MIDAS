@@ -28,6 +28,7 @@ def register_argparser(singleton=[None]):  # pylint: disable=dangerous-default-v
         subparser = argparser.get().subparsers.add_parser('example_b', help='run subcommand example_b')
         subparser.add_argument('-2', '--two', action='store_const', const=2, dest='test_value', help="test_value := 2")
         subparser.set_defaults(subcommand_main=main)
+        argparser.add_shared_subcommand_args(subparser)
         singleton[0] = subparser
 
 
