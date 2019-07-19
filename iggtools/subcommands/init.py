@@ -23,7 +23,6 @@ def init(args):
             new_id, old_id = row
             id_remap[old_id] = new_id
 
-
     seen_genomes, seen_species = set(), set()
     with OutputStream(outputs.genomes) as out:
 
@@ -52,7 +51,8 @@ def main(args):
 def register_argparser(singleton=[None]):  # pylint: disable=dangerous-default-value
     subparser = singleton[0]
     if not subparser:
-        subparser = argparser.get().subparsers.add_parser('init', help=f"initialize target {outputs.genomes}")
+        summary = f"initialize target {outputs.genomes}"
+        subparser = argparser.get().subparsers.add_parser('init', description=summary, help=summary)
         subparser.set_defaults(subcommand_main=main)
         argparser.add_shared_subcommand_args(subparser)
         singleton[0] = subparser

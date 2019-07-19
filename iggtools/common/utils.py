@@ -65,10 +65,9 @@ class InputStream:
 
     To run through some custom filters,
 
-        with InputStream("/path/to/file.lz4", """awk '{print $2}' | sed 's=foo=bar'""") as stream:
+        with InputStream("/path/to/file.lz4", """awk '{print $2}' | sed 's=foo=bar='""") as stream:
             for filtered_line in stream:
                 print(filtered_line)
-
 
     If your filters include commands like "head" or "tail" that can fail to consume all input,
     make sure to call stream.ignore_errors() before you exit the context.
@@ -77,11 +76,13 @@ class InputStream:
     a local file.  TODO:  In some cases local caching may be desired.
 
     Formats lz4, bz2, gz and plain text are supported.
+
+    Wildcards in path are also supported, but must expand to precisely 1 matching file.
     '''
 
     def __init__(self, path, filters=None, check_path=True):
         if check_path:
-            smart_glob(path, expected=1)
+            path = smart_glob(path, expected=1)[0]
         cat = 'set -o pipefail; '
         if path.startswith("s3://"):
             cat += f"aws s3 --quiet cp {path} -"
