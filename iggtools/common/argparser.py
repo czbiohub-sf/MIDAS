@@ -16,6 +16,7 @@ def get(singleton=[None]):  # pylint: disable=dangerous-default-value
         singleton[0] = parser
     return parser
 
-
-def parse_args():
-    return get().parse_args()
+def add_shared_subcommand_args(parser):
+    # Add here any arguments shared by all subcommands.
+    parser.add_argument('-f', '--force', action='store_const', const=True, dest='force', help="force rebuild of pre-existing outputs")
+    parser.set_defaults(force=False)

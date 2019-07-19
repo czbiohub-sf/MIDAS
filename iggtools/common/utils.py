@@ -4,6 +4,7 @@ import sys
 import time
 import subprocess
 import multiprocessing
+from fnmatch import fnmatch
 
 
 # Thread-safe and timestamped prints.
@@ -39,7 +40,146 @@ def tsprint(msg):
     tserr(tsfmt(msg))
 
 
-def command(cmd, quiet=False, **kwargs):
+class InputStream:
+    '''
+    Basic usage:
+
+        with InputStream("/path/to/file.lz4") as stream:
+            for line in stream:
+                print(line)
+
+    This may look prettier through decoded():
+
+        with InputStream("/path/to/file.lz4") as stream:
+            for line in decoded(stream):
+                print(line)
+
+    To inspect just the first line,
+
+        with InputStream("/path/to/file.lz4") as stream:
+            print(stream.readline()
+            stream.ignore_errors()
+
+    Failing to read through the entire stream would normally raise an exception,
+    unless you call stream.ignore_errors(), as in the above example.
+
+    To run through some custom filters,
+
+        with InputStream("/path/to/file.lz4", """awk '{print $2}' | sed 's=foo=bar='""") as stream:
+            for filtered_line in stream:
+                print(filtered_line)
+
+    If your filters include commands like "head" or "tail" that can fail to consume all input,
+    make sure to call stream.ignore_errors() before you exit the context.
+
+    If the path is in S3, data is streamed from S3 directly, without downloading to
+    a local file.  TODO:  In some cases local caching may be desired.
+
+    Formats lz4, bz2, gz and plain text are supported.
+
+    Wildcards in path are also supported, but must expand to precisely 1 matching file.
+    '''
+
+    def __init__(self, path, filters=None, check_path=True):
+        if check_path:
+            path = smart_glob(path, expected=1)[0]
+        cat = 'set -o pipefail; '
+        if path.startswith("s3://"):
+            cat += f"aws s3 --quiet cp {path} -"
+        else:
+            cat += f"cat {path}"
+        if path.endswith(".lz4"):
+            cat += " | lz4 -dc"
+        elif path.endswith(".bz2"):
+            cat += " | lbzip2 -dc"
+        elif path.endswith(".gz"):
+            cat += " | gzip -dc"
+        if filters:
+            cat += f" | {filters}"
+        self.cat = cat
+        self.path = path
+        self.subproc = 0
+        self.ignore_called_process_errors = False
+
+    def ignore_errors(self):
+        """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function."""
+        self.ignore_called_process_errors = True
+
+    def __enter__(self):
+        self.subproc = command(self.cat, popen=True, stdout=subprocess.PIPE)
+        self.subproc.__enter__()
+        self.subproc.stdout.ignore_errors = self.ignore_errors
+        return self.subproc.stdout  # Note the subject of the WITH statement is the subprocess STDOUT
+
+    def __exit__(self, etype, evalue, etraceback):
+        result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
+        if not self.ignore_called_process_errors:
+            returncode = self.subproc.returncode
+            if returncode != 0:
+                msg = f"Non-zero exit code {returncode} from reader of {self.path}."
+                if evalue:
+                    # Only a warning as we don't want to silence the other exception.
+                    tsprint(f"WARNING: {msg}")
+                else:
+                    # Surface this as an error.
+                    assert returncode == 0, msg
+        return result
+
+
+class OutputStream:
+    '''
+    Same idea as InputStream, but for output.  Handles compression etc transparently.
+    '''
+
+    def __init__(self, path, filters=None):
+        if path.startswith("s3://"):
+            cat = f"aws s3 --quiet cp - {path}"
+        else:
+            cat = f"cat > {path}"
+        if path.endswith(".lz4"):
+            cat = "lz4 -c | " + cat
+        elif path.endswith(".bz2"):
+            cat = "lbzip2 -c | " + cat
+        elif path.endswith(".gz"):
+            cat = "gzip -c | " + cat
+        if filters:
+            cat = f"{filters} | " + cat
+        self.cat = 'set -o pipefail; ' + cat
+        self.path = path
+        self.subproc = 0
+        self.ignore_called_process_errors = False
+
+    def ignore_errors(self):
+        """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function."""
+        self.ignore_called_process_errors = True
+
+    def __enter__(self):
+        self.subproc = command(self.cat, popen=True, stdin=subprocess.PIPE)
+        self.subproc.__enter__()
+        self.subproc.stdin.ignore_errors = self.ignore_errors
+        return self.subproc.stdin  # Note the subject of the WITH statement is the subprocess STDIN
+
+    def __exit__(self, etype, evalue, etraceback):
+        result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
+        if not self.ignore_called_process_errors:
+            returncode = self.subproc.returncode
+            if returncode != 0:
+                msg = f"Non-zero exit code {returncode} from reader of {self.path}."
+                if evalue:
+                    # Only a warning as we don't want to silence the other exception.
+                    tsprint(f"WARNING: {msg}")
+                else:
+                    # Surface this as an error.
+                    assert returncode == 0, msg
+        return result
+
+
+def decoded(stream):
+    for line in stream:
+        yield line.decode('utf-8').rstrip('\n')
+
+
+def command(cmd, quiet=False, popen=False, **kwargs):
     """Echo and execute specified cmd.  If string, execute through BASH.  In that case, cmd could be a pipeline.  Raise an exception if exit code non-zero.  Set check=False if you don't want that exception.  Set quiet=True if you don't want to echo the command.  The result is https://docs.python.org/3/library/subprocess.html#subprocess.CompletedProcess."""
     # This requires version >= 3.6
     assert "shell" not in kwargs, "Please do not override shell.  It is automatically True if command is a string, False if list."
@@ -47,14 +187,16 @@ def command(cmd, quiet=False, **kwargs):
     if not quiet:
         command_str = cmd if shell else " ".join(cmd)
         tsprint(repr(command_str))
-    subproc_args = {
-        "check": True
-    }
+    subproc_args = {}
+    if not popen:
+        subproc_args["check"] = True
     if shell:
         # By default docker tries a different shell with restricted functionality,
         # and weird handling of pipe errors.  Let's specify BASH here to be safe.
         subproc_args["executable"] = "/bin/bash"
     subproc_args.update(**kwargs)
+    if popen:
+        return subprocess.Popen(cmd, shell=shell, **subproc_args)
     return subprocess.run(cmd, shell=shell, **subproc_args)
 
 
@@ -66,6 +208,66 @@ def command_output(cmd, quiet=False, **kwargs):
 def backtick(cmd, **kwargs):
     """Execute specified cmd without echoing it.  Capture and return its stdout, stripping any whitespace."""
     return command_output(cmd, quiet=True, **kwargs).strip()
+
+
+def smart_glob(pattern, expected=range(0, sys.maxsize), memory=None):
+    """Return list of files that match specified pattern.  Raise exception if item count unexpected.  Memoize if memory dict provided."""
+    pdir, file_pattern = pattern.rsplit("/", 1)
+    def match_pattern(filename):
+        return fnmatch(filename, file_pattern)
+    matching_files = list(filter(match_pattern, smart_ls(pdir, memory=memory)))
+    actual = len(matching_files)
+    expected_str = str(expected)
+    if isinstance(expected, int):
+        expected = [expected]
+    assert actual in expected, f"Expected {expected_str} file(s) for {pattern}, found {actual}"
+    return [f"{pdir}/{mf}" for mf in sorted(matching_files)]
+
+
+find_files = smart_glob
+
+
+def smart_ls(pdir, missing_ok=True, memory=None):
+    "Return a list of files in pdir.  This pdir can be local or in s3.  If memory dict provided, use it to memoize.  If missing_ok=True, swallow errors (default)."
+    result = memory.get(pdir) if memory else None
+    if result == None:
+        try:
+            if pdir.startswith("s3://"):
+                s3_dir = pdir
+                if not s3_dir.endswith("/"):
+                    s3_dir += "/"
+                output = backtick(["aws", "s3", "ls", s3_dir])
+                rows = output.strip().split('\n')
+                result = [r.split()[-1] for r in rows]
+            else:
+                output = backtick(["ls", pdir])
+                result = output.strip().split('\n')
+        except Exception as e:
+            msg = f"Could not read directory: {pdir}"
+            if missing_ok and isinstance(e, subprocess.CalledProcessError):
+                print(f"INFO: {msg}")
+                result = []
+            else:
+                print(f"ERROR: {msg}")
+                raise
+        if memory != None:
+            memory[pdir] = result
+    return result
+
+
+def parse_table(lines, columns, decode=True):
+    if decode:
+        lines = decoded(lines)
+    headers = next(lines).split('\t')  # pylint: disable=stop-iteration-return
+    column_indexes = []
+    for c in columns:
+        assert c in headers, f"Column not found in table headers: {c}"
+        column_indexes.append(headers.index(c))
+    for i, l in enumerate(lines):
+        values = l.split('\t')
+        if len(headers) != len(values):
+            assert False, f"Line {i} has {len(values)} columns;  was expecting {len(headers)}."
+        yield [values[i] for i in column_indexes]
 
 
 if __name__ == "__main__":
