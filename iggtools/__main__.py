@@ -6,23 +6,16 @@
 # of registering their respective subcommands into the argument parser.
 #
 # Each subcommand module has its own main() function.  They are totally independent,
-# with their own set of command line arguments and subcommand help text.
+# with their own set of command line arguments and subcommand help text -- aside from
+# the shared arguments and shared help text defined in iggtools.common.argparser.
 #
-# The help text and broad description for the overall iggtools application is found in
-# iggtools.common.argparser, and also there are defined any and all arguments that
-# are shared across all subcommands.
-#
-from iggtools.subcommands import aws_batch_init, init, prokka  # pylint: disable=unused-import
-from iggtools.common import argparser
+from iggtools.subcommands import aws_batch_init, init, prokka # pylint: disable=unused-import
+from iggtools.common.argparser import parse_args
 
 
 def main():
-    parser = argparser.get()
-    args = parser.parse_args()
-    # Invoke subcommand specified in args.
-    subcommand_main = args.subcommand_main
-    del args.subcommand_main  # Remove unserializable function pointer from args.
-    return subcommand_main(args)
+    subcommand_main, subcommand_args = parse_args()
+    return subcommand_main(subcommand_args)
 
 
 if __name__ == "__main__":

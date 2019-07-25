@@ -1,7 +1,6 @@
-from iggtools.common import argparser
+from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, find_files, InputStream, OutputStream, parse_table
 from iggtools.params import inputs, outputs
-
 
 def init(args):
     """
@@ -42,20 +41,12 @@ def init(args):
     tsprint(f"Emitted {len(seen_genomes)} genomes and {len(seen_species)} species to {outputs.genomes}.")
 
 
+def register_args(main_func):
+    add_subcommand('init', main_func, help=f"initialize target {outputs.genomes}", epilog=init.__doc__)
+    return main_func
+
+
+@register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand}.")
-    assert args.subcommand == "init"
+    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
     init(args)
-
-
-def register_argparser(singleton=[None]):  # pylint: disable=dangerous-default-value
-    subparser = singleton[0]
-    if not subparser:
-        summary = f"initialize target {outputs.genomes}"
-        subparser = argparser.get().subparsers.add_parser('init', description=summary, help=summary)
-        subparser.set_defaults(subcommand_main=main)
-        argparser.add_shared_subcommand_args(subparser)
-        singleton[0] = subparser
-
-
-register_argparser()
