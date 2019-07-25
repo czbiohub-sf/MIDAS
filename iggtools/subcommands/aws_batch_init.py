@@ -1,5 +1,5 @@
-from iggtools.common import argparser
-from iggtools.common.utils import tsprint, command, command_output
+from iggtools.common.argparser import add_subcommand
+from iggtools.common.utils import tsprint, command, command_output, backtick
 
 
 def nvme_size_str():
@@ -20,21 +20,15 @@ def init_nvme(args):
             tsprint("Ignoring --force argument.  It is usually unnecessary to reinitialize AWS instance storage.")
 
 
+
+def register_args(main_func):
+    add_subcommand('aws_batch_init', main_func, help="inialize AWS Batch instance")
+    return main_func
+
+
+@register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand}.")
-    tsprint(vars(args))
-    assert args.subcommand == "aws_batch_init"
+    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    uname = backtick("uname")
+    assert uname == "Linux", f"Operating system {uname} is not Linux."
     init_nvme(args)
-
-
-def register_argparser(singleton=[None]):  # pylint: disable=dangerous-default-value
-    subparser = singleton[0]
-    if not subparser:
-        summary = 'inialize AWS Batch instance'
-        subparser = argparser.get().subparsers.add_parser('aws_batch_init', description=summary, help=summary)
-        subparser.set_defaults(subcommand_main=main)
-        argparser.add_shared_subcommand_args(subparser)
-        singleton[0] = subparser
-
-
-register_argparser()

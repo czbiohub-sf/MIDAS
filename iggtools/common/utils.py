@@ -46,18 +46,18 @@ class InputStream:
 
         with InputStream("/path/to/file.lz4") as stream:
             for line in stream:
-                print(line)
+                tsprint(line)
 
     This may look prettier through decoded():
 
         with InputStream("/path/to/file.lz4") as stream:
             for line in decoded(stream):
-                print(line)
+                tsprint(line)
 
     To inspect just the first line,
 
         with InputStream("/path/to/file.lz4") as stream:
-            print(stream.readline()
+            tsprint(stream.readline())
             stream.ignore_errors()
 
     Failing to read through the entire stream would normally raise an exception,
@@ -67,13 +67,14 @@ class InputStream:
 
         with InputStream("/path/to/file.lz4", """awk '{print $2}' | sed 's=foo=bar='""") as stream:
             for filtered_line in stream:
-                print(filtered_line)
+                tsprint(filtered_line)
 
     If your filters include commands like "head" or "tail" that can fail to consume all input,
     make sure to call stream.ignore_errors() before you exit the context.
 
     If the path is in S3, data is streamed from S3 directly, without downloading to
-    a local file.  TODO:  In some cases local caching may be desired.
+    a local file.  TODO:  In some cases, local caching may be desired.  You can simulate
+    that using "tee" in the filter.
 
     Formats lz4, bz2, gz and plain text are supported.
 
@@ -150,7 +151,7 @@ class OutputStream:
         self.ignore_called_process_errors = False
 
     def ignore_errors(self):
-        """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function."""
+        """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function.  This can happen if you specify head or tail as a filter while debugging.  You probably don't want to see this called in production code with OutputStream."""
         self.ignore_called_process_errors = True
 
     def __enter__(self):
@@ -245,10 +246,10 @@ def smart_ls(pdir, missing_ok=True, memory=None):
         except Exception as e:
             msg = f"Could not read directory: {pdir}"
             if missing_ok and isinstance(e, subprocess.CalledProcessError):
-                print(f"INFO: {msg}")
+                tsprint(f"INFO: {msg}")
                 result = []
             else:
-                print(f"ERROR: {msg}")
+                tsprint(f"ERROR: {msg}")
                 raise
         if memory != None:
             memory[pdir] = result
