@@ -3,7 +3,7 @@ from iggtools.common.utils import tsprint
 
 
 def register_args(main_func):
-    add_subcommand('prokka', main_func, help='run genome annotation tool prokka')
+    add_subcommand('prodigal', main_func, help='run genome annotation tool prodigal')
     return main_func
 
 
