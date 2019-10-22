@@ -16,6 +16,12 @@ fi
 repgenome=$1
 output_dir=$2
 
+flag="${output_dir}/success/${repgenome}"
+if [[ -f $flag ]] ; then
+    echo "$flag exists"
+    exit 0
+fi
+
 echo "NOW START for $repgenome"
 ## concatenate genes from all the genomes for each representative genome
 mkdir -p ${output_dir}/${repgenome}
@@ -25,7 +31,7 @@ mkdir -p ${output_dir}/${repgenome}/tmp_cleaned
 
 genomes=`awk -v pat=${repgenome} '$2 == pat {print}' /mnt/chunyu20TB/v2.0.0/mapfile  | cut -f1`
 
-echo $genomes | tr ' ' '\n' | xargs -Igg -P 16 \
+echo $genomes | tr ' ' '\n' | xargs -Igg -P 2 \
  bash -c "/mnt/chunyu20TB/v2.0.0/write_genes.py -gene-file /mnt/chunyu20TB/v2.0.0/prodigal/gg.fna \
           -output-dir ${output_dir}/${repgenome}/tmp_cleaned"
 
@@ -38,13 +44,13 @@ echo $genomes | tr ' ' '\n' | xargs -Igg bash -c "cat ${output_dir}/${repgenome}
 
 ## uclust_genes_99
 mkdir -p ${output_dir}/${repgenome}/temp
-/mnt/chunyu20TB/v2.0.0/run_uclust.sh $output_dir/${repgenome}/genes.ffn ${output_dir}/${repgenome}/temp 0.99 16
+/mnt/chunyu20TB/v2.0.0/run_uclust.sh $output_dir/${repgenome}/genes.ffn ${output_dir}/${repgenome}/temp 0.99 2
 
 
 ## uclust_genes
 echo -e "0.95\n0.90\n0.85\n0.80\n0.75" | \
   xargs -Ixx -P 5 bash -c "/mnt/chunyu20TB/v2.0.0/run_uclust.sh \
-        $output_dir/$repgenome/temp/centroids.99.ffn $output_dir/$repgenome/temp xx 3"
+        $output_dir/$repgenome/temp/centroids.99.ffn $output_dir/$repgenome/temp xx 1"
 
 ## store (uclusted) genes info
 /mnt/chunyu20TB/v2.0.0/store_gene_info.py \
