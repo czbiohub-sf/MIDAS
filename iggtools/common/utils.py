@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import time
 import subprocess
 import multiprocessing
+import random
+import traceback
 from fnmatch import fnmatch
+from functools import wraps
 
 
 # Thread-safe and timestamped prints.
@@ -269,6 +273,43 @@ def parse_table(lines, columns, decode=True):
         if len(headers) != len(values):
             assert False, f"Line {i} has {len(values)} columns;  was expecting {len(headers)}."
         yield [values[i] for i in column_indexes]
+
+
+def retry(operation, MAX_TRIES=3):
+    # Note the use of a separate random generator for retries so transient
+    # errors won't perturb other random streams used in the application.
+    invocation = [0]
+    @wraps(operation)
+    def wrapped_operation(*args, **kwargs):
+        randgen = None
+        remaining_attempts = MAX_TRIES
+        delay = 2.0
+        while remaining_attempts > 1:
+            try:
+                return operation(*args, **kwargs)
+            except:
+                if randgen == None:
+                    invocation[0] += 1
+                    randgen = random.Random(os.getpid() * 10000 + invocation[0]).random
+                wait_time = delay * (1.0 + randgen())
+                tsprint(f"Sleeping {wait_time} seconds before retry {MAX_TRIES - remaining_attempts + 1} of {operation} with {args}, {kwargs}.")
+                time.sleep(wait_time)
+                delay *= 3.0
+                remaining_attempts -= 1
+        # The last attempt is outside try/catch so caller can handle exception
+        return operation(*args, **kwargs)
+    return wrapped_operation
+
+
+def suppress_exceptions(func):
+    @wraps(func)
+    def func_noexc(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except:
+            tsprint(f"\nSuppressing exception below and returning None from {func} called with arguments {args} {kwargs}:\n{traceback.format_exc(limit=-1)}")
+            return None
+    return func_noexc
 
 
 if __name__ == "__main__":

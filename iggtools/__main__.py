@@ -9,7 +9,7 @@
 # with their own set of command line arguments and subcommand help text -- aside from
 # the shared arguments and shared help text defined in iggtools.common.argparser.
 #
-from iggtools.subcommands import aws_batch_init, init, prodigal # pylint: disable=unused-import
+from iggtools.subcommands import aws_batch_init, init, build_pangenome # pylint: disable=unused-import
 from iggtools.common.argparser import parse_args
 
 
