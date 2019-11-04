@@ -312,5 +312,24 @@ def suppress_exceptions(func):
     return func_noexc
 
 
+def portion(iterable, portion_size):
+    assert portion_size > 0
+    p = []
+    for item in iterable:
+        p.append(item)
+        if len(p) == portion_size:
+            yield p
+            p = []
+    if p:
+        yield p
+
+
+def multi_map(func, items, num_procs):
+    p = multiprocessing.Pool(num_procs)
+    items = list(items)
+    results = p.map(func, items)
+    return dict(zip(items, results))
+
+
 if __name__ == "__main__":
     tsprint(f"Hello from {backtick('pwd')}.  Put tests here.")

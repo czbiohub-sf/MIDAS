@@ -2,7 +2,7 @@ import multiprocessing
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, parse_table, decoded, retry, suppress_exceptions, command
+from iggtools.common.utils import tsprint, InputStream, parse_table, decoded, retry, command, portion, multi_map
 from iggtools.params import outputs
 
 
@@ -68,38 +68,6 @@ def clean_genes(genome_id):
     return output_genes, output_info
 
 
-@suppress_exceptions
-def clean_genes_noexc(genome_id):
-    return clean_genes(genome_id)
-
-
-def clean_all_genes(species_genomes_ids, clean_func, num_procs):
-    p = multiprocessing.Pool(num_procs)
-    temp_files = p.map(clean_func, species_genomes_ids)
-    failed = []
-    cleaned = {}
-    for genome_id, files in zip(species_genomes_ids, temp_files):
-        if files:
-            cleaned[genome_id] = files
-        else:
-            failed.append(genome_id)
-    return cleaned, failed
-
-
-def clean_all_genes_with_retry(species_genomes_ids, species_id):
-    num_procs = (multiprocessing.cpu_count() + 1) // 2
-    cleaned, failed = clean_all_genes(species_genomes_ids, clean_genes_noexc, num_procs)
-    if failed:
-        tsprint(f"Failed for {len(failed)} genomes from species {species_id}, including {', '.join(failed[:10])} even with individual genome retries, when running with {num_procs} subprocs.  Issuing a final wave of retries with 4x fewer subprocs.")
-        # This time, a failure will raise an exception.  So there can be no failures.
-        more_cleaned, failed_again = clean_all_genes(failed, clean_genes, (num_procs + 3) // 4)
-        assert not failed_again
-        tsprint(f"The wave of retries for {len(failed)} failed genomes from species {species_id} was a success.")
-        cleaned.update(more_cleaned)
-    tsprint(f"Successfully cleaned all {len(species_genomes_ids)} genomes from species {species_id}")
-    return reordered_dict(cleaned, species_genomes_ids)
-
-
 def build_pangenome(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
@@ -116,17 +84,27 @@ def build_pangenome(args):
     species_genomes_ids = species_genomes.keys()
     tsprint(f"There are {len(species_genomes)} genomes for species {species_id} with representative genome {representative_id}.")
 
-    cleaned = clean_all_genes_with_retry(species_genomes_ids, species_id)
+    num_procs = (multiprocessing.cpu_count() + 1) // 2
+    cleaned = multi_map(clean_genes, species_genomes_ids, num_procs)
 
     command("rm -f genes.ffn")
+    command("rm -f genes.len")
 
-    files_in_chunk = 10  # keep "cat" commands short
-    cleaned_files = list(cleaned.values())
-    for chunk_start in range(0, len(cleaned_files), files_in_chunk):
-        chunk_files = cleaned_files[chunk_start : chunk_start + files_in_chunk]
-        command("cat " + " ".join(str(genes_file) for genes_file, _ in chunk_files) + " >> genes.ffn")
-        command("cat " + " ".join(str(genes_len) for _, genes_len in chunk_files) + " >> genes.len")
+    for temp_files in portion(cleaned.values(), 20):  # keep "cat" commands short
+        fna_files = temp_files[0::2]
+        len_files = temp_files[1::2]
+        command("cat " + " ".join(fna_files) + " >> genes.ffn")
+        command("cat " + " ".join(len_files) + " >> genes.len")
 
+    num_procs = (multiprocessing.cpu_count() + 1) // 2
+    percents = [99, 90, 85, 80, 75]
+    clusters = {pid: f"centroids.{pid}.ffn" for pid in percents}
+    genes = "genes.ffn"
+    for pid in percents:
+        # Clusters "genes" into "clusters[pid]"
+        # After the first iteration, the rest could run in parallel
+        vsearch = f"vsearch -cluster_fast {genes} -id {pid/100.0} -threads {num_procs} -centroids {clusters[pid]} -uc uclust.{pid}.txt"
+        genes = clusters[99] # fixed 99
 
 
 
