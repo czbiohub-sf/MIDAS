@@ -291,7 +291,7 @@ def retry(operation, MAX_TRIES=3):
                 if randgen == None:
                     invocation[0] += 1
                     randgen = random.Random(os.getpid() * 10000 + invocation[0]).random
-                wait_time = delay * (1.0 + randgen())
+                wait_time = delay * (1.0 + 2.0 * randgen())
                 tsprint(f"Sleeping {wait_time} seconds before retry {MAX_TRIES - remaining_attempts + 1} of {operation} with {args}, {kwargs}.")
                 time.sleep(wait_time)
                 delay *= 3.0

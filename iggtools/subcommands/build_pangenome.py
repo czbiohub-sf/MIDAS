@@ -1,5 +1,6 @@
 import multiprocessing
 from collections import defaultdict
+from operator import itemgetter
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, parse_table, decoded, retry, command, portion, multi_map
@@ -91,8 +92,8 @@ def build_pangenome(args):
     command("rm -f genes.len")
 
     for temp_files in portion(cleaned.values(), 20):  # keep "cat" commands short
-        fna_files = temp_files[0::2]
-        len_files = temp_files[1::2]
+        fna_files = map(itemgetter(0), temp_files)
+        len_files = map(itemgetter(1), temp_files)
         command("cat " + " ".join(fna_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
 
