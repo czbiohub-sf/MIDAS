@@ -180,6 +180,8 @@ class OutputStream:
 
 
 def decoded(stream):
+    # Caution:  Sometimes if you pass a decoded(stream) to Biopython's SeqIO.parse it will complain that method readline() is not available on the generator.
+    # Thus, it is recommended that you do not decode the stream but rather pass it diectly to Biopython if using SeqIO.parse.
     for line in stream:
         yield line.decode('utf-8').rstrip('\n')
 
