@@ -53,12 +53,6 @@ class InputStream:
             for line in stream:
                 tsprint(line)
 
-    This may look prettier through decoded():
-
-        with InputStream("/path/to/file.lz4") as stream:
-            for line in decoded(stream):
-                tsprint(line)
-
     To inspect just the first line,
 
         with InputStream("/path/to/file.lz4") as stream:
@@ -86,7 +80,7 @@ class InputStream:
     Wildcards in path are also supported, but must expand to precisely 1 matching file.
     '''
 
-    def __init__(self, path, filters=None, check_path=True):
+    def __init__(self, path, filters=None, check_path=True, binary=False):
         if check_path:
             path = smart_glob(path, expected=1)[0]
         cat = 'set -o pipefail; '
@@ -106,6 +100,7 @@ class InputStream:
         self.path = path
         self.subproc = 0
         self.ignore_called_process_errors = False
+        self.binary = binary
 
     def ignore_errors(self):
         """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function."""
@@ -115,7 +110,7 @@ class InputStream:
         self.subproc = command(self.cat, popen=True, stdout=subprocess.PIPE)
         self.subproc.__enter__()
         self.subproc.stdout.ignore_errors = self.ignore_errors
-        return self.subproc.stdout  # Note the subject of the WITH statement is the subprocess STDOUT
+        return self.subproc.stdout if self.binary else text_mode(self.subproc.stdout)  # Note the subject of the WITH statement is the subprocess STDOUT
 
     def __exit__(self, etype, evalue, etraceback):
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
@@ -163,7 +158,7 @@ class OutputStream:
         self.subproc = command(self.cat, popen=True, stdin=subprocess.PIPE)
         self.subproc.__enter__()
         self.subproc.stdin.ignore_errors = self.ignore_errors
-        return text_mode(self.subproc.stdin)  # Note the subject of the WITH statement is the subprocess STDIN
+        return self.subproc.stdin  # Note the subject of the WITH statement is the subprocess STDIN
 
     def __exit__(self, etype, evalue, etraceback):
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
@@ -192,12 +187,8 @@ def text_mode(stream):
     return result
 
 
-def decoded(stream):
-    # Caution:  Sometimes if you pass a decoded(stream) to Biopython's SeqIO.parse it will complain that method readline() is not available on the generator.
-    # Thus, it is recommended that you do not decode the stream but rather pass it diectly to Biopython if using SeqIO.parse.
-    # The same applies to anything that expects a true file-like object.
-    # So when should you use this function?  When you are doing the parsing.
-    for line in text_mode(stream):
+def strip_eol(lines_iterable):
+    for line in lines_iterable:
         yield line.rstrip('\n')
 
 
@@ -277,9 +268,8 @@ def smart_ls(pdir, missing_ok=True, memory=None):
     return result
 
 
-def parse_table(lines, columns, decode=True):
-    if decode:
-        lines = decoded(lines)
+def parse_table(lines, columns):
+    lines = strip_eol(lines)
     headers = next(lines).split('\t')  # pylint: disable=stop-iteration-return
     column_indexes = []
     for c in columns:
