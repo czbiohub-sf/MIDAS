@@ -5,16 +5,18 @@ import sys
 import time
 import subprocess
 import multiprocessing
+from multiprocessing.pool import ThreadPool
 import random
 import traceback
 import io
 from fnmatch import fnmatch
 from functools import wraps
 
-
 # Thread-safe and timestamped prints.
 tslock = multiprocessing.RLock()
 
+num_vcpu = multiprocessing.cpu_count()
+num_physical_cores = (num_vcpu + 1) // 2
 
 def timestamp(t):
     # We do not use "{:.3f}".format(time.time()) because its result may be
@@ -53,23 +55,27 @@ class InputStream:
             for line in stream:
                 tsprint(line)
 
-    To inspect just the first line,
-
-        with InputStream("/path/to/file.lz4") as stream:
-            tsprint(stream.readline())
-            stream.ignore_errors()
-
-    Failing to read through the entire stream would normally raise an exception,
-    unless you call stream.ignore_errors(), as in the above example.
-
     To run through some custom filters,
 
         with InputStream("/path/to/file.lz4", """awk '{print $2}' | sed 's=foo=bar='""") as stream:
             for filtered_line in stream:
                 tsprint(filtered_line)
 
-    If your filters include commands like "head" or "tail" that can fail to consume all input,
-    make sure to call stream.ignore_errors() before you exit the context.
+    If your filters include commands like "head" or "tail" that intentionally skip some input,
+    make sure to call stream.ignore_errors() before you exit the context, because, without
+    that, failing to read through the entire stream would raise an exception.
+
+    For instance, to inspect just the first line,
+
+        with InputStream("/path/to/file.lz4") as stream:
+            tsprint(stream.readline())
+            stream.ignore_errors()
+
+    or, similarly, to inspect just line 125,
+
+        with InputStream("/path/to/file.lz4", "head -125 | tail -1") as stream:
+            tsprint(stream.readline())
+            stream.ignore_errors()
 
     If the path is in S3, data is streamed from S3 directly, without downloading to
     a local file.  TODO:  In some cases, local caching may be desired.  You can simulate
@@ -132,7 +138,7 @@ class OutputStream:
     Same idea as InputStream, but for output.  Handles compression etc transparently.
     '''
 
-    def __init__(self, path, filters=None):
+    def __init__(self, path, filters=None, binary=False):
         if path.startswith("s3://"):
             cat = f"aws s3 --quiet cp - {path}"
         else:
@@ -149,6 +155,7 @@ class OutputStream:
         self.path = path
         self.subproc = 0
         self.ignore_called_process_errors = False
+        self.binary = binary
 
     def ignore_errors(self):
         """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function.  This can happen if you specify head or tail as a filter while debugging.  You probably don't want to see this called in production code with OutputStream."""
@@ -158,7 +165,7 @@ class OutputStream:
         self.subproc = command(self.cat, popen=True, stdin=subprocess.PIPE)
         self.subproc.__enter__()
         self.subproc.stdin.ignore_errors = self.ignore_errors
-        return self.subproc.stdin  # Note the subject of the WITH statement is the subprocess STDIN
+        return self.subproc.stdin if self.binary else text_mode(self.subproc.stdin)  # Note the subject of the WITH statement is the subprocess STDIN
 
     def __exit__(self, etype, evalue, etraceback):
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
@@ -199,7 +206,11 @@ def command(cmd, quiet=False, popen=False, **kwargs):
     shell = isinstance(cmd, str)
     if not quiet:
         command_str = cmd if shell else " ".join(cmd)
-        tsprint(repr(command_str))
+        hack_remove_prefix = "set -o pipefail; "
+        print_str = command_str
+        if print_str.startswith(hack_remove_prefix):
+            print_str = print_str[len(hack_remove_prefix):]
+        tsprint(repr(print_str))
     subproc_args = {}
     if not popen:
         subproc_args["check"] = True
@@ -225,6 +236,8 @@ def backtick(cmd, **kwargs):
 
 def smart_glob(pattern, expected=range(0, sys.maxsize), memory=None):
     """Return list of files that match specified pattern.  Raise exception if item count unexpected.  Memoize if memory dict provided."""
+    if "/" not in pattern:
+        pattern = "./" + pattern
     pdir, file_pattern = pattern.rsplit("/", 1)
     def match_pattern(filename):
         return fnmatch(filename, file_pattern)
@@ -268,9 +281,10 @@ def smart_ls(pdir, missing_ok=True, memory=None):
     return result
 
 
-def parse_table(lines, columns):
+def parse_table(lines, columns, headers=None):
     lines = strip_eol(lines)
-    headers = next(lines).split('\t')  # pylint: disable=stop-iteration-return
+    if not headers:
+        headers = next(lines).split('\t')  # pylint: disable=stop-iteration-return
     column_indexes = []
     for c in columns:
         assert c in headers, f"Column not found in table headers: {c}"
@@ -293,11 +307,16 @@ def retry(operation, MAX_TRIES=3):
         delay = 2.0
         while remaining_attempts > 1:
             try:
+                t_start = time.time()
                 return operation(*args, **kwargs)
             except:
+                t_end = time.time()
                 if randgen == None:
                     invocation[0] += 1
                     randgen = random.Random(os.getpid() * 10000 + invocation[0]).random
+                if t_end - t_start > 30:
+                    # For longer operations, the delay should increase, so that the backoff will meaningfully reduce load on the failing service.
+                    delay = (t_end - t_start) * 0.2
                 wait_time = delay * (1.0 + 2.0 * randgen())
                 tsprint(f"Sleeping {wait_time} seconds before retry {MAX_TRIES - remaining_attempts + 1} of {operation} with {args}, {kwargs}.")
                 time.sleep(wait_time)
@@ -319,7 +338,7 @@ def suppress_exceptions(func):
     return func_noexc
 
 
-def portion(iterable, portion_size):
+def split(iterable, portion_size):
     assert portion_size > 0
     p = []
     for item in iterable:
@@ -331,11 +350,79 @@ def portion(iterable, portion_size):
         yield p
 
 
-def multi_map(func, items, num_procs):
-    p = multiprocessing.Pool(num_procs)
+# The next few functions present a uniform interface to a parallel version of map
+# using either multiple threads (preferred) or multiple processes (necessary when
+# the function's performance is bottlenecked on CPU-intensive python code).
+#
+# Use multiprocessing *only* if the Python code itself is slow and bottlenecked on CPU.
+# If the problem is just I/O latency, use multithreading, rather than multiprocessing.
+# If the CPU intensive work can be done in subcommands, use multithreading rather than
+# multiprocessing, to invoke multiple subcommands in parallel.
+#
+# When multiprocessing, it pays little to exceed the number of physical cores,
+# and never more than 2x, particularly if there are merging costs.
+#
+# With multithreading, on the other hand, there is no reason to constrain
+# the number of threads;  by default we set it equal to the number of items.
+
+
+def hashmap(func, items):
     items = list(items)
-    results = p.map(func, items)
+    results = map(func, items)
     return dict(zip(items, results))
+
+
+# private! use multiprocessing_map or multithreading_map instead
+def _multi_map(func, items, num_procs, PoolClass):
+    p = PoolClass(num_procs)
+    return p.map(func, items)
+
+
+# private! use multiprocessing_hashmap or multithreading_hashmap instead
+def _multi_hashmap(func, items, num_procs, PoolClass):
+    items = list(items)
+    results = _multi_map(func, items, num_procs, PoolClass)
+    return dict(zip(items, results))
+
+
+# use this *only* if func is CPU bound
+def multiprocessing_map(func, items, num_procs=num_physical_cores):
+    return _multi_map(func, items, num_procs, multiprocessing.Pool)
+
+
+# use this if func is not CPU bound
+def multithreading_map(func, items, num_threads=None):
+    if not num_threads:
+        items = list(items)
+        num_threads = max(1, len(items))
+    return _multi_map(func, items, num_threads, ThreadPool)
+
+
+# use this *only* if func is CPU bound
+def multiprocessing_hashmap(func, items, num_procs=num_physical_cores):
+    return _multi_hashmap(func, items, num_procs, multiprocessing.Pool)
+
+
+# use this if func is not CPU bound
+def multithreading_hashmap(func, items, num_threads=None):
+    if not num_threads:
+        items = list(items)
+        num_threads = max(1, len(items))
+    return _multi_hashmap(func, items, num_threads, ThreadPool)
+
+
+def transpose(list_of_tuples):
+    # zip is its own inverse, for small enough data
+    # this converts [(a, 1), (b, 2), (c, 3)] into ([a, b, c], [1, 2, 3])
+    return zip(*list_of_tuples)
+
+
+def sorted_dict(d):
+    return {k: d[k] for k in sorted(d.keys())}
+
+
+def reordered_dict(d, key_order):
+    return {k: d[k] for k in key_order}
 
 
 if __name__ == "__main__":
