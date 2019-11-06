@@ -3,7 +3,7 @@ from collections import defaultdict
 from operator import itemgetter
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, parse_table, decoded, retry, command, portion, multi_map
+from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, portion, multi_map
 from iggtools.params import outputs
 
 
@@ -53,7 +53,7 @@ def clean_genes(genome_id):
     with open(output_genes, 'w') as o_genes, \
          open(output_info, 'w') as o_info, \
          InputStream(input_annotations, check_path=False) as genes:
-        for rec in Bio.SeqIO.parse(decoded(genes), 'fasta'):
+        for rec in Bio.SeqIO.parse(genes, 'fasta'):
             gene_id = rec.id
             gene_seq = str(rec.seq).upper()
             gene_len = len(gene_seq)

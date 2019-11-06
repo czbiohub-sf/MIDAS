@@ -7,6 +7,7 @@ import subprocess
 import multiprocessing
 import random
 import traceback
+import io
 from fnmatch import fnmatch
 from functools import wraps
 
@@ -162,7 +163,7 @@ class OutputStream:
         self.subproc = command(self.cat, popen=True, stdin=subprocess.PIPE)
         self.subproc.__enter__()
         self.subproc.stdin.ignore_errors = self.ignore_errors
-        return self.subproc.stdin  # Note the subject of the WITH statement is the subprocess STDIN
+        return text_mode(self.subproc.stdin)  # Note the subject of the WITH statement is the subprocess STDIN
 
     def __exit__(self, etype, evalue, etraceback):
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
@@ -179,11 +180,25 @@ class OutputStream:
         return result
 
 
+def text_mode(stream):
+    # Thank you https://stackoverflow.com/questions/31188333/text-mode-adapter-for-binary-or-text-mode-file
+    if isinstance(stream, io.TextIOBase):
+        result = stream
+    elif isinstance(stream, (io.BufferedIOBase, io.RawIOBase)):
+        result = io.TextIOWrapper(stream)
+    else:
+        tsprint(f"WARNING:  Incomplete implementation of utils.text_mode.  Might cause problems if object type {type(stream)} is not already a text-mode stream.")
+        result = stream
+    return result
+
+
 def decoded(stream):
     # Caution:  Sometimes if you pass a decoded(stream) to Biopython's SeqIO.parse it will complain that method readline() is not available on the generator.
     # Thus, it is recommended that you do not decode the stream but rather pass it diectly to Biopython if using SeqIO.parse.
-    for line in stream:
-        yield line.decode('utf-8').rstrip('\n')
+    # The same applies to anything that expects a true file-like object.
+    # So when should you use this function?  When you are doing the parsing.
+    for line in text_mode(stream):
+        yield line.rstrip('\n')
 
 
 def command(cmd, quiet=False, popen=False, **kwargs):
