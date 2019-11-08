@@ -3,3 +3,5 @@
 
 igg = "s3://microbiome-igg/2.0"
 genomes = f"{igg}/genomes.tsv"
+pangenomes = f"{igg}/pangenomes"
+annotations = f"{igg}/prodigal"
