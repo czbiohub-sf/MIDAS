@@ -167,6 +167,8 @@ def build_pangenome(args):
         msg = msg.replace("Building", "Rebuilding")
     tsprint(msg)
 
+    command(f"aws s3 rm --recursive {pangenome_file(representative_id, '')}")
+
     cleaned = multiprocessing_map(clean_genes, species_genomes_ids)
 
     command("rm -f genes.ffn")
