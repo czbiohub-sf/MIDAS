@@ -1,7 +1,7 @@
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, num_vcpu, transpose, find_files, sorted_dict
+from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict
 from iggtools.params import outputs
 
 
@@ -130,6 +130,16 @@ def xref(cluster_files, gene_info_file):
             gene_info.write('\n')
 
 
+@retry
+def upload(src, dst):
+    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}")
+
+
+def upload_star(srcdst):
+    src, dst = srcdst
+    return upload(src, dst)
+
+
 def build_pangenome(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
@@ -145,6 +155,17 @@ def build_pangenome(args):
     representative_id = representatives[species_id]
     species_genomes_ids = species_genomes.keys()
     tsprint(f"There are {len(species_genomes)} genomes for species {species_id} with representative genome {representative_id}.")
+
+    def destpath(src):
+        return pangenome_file(representative_id, src + ".lz4")
+
+    msg = f"Building pangenome for species {species_id} with representative genome {representative_id}."
+    if find_files(destpath("gene_info.txt")):
+        if not args.force:
+            tsprint(f"Destination {destpath('gene_info.txt')} already exists.  Specify --force to overwrite.")
+            return
+        msg = msg.replace("Building", "Rebuilding")
+    tsprint(msg)
 
     cleaned = multiprocessing_map(clean_genes, species_genomes_ids)
 
@@ -162,6 +183,23 @@ def build_pangenome(args):
     cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
+
+    # Create list of (source, dest) pairs for uploading.
+    # Note one of the sources is copied to 2 different destinations.
+    upload_tasks = []
+    for src in ["gene_info.txt", "genes.ffn", "genes.len"]:
+        upload_tasks.append((src, destpath(src)))
+    src = f"centroids.{max_percent}.ffn"
+    dst = destpath("centroids.ffn")  # no percent in this
+    upload_tasks.append((src, dst))
+    # Stash cluster_files under pangenome_dir/temp/
+    # This includes an extra copy of centroids.{max_percent}.ffn
+    for files in cluster_files.values():
+        # files is a pair of (centroid, uclust) files
+        for src in files:
+            upload_tasks.append((src, destpath("temp/" + src)))
+
+    multithreading_map(upload_star, upload_tasks)
 
 
 def register_args(main_func):
