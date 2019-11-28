@@ -1,3 +1,5 @@
+import os
+import sys
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
@@ -141,12 +143,68 @@ def upload_star(srcdst):
 
 
 def build_pangenome(args):
+
+    if args.toc:
+        build_pangenome_from_subsubcommand(args)
+    else:
+        build_pangenome_driver(args)
+
+
+def build_pangenome_driver(args):
+
+    local_toc = os.path.basename(outputs.genomes)
+
+    command(f"rm -f {local_toc}")
+
+    command(f"aws s3 cp {outputs.genomes} {local_toc}")
+
+    species, representatives = read_toc(local_toc)
+
+    species_id = args.species
+    assert species_id in species, f"Species {species_id} is not in the database."
+
+    representative_id = representatives[species_id]
+    species_genomes = species[species_id]
+
+    def destpath(src):
+        return pangenome_file(representative_id, src + ".lz4")
+
+    msg = f"Building pangenome for species {species_id} with representative genome {representative_id} and {len(species_genomes)} total genomes."
+    if find_files(destpath("gene_info.txt")):
+        if not args.force:
+            tsprint(f"Destination {destpath('gene_info.txt')} already exists.  Specify --force to overwrite.")
+            return
+        msg = msg.replace("Building", "Rebuilding")
+    tsprint(msg)
+
+    if not args.debug:
+        command(f"rm -rf {species_id}")
+    if not os.path.isdir(str(species_id)):
+        command(f"mkdir {species_id}")
+
+    try:
+        # Make essentially a recurisve call via subcommand, redirecting logs.
+        myroot = os.path.dirname(os.path.dirname(sys.argv[0]))
+        command(f"cd {species_id}; PYTHONPATH={myroot} {sys.executable} -m iggtools build_pangenome -s {species_id} --toc {os.path.abspath(local_toc)} > pangenome_build.log 2>&1")
+    finally:
+        try:
+            upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
+        except:
+            pass
+        if not args.debug:
+            command(f"rm -rf {species_id}")
+
+
+def build_pangenome_from_subsubcommand(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
     Output spec: https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
 
-    species, representatives = read_toc(outputs.genomes)
+    assert os.path.isfile(args.toc), f"Please do not call this directly.  Violation: File does not exist: {args.toc}"
+    assert os.path.basename(os.getcwd()) == args.species, f"Please do not call this directly.  Violation: {os.path.basename(os.getcwd())} != {args.species}"
+
+    species, representatives = read_toc(args.toc)
 
     species_id = args.species
     assert species_id in species, f"Species {species_id} is not in the database."
@@ -158,14 +216,6 @@ def build_pangenome(args):
 
     def destpath(src):
         return pangenome_file(representative_id, src + ".lz4")
-
-    msg = f"Building pangenome for species {species_id} with representative genome {representative_id}."
-    if find_files(destpath("gene_info.txt")):
-        if not args.force:
-            tsprint(f"Destination {destpath('gene_info.txt')} already exists.  Specify --force to overwrite.")
-            return
-        msg = msg.replace("Building", "Rebuilding")
-    tsprint(msg)
 
     command(f"aws s3 rm --recursive {pangenome_file(representative_id, '')}")
 
@@ -211,6 +261,11 @@ def register_args(main_func):
                            dest='species',
                            required=True,
                            help="species whose pangenome to build")
+    subparser.add_argument('-9',
+                           '--toc',
+                           dest='toc',
+                           required=False,
+                           help="reserved")
     return main_func
 
 
