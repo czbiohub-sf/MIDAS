@@ -1,5 +1,6 @@
 import os
 import sys
+import traceback
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
@@ -150,6 +151,11 @@ def build_pangenome(args):
         build_pangenome_driver(args)
 
 
+@retry
+def my_find_files(f):
+    return find_files(f)
+
+
 def build_pangenome_driver(args):
 
     local_toc = os.path.basename(outputs.genomes)
@@ -160,24 +166,46 @@ def build_pangenome_driver(args):
 
     species, representatives = read_toc(local_toc)
 
-    species_id = args.species
-    assert species_id in species, f"Species {species_id} is not in the database."
+    pretasks = []
+    dests = []
+    for species_id in args.species.split(","):
+        try:
+            assert species_id in species, f"Species {species_id} is not in the database."
+            representative_id = representatives[species_id]
+            species_genomes = species[species_id]
+            dest_file = pangenome_file(representative_id, "gene_info.txt.lz4")
+            dests.append(dest_file)
+            pretasks.append([species_id, representative_id, len(species_genomes), local_toc, args.debug])
+        except:
+            tsprint(traceback.format_exc())
 
-    representative_id = representatives[species_id]
-    species_genomes = species[species_id]
+    dests_exist = multithreading_map(my_find_files, dests, 10)
+
+    tasks = []
+    for i in range(len(pretasks)):
+        pt = pretasks[i]
+        msg = f"Building pangenome for species {pt[0]} with representative genome {pt[1]} and {pt[2]} total genomes."
+        if dests_exist[i]:
+            if not args.force:
+                tsprint(f"Destination {dests[i]} already exists.  Specify --force to overwrite.")
+                continue
+            msg = msg.replace("Building", "Rebuilding")
+        pt.append(msg)
+        tasks.append(pt)
+
+    multithreading_map(build_pangenome_single_species, tasks, num_threads=3)
+
+
+def build_pangenome_single_species(myargs):
+
+    species_id, representative_id, _len_species_genomes, local_toc, args_debug, msg = myargs
+
+    tsprint(msg)
 
     def destpath(src):
         return pangenome_file(representative_id, src + ".lz4")
 
-    msg = f"Building pangenome for species {species_id} with representative genome {representative_id} and {len(species_genomes)} total genomes."
-    if find_files(destpath("gene_info.txt")):
-        if not args.force:
-            tsprint(f"Destination {destpath('gene_info.txt')} already exists.  Specify --force to overwrite.")
-            return
-        msg = msg.replace("Building", "Rebuilding")
-    tsprint(msg)
-
-    if not args.debug:
+    if not args_debug:
         command(f"rm -rf {species_id}")
     if not os.path.isdir(str(species_id)):
         command(f"mkdir {species_id}")
@@ -191,7 +219,7 @@ def build_pangenome_driver(args):
             upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
         except:
             pass
-        if not args.debug:
+        if not args_debug:
             command(f"rm -rf {species_id}")
 
 
