@@ -425,5 +425,19 @@ def reordered_dict(d, key_order):
     return {k: d[k] for k in key_order}
 
 
+def flatten(l):
+    return [item for sublist in l for item in sublist]
+
+
+@retry
+def upload(src, dst):
+    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}")
+
+
+def upload_star(srcdst):
+    src, dst = srcdst
+    return upload(src, dst)
+
+
 if __name__ == "__main__":
     tsprint(f"Hello from {backtick('pwd')}.  Put tests here.")

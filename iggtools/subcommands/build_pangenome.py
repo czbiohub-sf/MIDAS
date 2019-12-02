@@ -1,15 +1,19 @@
 import os
 import sys
-import traceback
 from collections import defaultdict
+from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict
+from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict, upload, upload_star, flatten
 from iggtools.params import outputs
 
 
 CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
 CLUSTERING_PERCENTS = sorted(CLUSTERING_PERCENTS, reverse=True)
+
+
+# Up to this many concurrent species builds.
+CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 
 
 def pangenome_file(representative_id, component):
@@ -133,114 +137,115 @@ def xref(cluster_files, gene_info_file):
             gene_info.write('\n')
 
 
-@retry
-def upload(src, dst):
-    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}")
-
-
-def upload_star(srcdst):
-    src, dst = srcdst
-    return upload(src, dst)
-
-
 def build_pangenome(args):
-
-    if args.toc:
-        build_pangenome_from_subsubcommand(args)
+    if args.slave_toc:
+        build_pangenome_slave(args)
     else:
-        build_pangenome_driver(args)
+        build_pangenome_master(args)
 
 
 @retry
-def my_find_files(f):
+def find_files_with_retry(f):
     return find_files(f)
 
 
-def build_pangenome_driver(args):
+def decode_species_arg(args, species):
+    selected_species = set()
+    try:
+        if args.species.upper() == "ALL":
+            selected_species = set(species)
+        else:
+            for s in args.species.split(","):
+                if ":" not in s:
+                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
+                    selected_species.add(s)
+                else:
+                    i, n = s.split(":")
+                    i = int(i)
+                    n = int(n)
+                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
+                    for sid in species:
+                        if int(sid) % n == i:
+                            selected_species.add(sid)
+    except:
+        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
+        raise
+    return sorted(selected_species)
 
+
+def build_pangenome_master(args):
+
+    # Fetch table of contents from s3.
+    # This will be read separately by each species build subcommand, so we make a local copy.
     local_toc = os.path.basename(outputs.genomes)
-
     command(f"rm -f {local_toc}")
-
     command(f"aws s3 cp {outputs.genomes} {local_toc}")
 
     species, representatives = read_toc(local_toc)
 
-    pretasks = []
-    dests = []
-    for species_id in args.species.split(","):
-        try:
-            assert species_id in species, f"Species {species_id} is not in the database."
-            representative_id = representatives[species_id]
-            species_genomes = species[species_id]
-            dest_file = pangenome_file(representative_id, "gene_info.txt.lz4")
-            dests.append(dest_file)
-            pretasks.append([species_id, representative_id, len(species_genomes), local_toc, args.debug])
-        except:
-            tsprint(traceback.format_exc())
+    def species_work(species_id):
+        assert species_id in species, f"Species {species_id} is not in the database."
+        representative_id = representatives[species_id]
+        species_genomes = species[species_id]
 
-    dests_exist = multithreading_map(my_find_files, dests, 10)
+        def destpath(src):
+            return pangenome_file(representative_id, src + ".lz4")
 
-    tasks = []
-    for i in range(len(pretasks)):
-        pt = pretasks[i]
-        msg = f"Building pangenome for species {pt[0]} with representative genome {pt[1]} and {pt[2]} total genomes."
-        if dests_exist[i]:
+        # The species build will upload this file last, after everything else is successfully uploaded.
+        # Therefore, if this file exists in s3, there is no need to redo the species build.
+        dest_file = destpath("gene_info.txt")
+        msg = f"Building pangenome for species {species_id} with representative genome {representative_id} and {len(species_genomes)} total genomes."
+        if find_files_with_retry(dest_file):
             if not args.force:
-                tsprint(f"Destination {dests[i]} already exists.  Specify --force to overwrite.")
-                continue
+                tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
+                return
             msg = msg.replace("Building", "Rebuilding")
-        pt.append(msg)
-        tasks.append(pt)
 
-    multithreading_map(build_pangenome_single_species, tasks, num_threads=3)
+        with CONCURRENT_SPECIES_BUILDS:
+            tsprint(msg)
+            if not args.debug:
+                command(f"rm -rf {species_id}")
+            if not os.path.isdir(str(species_id)):
+                command(f"mkdir {species_id}")
+            try:
+                # Recurisve call via subcommand.  Use subdir, redirect logs.
+                myroot = os.path.dirname(os.path.dirname(sys.argv[0]))
+                command(f"cd {species_id}; PYTHONPATH={myroot} {sys.executable} -m iggtools build_pangenome -s {species_id} --slave_mode --slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} > pangenome_build.log 2>&1")
+            finally:
+                if not os.path.isfile(f"{species_id}/pangenome_build.log"):
+                    command(f"echo 'Failed to even create log file.' > {species_id}/pangenome_build.log")
+                try:
+                    upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
+                except:
+                    pass
+                if not args.debug:
+                    command(f"rm -rf {species_id}")
 
-
-def build_pangenome_single_species(myargs):
-
-    species_id, representative_id, _len_species_genomes, local_toc, args_debug, msg = myargs
-
-    tsprint(msg)
-
-    def destpath(src):
-        return pangenome_file(representative_id, src + ".lz4")
-
-    if not args_debug:
-        command(f"rm -rf {species_id}")
-    if not os.path.isdir(str(species_id)):
-        command(f"mkdir {species_id}")
-
-    try:
-        # Make essentially a recurisve call via subcommand, redirecting logs.
-        myroot = os.path.dirname(os.path.dirname(sys.argv[0]))
-        command(f"cd {species_id}; PYTHONPATH={myroot} {sys.executable} -m iggtools build_pangenome -s {species_id} --toc {os.path.abspath(local_toc)} > pangenome_build.log 2>&1")
-    finally:
-        try:
-            upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
-        except:
-            pass
-        if not args_debug:
-            command(f"rm -rf {species_id}")
+    # Check for destination presence in s3 with up to 10-way concurrency.
+    # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
+    species_id_list = decode_species_arg(args, species)
+    multithreading_map(species_work, species_id_list, num_threads=10)
 
 
-def build_pangenome_from_subsubcommand(args):
+def build_pangenome_slave(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
     Output spec: https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
 
-    assert os.path.isfile(args.toc), f"Please do not call this directly.  Violation: File does not exist: {args.toc}"
-    assert os.path.basename(os.getcwd()) == args.species, f"Please do not call this directly.  Violation: {os.path.basename(os.getcwd())} != {args.species}"
+    violation = "Please do not call build_pangenome_slave directly.  Violation"
+    assert args.slave_mode, f"{violation}:  Missing --slave_mode arg."
+    assert os.path.isfile(args.slave_toc), f"{violation}: File does not exist: {args.slave_toc}"
+    assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
-    species, representatives = read_toc(args.toc)
-
+    species, representatives = read_toc(args.slave_toc)
     species_id = args.species
-    assert species_id in species, f"Species {species_id} is not in the database."
+
+    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     species_genomes = species[species_id]
     representative_id = representatives[species_id]
     species_genomes_ids = species_genomes.keys()
-    tsprint(f"There are {len(species_genomes)} genomes for species {species_id} with representative genome {representative_id}.")
 
     def destpath(src):
         return pangenome_file(representative_id, src + ".lz4")
@@ -249,37 +254,38 @@ def build_pangenome_from_subsubcommand(args):
 
     cleaned = multiprocessing_map(clean_genes, species_genomes_ids)
 
-    command("rm -f genes.ffn")
-    command("rm -f genes.len")
+    command("rm -f genes.ffn genes.len")
 
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
         fna_files, len_files = transpose(temp_files)
         command("cat " + " ".join(fna_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
 
+    # The initial clustering to max_percent takes longest.
     max_percent, lower_percents = CLUSTERING_PERCENTS[0], CLUSTERING_PERCENTS[1:]
     cluster_files = {max_percent: vsearch(max_percent, "genes.ffn")}
+
+    # Reclustering of the max_percent centroids is usually quick, and can proceed in prallel.
     recluster = lambda percent_id: vsearch(percent_id, cluster_files[max_percent][0])
     cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
 
     # Create list of (source, dest) pairs for uploading.
-    # Note one of the sources is copied to 2 different destinations.
-    upload_tasks = []
-    for src in ["gene_info.txt", "genes.ffn", "genes.len"]:
-        upload_tasks.append((src, destpath(src)))
-    src = f"centroids.{max_percent}.ffn"
-    dst = destpath("centroids.ffn")  # no percent in this
-    upload_tasks.append((src, dst))
-    # Stash cluster_files under pangenome_dir/temp/
-    # This includes an extra copy of centroids.{max_percent}.ffn
-    for files in cluster_files.values():
-        # files is a pair of (centroid, uclust) files
-        for src in files:
-            upload_tasks.append((src, destpath("temp/" + src)))
+    # Note that centroids.{max_percent}.ffn is uploaded to 2 different destinations.
+    upload_tasks = [
+        ("genes.ffn", destpath("genes.ffn")),
+        ("genes.len", destpath("genes.len")),
+        (f"centroids.{max_percent}.ffn", destpath("centroids.ffn"))  # no percent in dest, per spec
+    ]
+    for src in flatten(cluster_files.values()):
+        upload_tasks.append((src, destpath("temp/" + src)))
 
+    # Upload in parallel.
     multithreading_map(upload_star, upload_tasks)
+
+    # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
+    upload("gene_info.txt", destpath("gene_info.txt"))
 
 
 def register_args(main_func):
@@ -287,13 +293,12 @@ def register_args(main_func):
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
-                           required=True,
-                           help="species whose pangenome to build")
-    subparser.add_argument('-9',
-                           '--toc',
-                           dest='toc',
                            required=False,
-                           help="reserved")
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
+    subparser.add_argument('--slave_toc',
+                           dest='slave_toc',
+                           required=False,
+                           help="reserved to pass table of contents from master to slave")
     return main_func
 
 

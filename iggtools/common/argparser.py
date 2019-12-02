@@ -56,6 +56,12 @@ def _add_shared_subcommand_args(subparser):
                            dest='debug',
                            help="debug mode, e.g. skip cleanup on error, extra prints, etc.")
     subparser.set_defaults(debug=False)
+    subparser.add_argument('--slave_mode',
+                           action='store_const',
+                           const=True,
+                           dest='slave_mode',
+                           help="slave mode is reserved for master-slave decomposition (do not use directly)")
+    subparser.set_defaults(slave=False)
 
 
 # ----------------------------------------------------- #
