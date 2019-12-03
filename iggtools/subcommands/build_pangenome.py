@@ -1,12 +1,19 @@
+import os
+import sys
 from collections import defaultdict
+from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, num_vcpu, transpose, find_files, sorted_dict
+from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict, upload, upload_star, flatten
 from iggtools.params import outputs
 
 
 CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
 CLUSTERING_PERCENTS = sorted(CLUSTERING_PERCENTS, reverse=True)
+
+
+# Up to this many concurrent species builds.
+CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 
 
 def pangenome_file(representative_id, component):
@@ -71,7 +78,13 @@ def vsearch(percent_id, genes, num_threads=num_vcpu):
     if find_files(centroids) and find_files(uclust):
         tsprint(f"Found vsearch results at percent identity {percent_id} from prior run.")
     else:
-        command(f"vsearch --quiet --cluster_fast {genes} --id {percent_id/100.0} --threads {num_threads} --centroids {centroids} --uc {uclust}")
+        try:
+            command(f"vsearch --quiet --cluster_fast {genes} --id {percent_id/100.0} --threads {num_threads} --centroids {centroids} --uc {uclust}")
+        except:
+            # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
+            command(f"mv {centroids} {centroids}.bogus", check=False)
+            command(f"mv {uclust} {uclust}.bogus", check=False)
+            raise
     return centroids, uclust #, log
 
 
@@ -131,37 +144,154 @@ def xref(cluster_files, gene_info_file):
 
 
 def build_pangenome(args):
+    if args.slave_toc:
+        build_pangenome_slave(args)
+    else:
+        build_pangenome_master(args)
+
+
+@retry
+def find_files_with_retry(f):
+    return find_files(f)
+
+
+def decode_species_arg(args, species):
+    selected_species = set()
+    try:
+        if args.species.upper() == "ALL":
+            selected_species = set(species)
+        else:
+            for s in args.species.split(","):
+                if ":" not in s:
+                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
+                    selected_species.add(s)
+                else:
+                    i, n = s.split(":")
+                    i = int(i)
+                    n = int(n)
+                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
+                    for sid in species:
+                        if int(sid) % n == i:
+                            selected_species.add(sid)
+    except:
+        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
+        raise
+    return sorted(selected_species)
+
+
+def build_pangenome_master(args):
+
+    # Fetch table of contents from s3.
+    # This will be read separately by each species build subcommand, so we make a local copy.
+    local_toc = os.path.basename(outputs.genomes)
+    command(f"rm -f {local_toc}")
+    command(f"aws s3 cp {outputs.genomes} {local_toc}")
+
+    species, representatives = read_toc(local_toc)
+
+    def species_work(species_id):
+        assert species_id in species, f"Species {species_id} is not in the database."
+        representative_id = representatives[species_id]
+        species_genomes = species[species_id]
+
+        def destpath(src):
+            return pangenome_file(representative_id, src + ".lz4")
+
+        # The species build will upload this file last, after everything else is successfully uploaded.
+        # Therefore, if this file exists in s3, there is no need to redo the species build.
+        dest_file = destpath("gene_info.txt")
+        msg = f"Building pangenome for species {species_id} with representative genome {representative_id} and {len(species_genomes)} total genomes."
+        if find_files_with_retry(dest_file):
+            if not args.force:
+                tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Building", "Rebuilding")
+
+        with CONCURRENT_SPECIES_BUILDS:
+            tsprint(msg)
+            if not args.debug:
+                command(f"rm -rf {species_id}")
+            if not os.path.isdir(str(species_id)):
+                command(f"mkdir {species_id}")
+            try:
+                # Recurisve call via subcommand.  Use subdir, redirect logs.
+                myroot = os.path.dirname(os.path.dirname(sys.argv[0]))
+                command(f"cd {species_id}; PYTHONPATH={myroot} {sys.executable} -m iggtools build_pangenome -s {species_id} --slave_mode --slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} > pangenome_build.log 2>&1")
+            finally:
+                if not os.path.isfile(f"{species_id}/pangenome_build.log"):
+                    command(f"echo 'Failed to even create log file.' > {species_id}/pangenome_build.log")
+                try:
+                    upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
+                except:
+                    pass
+                if not args.debug:
+                    command(f"rm -rf {species_id}")
+
+    # Check for destination presence in s3 with up to 10-way concurrency.
+    # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
+    species_id_list = decode_species_arg(args, species)
+    multithreading_map(species_work, species_id_list, num_threads=10)
+
+
+def build_pangenome_slave(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
     Output spec: https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
 
-    species, representatives = read_toc(outputs.genomes)
+    violation = "Please do not call build_pangenome_slave directly.  Violation"
+    assert args.slave_mode, f"{violation}:  Missing --slave_mode arg."
+    assert os.path.isfile(args.slave_toc), f"{violation}: File does not exist: {args.slave_toc}"
+    assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
+    species, representatives = read_toc(args.slave_toc)
     species_id = args.species
-    assert species_id in species, f"Species {species_id} is not in the database."
+
+    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     species_genomes = species[species_id]
     representative_id = representatives[species_id]
     species_genomes_ids = species_genomes.keys()
-    tsprint(f"There are {len(species_genomes)} genomes for species {species_id} with representative genome {representative_id}.")
+
+    def destpath(src):
+        return pangenome_file(representative_id, src + ".lz4")
+
+    command(f"aws s3 rm --recursive {pangenome_file(representative_id, '')}")
 
     cleaned = multiprocessing_map(clean_genes, species_genomes_ids)
 
-    command("rm -f genes.ffn")
-    command("rm -f genes.len")
+    command("rm -f genes.ffn genes.len")
 
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
         fna_files, len_files = transpose(temp_files)
         command("cat " + " ".join(fna_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
 
+    # The initial clustering to max_percent takes longest.
     max_percent, lower_percents = CLUSTERING_PERCENTS[0], CLUSTERING_PERCENTS[1:]
     cluster_files = {max_percent: vsearch(max_percent, "genes.ffn")}
+
+    # Reclustering of the max_percent centroids is usually quick, and can proceed in prallel.
     recluster = lambda percent_id: vsearch(percent_id, cluster_files[max_percent][0])
     cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
+
+    # Create list of (source, dest) pairs for uploading.
+    # Note that centroids.{max_percent}.ffn is uploaded to 2 different destinations.
+    upload_tasks = [
+        ("genes.ffn", destpath("genes.ffn")),
+        ("genes.len", destpath("genes.len")),
+        (f"centroids.{max_percent}.ffn", destpath("centroids.ffn"))  # no percent in dest, per spec
+    ]
+    for src in flatten(cluster_files.values()):
+        upload_tasks.append((src, destpath("temp/" + src)))
+
+    # Upload in parallel.
+    multithreading_map(upload_star, upload_tasks)
+
+    # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
+    upload("gene_info.txt", destpath("gene_info.txt"))
 
 
 def register_args(main_func):
@@ -169,8 +299,12 @@ def register_args(main_func):
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
-                           required=True,
-                           help="species whose pangenome to build")
+                           required=False,
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
+    subparser.add_argument('--slave_toc',
+                           dest='slave_toc',
+                           required=False,
+                           help="reserved to pass table of contents from master to slave")
     return main_func
 
 
