@@ -61,7 +61,7 @@ def _add_shared_subcommand_args(subparser):
                            const=True,
                            dest='slave_mode',
                            help="slave mode is reserved for master-slave decomposition (do not use directly)")
-    subparser.set_defaults(slave=False)
+    subparser.set_defaults(slave_mode=False)
 
 
 # ----------------------------------------------------- #
