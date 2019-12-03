@@ -203,7 +203,7 @@ def build_pangenome_master(args):
         msg = f"Building pangenome for species {species_id} with representative genome {representative_id} and {len(species_genomes)} total genomes."
         if find_files_with_retry(dest_file):
             if not args.force:
-                tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
+                tsprint(f"Destination {dest_file} for species {species_id} pangenome already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Building", "Rebuilding")
 
