@@ -78,7 +78,13 @@ def vsearch(percent_id, genes, num_threads=num_vcpu):
     if find_files(centroids) and find_files(uclust):
         tsprint(f"Found vsearch results at percent identity {percent_id} from prior run.")
     else:
-        command(f"vsearch --quiet --cluster_fast {genes} --id {percent_id/100.0} --threads {num_threads} --centroids {centroids} --uc {uclust}")
+        try:
+            command(f"vsearch --quiet --cluster_fast {genes} --id {percent_id/100.0} --threads {num_threads} --centroids {centroids} --uc {uclust}")
+        except:
+            # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
+            command(f"mv {centroids} {centroids}.bogus", check=False)
+            command(f"mv {uclust} {uclust}.bogus", check=False)
+            raise
     return centroids, uclust #, log
 
 
