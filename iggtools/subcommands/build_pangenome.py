@@ -3,8 +3,8 @@ import sys
 from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict, upload, upload_star, flatten
+from iggtools.common.argparser import add_subcommand, SUPPRESS
+from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict, upload, upload_star, flatten, pythonpath
 from iggtools.params import outputs
 
 
@@ -144,7 +144,7 @@ def xref(cluster_files, gene_info_file):
 
 
 def build_pangenome(args):
-    if args.slave_toc:
+    if args.zzz_slave_toc:
         build_pangenome_slave(args)
     else:
         build_pangenome_master(args)
@@ -215,8 +215,7 @@ def build_pangenome_master(args):
                 command(f"mkdir {species_id}")
             try:
                 # Recurisve call via subcommand.  Use subdir, redirect logs.
-                myroot = os.path.dirname(os.path.dirname(sys.argv[0]))
-                command(f"cd {species_id}; PYTHONPATH={myroot} {sys.executable} -m iggtools build_pangenome -s {species_id} --slave_mode --slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} > pangenome_build.log 2>&1")
+                command(f"cd {species_id}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} > pangenome_build.log 2>&1")
             finally:
                 if not os.path.isfile(f"{species_id}/pangenome_build.log"):
                     command(f"echo 'Failed to even create log file.' > {species_id}/pangenome_build.log")
@@ -240,11 +239,11 @@ def build_pangenome_slave(args):
     """
 
     violation = "Please do not call build_pangenome_slave directly.  Violation"
-    assert args.slave_mode, f"{violation}:  Missing --slave_mode arg."
-    assert os.path.isfile(args.slave_toc), f"{violation}: File does not exist: {args.slave_toc}"
+    assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
+    assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
     assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
-    species, representatives = read_toc(args.slave_toc)
+    species, representatives = read_toc(args.zzz_slave_toc)
     species_id = args.species
 
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
@@ -301,10 +300,10 @@ def register_args(main_func):
                            dest='species',
                            required=False,
                            help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
-    subparser.add_argument('--slave_toc',
-                           dest='slave_toc',
+    subparser.add_argument('--zzz_slave_toc',
+                           dest='zzz_slave_toc',
                            required=False,
-                           help="reserved to pass table of contents from master to slave")
+                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
     return main_func
 
 

@@ -439,5 +439,10 @@ def upload_star(srcdst):
     return upload(src, dst)
 
 
+def pythonpath():
+    # Path from which this program can be called with "python3 -m iggtools"
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 if __name__ == "__main__":
     tsprint(f"Hello from {backtick('pwd')}.  Put tests here.")

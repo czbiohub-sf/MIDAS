@@ -4,7 +4,7 @@ from iggtools.common.utils import tsprint, command, command_output, backtick
 
 def nvme_size_str():
     # When /mnt/nvme does not exist, do not crash (check=False); just return empty string.
-    return command_output("""df -m /mnt/nvme | awk '{print $2}' | tail -1""", check=False)
+    return backtick("""df -m /mnt/nvme | awk '{print $2}' | tail -1""", check=False)
 
 
 def init_nvme(args):
