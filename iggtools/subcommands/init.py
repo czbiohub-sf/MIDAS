@@ -26,7 +26,7 @@ def init(args):
     with OutputStream(outputs.genomes) as out:
 
         target_columns = ["genome", "species", "representative", "genome_is_representative"]
-        out.write(("\t".join(target_columns) + "\n").encode('utf-8'))
+        out.write("\t".join(target_columns) + "\n")
 
         with InputStream(inputs.genomes2species) as g2s:
             for row in parse_table(g2s, ["MAG_code", "Species_id"]):
@@ -34,7 +34,7 @@ def init(args):
                 species = id_remap[representative]
                 genome_is_representative = str(int(genome == representative))
                 target_row = [genome, species, representative, genome_is_representative]
-                out.write(("\t".join(target_row) + "\n").encode('utf-8'))
+                out.write("\t".join(target_row) + "\n")
                 seen_genomes.add(genome)
                 seen_species.add(species)
 

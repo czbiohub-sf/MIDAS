@@ -100,6 +100,8 @@ def xref(cluster_files, gene_info_file):
     """
     Produce the gene_info.txt file as documented in https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
+    # TODO:  Handle rare case where a 99% centroid for some cluster is itself assigned to another 99% cluster.
+    #
     # Let centroids[gene][percent_id] be the centroid of the percent_id cluster contianing gene.
     #
     # The centroids are themselves genes, and their ids, as all gene_ids, are strings
@@ -185,7 +187,7 @@ def build_pangenome_master(args):
     # This will be read separately by each species build subcommand, so we make a local copy.
     local_toc = os.path.basename(outputs.genomes)
     command(f"rm -f {local_toc}")
-    command(f"aws s3 cp {outputs.genomes} {local_toc}")
+    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
 
     species, representatives = read_toc(local_toc)
 
@@ -209,22 +211,25 @@ def build_pangenome_master(args):
 
         with CONCURRENT_SPECIES_BUILDS:
             tsprint(msg)
+            slave_log = "pangenome_build.log"
+            slave_subdir = str(species_id)
             if not args.debug:
-                command(f"rm -rf {species_id}")
-            if not os.path.isdir(str(species_id)):
-                command(f"mkdir {species_id}")
+                command(f"rm -rf {slave_subdir}")
+            if not os.path.isdir(slave_subdir):
+                command(f"mkdir {slave_subdir}")
+            # Recurisve call via subcommand.  Use subdir, redirect logs.
+            slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
+            with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+                slog.write(msg + "\n")
+                slog.write(slave_cmd + "\n")
             try:
-                # Recurisve call via subcommand.  Use subdir, redirect logs.
-                command(f"cd {species_id}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} > pangenome_build.log 2>&1")
+                command(slave_cmd)
             finally:
-                if not os.path.isfile(f"{species_id}/pangenome_build.log"):
-                    command(f"echo 'Failed to even create log file.' > {species_id}/pangenome_build.log")
-                try:
-                    upload(f"{species_id}/pangenome_build.log", destpath("pangenome_build.log"))
-                except:
-                    pass
+                # Cleanup should not raise exceptions of its own, so as not to interfere with any
+                # prior exceptions that may be more informative.  Hence check=False.
+                upload(f"{slave_subdir}/{slave_log}", destpath(slave_log), check=False)
                 if not args.debug:
-                    command(f"rm -rf {species_id}")
+                    command(f"rm -rf {slave_subdir}", check=False)
 
     # Check for destination presence in s3 with up to 10-way concurrency.
     # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
