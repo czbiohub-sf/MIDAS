@@ -41,6 +41,7 @@ def tserr(msg):
     with tslock:
         sys.stderr.write(str(msg))
         sys.stderr.write("\n")
+        sys.stderr.flush()
 
 
 def tsprint(msg):
@@ -107,6 +108,7 @@ class InputStream:
         self.subproc = 0
         self.ignore_called_process_errors = False
         self.binary = binary
+        self.stream = None
 
     def ignore_errors(self):
         """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function."""
@@ -115,8 +117,9 @@ class InputStream:
     def __enter__(self):
         self.subproc = command(self.cat, popen=True, stdout=subprocess.PIPE)
         self.subproc.__enter__()
-        self.subproc.stdout.ignore_errors = self.ignore_errors
-        return self.subproc.stdout if self.binary else text_mode(self.subproc.stdout)  # Note the subject of the WITH statement is the subprocess STDOUT
+        self.stream = self.subproc.stdout if self.binary else text_mode(self.subproc.stdout)  # Note the subject of the WITH statement is the subprocess STDOUT
+        self.stream.ignore_errors = self.ignore_errors
+        return self.stream
 
     def __exit__(self, etype, evalue, etraceback):
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
@@ -156,6 +159,7 @@ class OutputStream:
         self.subproc = 0
         self.ignore_called_process_errors = False
         self.binary = binary
+        self.stream = None
 
     def ignore_errors(self):
         """Exiting the context before consuming all data would normally raise an exception.  To suppress that, call this function.  This can happen if you specify head or tail as a filter while debugging.  You probably don't want to see this called in production code with OutputStream."""
@@ -164,10 +168,12 @@ class OutputStream:
     def __enter__(self):
         self.subproc = command(self.cat, popen=True, stdin=subprocess.PIPE)
         self.subproc.__enter__()
-        self.subproc.stdin.ignore_errors = self.ignore_errors
-        return self.subproc.stdin if self.binary else text_mode(self.subproc.stdin)  # Note the subject of the WITH statement is the subprocess STDIN
+        self.stream = self.subproc.stdin if self.binary else text_mode(self.subproc.stdin)  # Note the subject of the WITH statement is the subprocess STDIN
+        self.stream.ignore_errors = self.ignore_errors
+        return self.stream
 
     def __exit__(self, etype, evalue, etraceback):
+        self.stream.flush()
         result = self.subproc.__exit__(etype, evalue, etraceback)  # pylint: disable=assignment-from-no-return
         if not self.ignore_called_process_errors:
             returncode = self.subproc.returncode
@@ -271,7 +277,7 @@ def smart_ls(pdir, missing_ok=True, memory=None):
         except Exception as e:
             msg = f"Could not read directory: {pdir}"
             if missing_ok and isinstance(e, subprocess.CalledProcessError):
-                tsprint(f"INFO: {msg}")
+                # tsprint(f"INFO: {msg}.  It is OK for that directory to be missing.")
                 result = []
             else:
                 tsprint(f"ERROR: {msg}")
@@ -430,13 +436,18 @@ def flatten(l):
 
 
 @retry
-def upload(src, dst):
-    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}")
+def upload(src, dst, check=True):
+    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}", check=check)
 
 
 def upload_star(srcdst):
     src, dst = srcdst
     return upload(src, dst)
+
+
+def pythonpath():
+    # Path from which this program can be called with "python3 -m iggtools"
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 if __name__ == "__main__":

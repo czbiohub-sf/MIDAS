@@ -44,6 +44,9 @@ RUN prokka --version
 # AWS instance setup
 RUN apt-get install -y mdadm xfsprogs htop
 
+# We need sudo to exist for some s3mi commands, even though it doesn't do anything
+RUN apt-get install -y sudo
+
 # Cleanup
 RUN rm -rf /tmp/*
 
