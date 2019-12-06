@@ -30,7 +30,7 @@ def init_nvme(args):
 
 
 def register_args(main_func):
-    add_subcommand('aws_batch_init', main_func, help="inialize AWS Batch instance")
+    add_subcommand('aws_batch_init', main_func, help="init AWS Batch instance (never run outside AWS Batch)")
     return main_func
 
 

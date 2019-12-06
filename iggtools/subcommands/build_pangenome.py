@@ -299,7 +299,7 @@ def build_pangenome_slave(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('build_pangenome', main_func, help='build pangenome for given species')
+    subparser = add_subcommand('build_pangenome', main_func, help='build pangenome for specified species')
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
