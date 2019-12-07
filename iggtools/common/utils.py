@@ -237,7 +237,8 @@ def command_output(cmd, quiet=False, **kwargs):
 
 def backtick(cmd, **kwargs):
     """Execute specified cmd without echoing it.  Capture and return its stdout, stripping any whitespace."""
-    return command_output(cmd, quiet=True, **kwargs).strip()
+    quiet = kwargs.pop('quiet', True)
+    return command_output(cmd, quiet=quiet, **kwargs).strip()
 
 
 def smart_glob(pattern, expected=range(0, sys.maxsize), memory=None):
@@ -448,6 +449,19 @@ def upload_star(srcdst):
 def pythonpath():
     # Path from which this program can be called with "python3 -m iggtools"
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def datecode(t=None, local=False):
+    """The date code incorporates both the unix time and the date in either the local timezone (respecting DST) or UTC (aka GMT).  It is convenient for naming ops subdirectories or tagging events for easy sorting."""
+    if t == None:
+        t = time.time()
+    zt = time.localtime(t) if local else time.gmtime(t)
+    return "{year}_{month:02d}_{day:02d}__{t}".format(
+        year=zt.tm_year,
+        month=zt.tm_mon,
+        day=zt.tm_mday,
+        t=int(t)
+    )
 
 
 if __name__ == "__main__":

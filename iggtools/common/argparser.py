@@ -1,5 +1,11 @@
 from argparse import ArgumentParser, SUPPRESS
 from iggtools import version
+from iggtools.params import batch
+from iggtools.params.outputs import opsdir
+
+
+# TODO:  Implement '--batch' in subcommands.
+BATCH_FLAGS_IN_SUBCOMMANDS = False
 
 
 def _new(_):
@@ -25,7 +31,7 @@ def _new(_):
     return parser
 
 
-def _add_shared_subcommand_args(subparser):
+def _add_shared_subcommand_args(subparser, suppress_batch_args=False):
     """Arguments to be made available in every subcommand."""
     #
     # Adding the same flag separately to each subcommand parser makes it possible for
@@ -54,7 +60,7 @@ def _add_shared_subcommand_args(subparser):
                            action='store_const',
                            const=True,
                            dest='debug',
-                           help="debug mode, e.g. skip cleanup on error, extra prints, etc.")
+                           help="debug mode: skip cleanup on error, extra prints")
     subparser.set_defaults(debug=False)
     subparser.add_argument('--zzz_slave_mode',
                            action='store_const',
@@ -62,6 +68,39 @@ def _add_shared_subcommand_args(subparser):
                            dest='zzz_slave_mode',
                            help=SUPPRESS) # "slave mode is reserved for master-slave decomposition (do not use directly)"
     subparser.set_defaults(zzz_slave_mode=False)
+    subparser.add_argument('--batch_branch',
+                           dest='batch_branch',
+                           required=False,
+                           help=f"iggtools git branch for AWS batch, default '{batch.default_branch}'" if not suppress_batch_args else SUPPRESS)
+    subparser.set_defaults(batch_branch=batch.default_branch)
+    subparser.add_argument('--batch_memory',
+                           dest='batch_memory',
+                           required=False,
+                           help=f"memory size for AWS batch container, default '{batch.default_memory}'" if not suppress_batch_args else SUPPRESS)
+    subparser.set_defaults(batch_memory=batch.default_memory)
+    subparser.add_argument('--batch_vcpus',
+                           dest='batch_vcpus',
+                           required=False,
+                           help=f"vCPUs for AWS batch container, default '{batch.default_vcpus}'" if not suppress_batch_args else SUPPRESS)
+    subparser.set_defaults(batch_vcpus=batch.default_vcpus)
+    subparser.add_argument('--batch_queue',
+                           dest='batch_queue',
+                           required=False,
+                           help=f"AWS batch queue, default '{batch.default_queue}'" if not suppress_batch_args else SUPPRESS)
+    subparser.set_defaults(batch_queue=batch.default_queue)
+    subparser.add_argument('--batch_ecr_image',
+                           dest='batch_ecr_image',
+                           required=False,
+                           help=f"ecr image for AWS batch, default '{batch.default_ecr_image}'" if not suppress_batch_args else SUPPRESS)
+    subparser.set_defaults(batch_ecr_image=batch.default_ecr_image)
+    if BATCH_FLAGS_IN_SUBCOMMANDS:
+        subparser.add_argument('-b',
+                               '--batch',
+                               action='store_const',
+                               const=True,
+                               dest='debug',
+                               help=f"submit this command to AWS Batch with record keeping in {opsdir}; exposes additional options from the aws_batch_submit subcommand")
+        subparser.set_defaults(batch=False)
 
 
 # ----------------------------------------------------- #
@@ -75,7 +114,7 @@ def add_subcommand(subcommand_name, subcommand_main, *args, **kwargs):
     assert isinstance(singleton, ArgumentParser)
     subparser = singleton.subparsers.add_parser(subcommand_name, *args, **kwargs)
     subparser.set_defaults(subcommand_main=subcommand_main)
-    _add_shared_subcommand_args(subparser)
+    _add_shared_subcommand_args(subparser, suppress_batch_args="aws_batch" not in subcommand_name)
     return subparser
 
 
@@ -90,3 +129,7 @@ def parse_args():
 @_new
 def singleton():
     assert False, "Through the magic of decorators, singleton becomes an instance of ArgumentParser."
+
+
+if BATCH_FLAGS_IN_SUBCOMMANDS:
+    _add_shared_subcommand_args(singleton)
