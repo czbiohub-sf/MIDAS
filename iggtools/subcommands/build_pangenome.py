@@ -44,7 +44,7 @@ def read_toc(genomes_tsv, deep_sort=False):
 
 
 # 1. Occasional failures in aws s3 cp require a retry.
-# 2. In future, for really large numbers of genomes, we may prefer instead a separate wave of retries for the first-attempt failures.
+# 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
 # 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
 @retry
 def clean_genes(genome_id):
@@ -54,7 +54,7 @@ def clean_genes(genome_id):
 
     with open(output_genes, 'w') as o_genes, \
          open(output_info, 'w') as o_info, \
-         InputStream(input_annotations, check_path=False) as genes:
+         InputStream(input_annotations, check_path=False) as genes:  # check_path=False because for flat directory structure it's slow
         for rec in Bio.SeqIO.parse(genes, 'fasta'):
             gene_id = rec.id
             gene_seq = str(rec.seq).upper()
@@ -100,7 +100,7 @@ def xref(cluster_files, gene_info_file):
     """
     Produce the gene_info.txt file as documented in https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
-    # TODO:  Handle rare case where a 99% centroid for some cluster is itself assigned to another 99% cluster.
+    # TODO:  Handle rare case where a 99% centroid for some cluster is itself assigned to another 99% cluster.  # pylint: disable=fixme
     #
     # Let centroids[gene][percent_id] be the centroid of the percent_id cluster contianing gene.
     #
@@ -159,7 +159,7 @@ def find_files_with_retry(f):
 
 def decode_species_arg(args, species):
     selected_species = set()
-    try:
+    try:  # pylint: disable=too-many-nested-blocks
         if args.species.upper() == "ALL":
             selected_species = set(species)
         else:

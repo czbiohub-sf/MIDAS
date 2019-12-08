@@ -42,7 +42,7 @@ def aws_batch_submit(args):
     datestamp, timestamp = datecode(t_submit).split("__")
     # timestamp is a string, and that's good, because JSON can lose resolution for large integers
     event = {
-        "unixtime": timestamp,
+        "unix_timestamp": timestamp,
         "utc_date": datestamp,
         "type": "aws_batch_submit",
         "job_id": job_id,

@@ -8,7 +8,8 @@ def nvme_size_str():
 
 
 def init_nvme(args):
-    # TODO:  Generalize the magic numbers 838 and 1715518 (those are for AWS instance type r5.12xlarge).
+    # TODO:  Generalize the magic numbers 838 and 1715518 (those are for AWS instance type r5.12xlarge).  # pylint: disable=fixme
+    # https://github.com/czbiohub/iggtools/issues/17
     if nvme_size_str() != '1715518':
         # Raid, format, and mount the NVME drives attached to this instance.
         tsprint("Initializing instance NVME storage.")
