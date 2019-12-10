@@ -4,7 +4,7 @@ from iggtools.params import batch
 from iggtools.params.outputs import opsdir
 
 
-# TODO:  Implement '--batch' in subcommands.
+# TODO:  Implement '--batch' in subcommands.  # pylint: disable=fixme
 BATCH_FLAGS_IN_SUBCOMMANDS = False
 
 
