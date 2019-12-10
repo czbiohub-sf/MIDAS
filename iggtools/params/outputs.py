@@ -3,6 +3,7 @@
 
 igg = "s3://microbiome-igg/2.0"
 genomes = f"{igg}/genomes.tsv"
+cleaned_imports = f"{igg}/cleaned_imports"
 pangenomes = f"{igg}/pangenomes"
-annotations = f"{igg}/prodigal"
+annotations = f"{igg}/prokka"
 opsdir = f"{igg}/operations"
