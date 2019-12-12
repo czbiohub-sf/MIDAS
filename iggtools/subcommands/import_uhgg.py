@@ -38,6 +38,11 @@ def read_toc(genomes_tsv, deep_sort=False):
     return species, representatives, genomes
 
 
+# Move genome id parsing and name transformations in some central place that all commands can import
+def unified_genome_id(genome_id):
+    return "UHGG" + genome_id.replace("GUT_GENOME", "")
+
+
 # 1. Occasional failures in aws s3 cp require a retry.
 # 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
 # 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
@@ -51,9 +56,9 @@ def clean_genome(genome_id, representative_id):
         for sn, rec in enumerate(Bio.SeqIO.parse(genome, 'fasta')):
             contig_seq = str(rec.seq).upper()
             contig_len = len(contig_seq)
-            gid = genome_id.replace("GUT_GENOME", "")
+            ugid = unified_genome_id(genome_id)
             contig_hash = md5(contig_seq.encode('utf-8')).hexdigest()[-6:]
-            new_contig_id = f"UHGG{gid}_C{sn}_L{contig_len/1000.0:3.1f}k_H{contig_hash}"
+            new_contig_id = f"{ugid}_C{sn}_L{contig_len/1000.0:3.1f}k_H{contig_hash}"
             o_genome.write(f">{new_contig_id}\n{contig_seq}\n")
 
     return output_genome
@@ -113,7 +118,7 @@ def import_uhgg_master(args):
         msg = f"Importing genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
             if not args.force:
-                tsprint(f"Destination {dest_file} for genome {genome_id} pangenome already exists.  Specify --force to overwrite.")
+                tsprint(f"Destination {dest_file} for genome {genome_id} already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Importing", "Reimporting")
 
