@@ -50,6 +50,7 @@ def download_genome(genome_id, cleaned_genome):
 
 
 def annotate_genome(genome_id, species_id):
+    # Prokka will crash if installed <6 months ago.  It's a feature.  See tbl2asn.
     cleaned_genome = imported_genome_file(genome_id, species_id, f"{genome_id}.fna.lz4")
     ugid = unified_genome_id(genome_id)
 
@@ -58,21 +59,18 @@ def annotate_genome(genome_id, species_id):
     subdir = "prokka_dir"
     command(f"rm -rf {subdir}")
 
-    output_files = {
-        "{genome_id}.faa",
-        "{genome_id}.ffn",
-        "{genome_id}.fna",
-        "{genome_id}.gff",
-        "{genome_id}.tsv"
-    }
-    try:
-        command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {ugid} --compliant {genome_id}.fasta")
-        for o in output_files:
-            command(f"mv {subdir}/{o} .")
-    finally:
-        command("mv {subdir}/{genome_id}.log prokka.log")
+    output_files = [
+        f"{genome_id}.faa",
+        f"{genome_id}.ffn",
+        f"{genome_id}.fna",
+        f"{genome_id}.gff",
+        f"{genome_id}.tsv"
+    ]
+    command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {ugid} --compliant {genome_id}.fasta")
+    for o in output_files:
+        command(f"mv {subdir}/{o} .")
 
-    return output_files + ["prokka.log"]
+    return output_files
 
 
 def annotate_genes(args):
@@ -161,6 +159,11 @@ def annotate_genes_master(args):
     multithreading_map(genome_work, genome_id_list, num_threads=20)
 
 
+def drop_lz4(filename):
+    assert filename.endswith(".lz4")
+    return filename[:-4]
+
+
 def annotate_genes_slave(args):
     """
     https://github.com/czbiohub/iggtools/wiki
@@ -188,7 +191,7 @@ def annotate_genes_slave(args):
     multithreading_map(upload_star, upload_tasks)
 
     # Upload this last because it indicates all other work has succeeded.
-    upload(last_output, annotations_file(genome_id, species_id, last_output))
+    upload(drop_lz4(last_output), annotations_file(genome_id, species_id, last_output))
 
 
 def register_args(main_func):

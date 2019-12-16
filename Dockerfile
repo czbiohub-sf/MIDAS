@@ -18,13 +18,9 @@ RUN apt-get update && apt-get install -y python3.7
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.7 2
 RUN apt-get install -y python3-pip
 
-# aws
-RUN pip3 install awscli --upgrade
-RUN pip3 install --upgrade 'git+git://github.com/chanzuckerberg/s3mi.git'
-
 # bioinformatics
 RUN apt-get install -y samtools bowtie2 vsearch
-RUN pip3 install pysam biopython
+RUN pip3 install biopython
 
 # Prokka
 RUN apt-get install -y libdatetime-perl libxml-simple-perl libdigest-md5-perl default-jre git
@@ -35,17 +31,31 @@ RUN apt-get remove -y ncbi-blast+
 RUN wget -N ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.9.0/ncbi-blast-2.9.0+-1.x86_64.rpm
 RUN alien -i ncbi-blast-2.9.0+-1.x86_64.rpm
 RUN rm -rf ncbi-blast-2.9.0+-1.x86_64.rpm
-RUN bash -c "yes | cpan Bio::Perl"
+# The following line differs from the official instructions in that it actually works.
+RUN cpan List::Util
 WORKDIR /usr/local
 RUN git clone https://github.com/tseemann/prokka.git && /usr/local/prokka/bin/prokka --setupdb
 RUN ln -sf /usr/local/prokka/bin/prokka /usr/local/bin/prokka
 RUN prokka --version
+
+# In future we should append a layer that re-installs tbl2asn, which is a component
+# of blast that expires after 6 months, and is needed by prokka.  Uncomment this layer
+# when your jobs started failing in Prokka with error that tbl2asn is expired.
+# RUN wget ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/converters/by_program/tbl2asn/linux.tbl2asn.gz && \
+#    gunzip linux.tbl2asn.gz && \
+#    mv linux.tbl2asn tbl2asn && \
+#    chmod +x tbl2asn && \
+#    mv tbl2asn /usr/local/prokka/binaries/linux/
 
 # AWS instance setup
 RUN apt-get install -y mdadm xfsprogs htop
 
 # We need sudo to exist for some s3mi commands, even though it doesn't do anything
 RUN apt-get install -y sudo
+
+# aws
+RUN pip3 install awscli --upgrade
+RUN pip3 install --upgrade 'git+git://github.com/chanzuckerberg/s3mi.git'
 
 # Cleanup
 RUN rm -rf /tmp/*

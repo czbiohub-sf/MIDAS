@@ -438,7 +438,12 @@ def flatten(l):
 
 @retry
 def upload(src, dst, check=True):
-    command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}", check=check)
+    assert os.path.isfile(src)
+    try:
+        command(f"set -o pipefail; lz4 -c {src} | aws s3 cp --only-show-errors - {dst}", check=check)
+    except:
+        command(f"aws s3 rm {dst}", check=False)
+        raise
 
 
 def upload_star(srcdst):
