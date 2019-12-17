@@ -65,7 +65,7 @@ def hmmsearch(genome_id, species_id, num_threads=1):
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {marker_hmmsearch}  marker_genes.hmm {genome_id}.faa")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {marker_hmmsearch} marker_genes.hmm {genome_id}.faa")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {marker_hmmsearch} {marker_hmmsearch}.bogus", check=False)
@@ -124,7 +124,7 @@ def build_marker_genes_master(args):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = input_annotations_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
+        dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
         msg = f"Running HMMsearch for genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
             if not args.force:
