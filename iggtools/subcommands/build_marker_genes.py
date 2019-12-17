@@ -230,6 +230,7 @@ def build_marker_genes_master(args):
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_marker_genes --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
         with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+            print("here")
             slog.write(msg + "\n")
             slog.write(slave_cmd + "\n")
         try:
@@ -237,7 +238,7 @@ def build_marker_genes_master(args):
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            upload(f"{slave_subdir}/{slave_log}", output_marker_genes_file(genome_id, species_id, slave_log + ".lz4"), check=False)
+            upload(f"{slave_subdir}/{slave_log}", destpath(genome_id, species_id, slave_log), check=False)
             if not args.debug:
                 command(f"rm -rf {slave_subdir}", check=False)
 
