@@ -41,7 +41,7 @@ def read_toc(genomes_tsv, deep_sort=False):
 
 # 1. Occasional failures in aws s3 cp require a retry.
 @retry
-def download_genome(genome_id, annotated_genes):
+def download_genes(genome_id, annotated_genes):
     command(f"rm -f {genome_id}.faa")
     command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.faa")
 
@@ -51,27 +51,69 @@ def download_marker_genes_hmm():
     command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} marker_genes.hmm")
 
 
-def hmmsearch(genome_id, species_id, num_threads=1):
+def hmmsearch(genome_id, num_threads=1):
     # Input
-    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
-    download_genome(genome_id, annotated_genes)
+    annotated_genes = f"{genome_id}.faa"
     download_marker_genes_hmm()
 
     # Output
-    marker_hmmsearch = f"{genome_id}.hmmsearch"
+    hmmsearch_file = f"{genome_id}.hmmsearch"
 
     # Command
-    if find_files(marker_hmmsearch):
+    if find_files(hmmsearch_file):
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {marker_hmmsearch} marker_genes.hmm {genome_id}.faa")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} marker_genes.hmm {annotated_genes}")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
-            command(f"mv {marker_hmmsearch} {marker_hmmsearch}.bogus", check=False)
+            command(f"mv {hmmsearch_file} {hmmsearch_file}.bogus", check=False)
             raise
 
-    return marker_hmmsearch
+    return hmmsearch_file
+
+
+def parse_fasta(annotated_genes):
+    """" Lookup of seq_id to sequence for PATRIC genes """
+    gene_seqs = {}
+    with InputStream(annotated_genes) as genes:
+        for rec in Bio.SeqIO.parse(genes, 'fasta'):
+            gene_seqs[rec.id] = str(rec.seq).upper()
+    return gene_seqs
+
+
+def parse_hmmsearch(hmmsearch_file):
+    """ Parse HMMER domblout files. Return data-type formatted dictionary """
+    with InputStream(hmmsearch_file) as f_in:
+        for line in f_in:
+            if line[0] == "#":
+                continue
+            x = line.rstrip().split()
+            query = x[0]
+            target = x[3]
+            evalue = float(x[12])
+            qcov = (int(x[20]) - int(x[19]) + 1)/float(x[2])
+            tcov = (int(x[16]) - int(x[15]) + 1)/float(x[5])
+            yield {'query':query, 'target':target, 'evalue':evalue, 'qcov':qcov, 'tcov':tcov, 'qlen':int(x[2]), 'tlen':int(x[5])}
+
+
+def find_hits(hmmsearch_file):
+    # Input
+    max_evalue = inputs.hmmsearch_max_evalue
+    min_cov = inputs.hmmsearch_min_cov
+
+    hits = {}
+    for r in parse_hmmsearch(hmmsearch_file):
+        if r['evalue'] > max_evalue:
+            continue
+        elif min(r['qcov'], r['tcov']) < min_cov:
+            continue
+        if r['target'] not in hits:
+            hits[r['target']] = r
+        elif r['evalue'] < hits[r['target']]['evalue']:
+            hits[r['target']] = r
+    return list(hits.values())
+
 
 
 def build_marker_genes(args):
@@ -172,10 +214,28 @@ def build_marker_genes_slave(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
+    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
+    download_genes(genome_id, annotated_genes)
+    local_gene_files = f"{genome_id}.faa"
+
     dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
-    marker_hmmsearch = hmmsearch(genome_id, species_id, num_threads=1)
-    upload(marker_hmmsearch, dest_file)
+    hmmsearch_file = hmmsearch(genome_id, num_threads=1)
+
+    # Parse local hmmsearch file
+    hmmsearch_seq = f"{genome_id}.markers.fa"
+    hmmsearch_map = f"{genome_id}.markers.map"
+
+    genes = parse_fasta(local_gene_files)
+    with open(hmmsearch_seq, "w") as o_seq, open(hmmsearch_map, "w") as o_map:
+        for rec in find_hits(hmmsearch_file):
+            marker_gene = genes[rec["query"]].upper()
+            marker_info = [species_id, genome_id, rec["query"], len(marker_gene), rec["target"]]
+            o_map.write('\t'.join([str(_) for _ in marker_info]) + '\n')
+            o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
+
+    ## TODO: once the parsing works, then I can work on upload multiple files
+    upload(hmmsearch_file, dest_file)
 
 
 def register_args(main_func):
