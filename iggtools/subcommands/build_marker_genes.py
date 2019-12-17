@@ -19,12 +19,39 @@ def output_marker_genes_file(genome_id, species_id, filename):
     # s3://{igg}/marker_genes/phyeco/temp/GUT_GENOME138501.{hmmsearch, markers.fa, markers.map}
     return f"{outputs.marker_genes}/temp/{species_id}/{genome_id}/{filename}"
 
+
 def lastoutput(genome_id):
     return f"{genome_id}.markers.map"
 
 
 def destpath(genome_id, species_id, src):
     return output_marker_genes_file(genome_id, species_id, src + ".lz4")
+
+
+# 1. Occasional failures in aws s3 cp require a retry.
+@retry
+def download_reference(ref_path):
+    local_path = os.path.basename(ref_path)
+    command(f"rm -f {local_path}")
+    command(f"aws s3 cp --only-show-errors {ref_path} {local_path}")
+    assert os.path.isfile(local_path), f"Failed download reference file {ref_path} to local file {local_path}"
+    return local_path
+
+
+def drop_lz4(filename):
+    assert filename.endswith(".lz4")
+    return filename[:-4]
+
+
+@retry
+def download_reference_lz4(ref_path):
+    local_path = os.path.basename(ref_path)
+    if local_path.endswith(".lz4"):
+        local_path = drop_lz4(local_path)
+    command(f"rm -f {local_path}")
+    command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
+    assert os.path.isfile(local_path), f"Failed download lz4 reference file {ref_path} to local file {local_path}"
+    return local_path
 
 
 def read_toc(genomes_tsv, deep_sort=False):
@@ -46,43 +73,20 @@ def read_toc(genomes_tsv, deep_sort=False):
     return species, representatives, genomes
 
 
-# 1. Occasional failures in aws s3 cp require a retry.
-@retry
-def download_gene_faa(genome_id, annotated_genes):
-    command(f"rm -f {genome_id}.faa")
-    command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.faa")
-
-@retry
-def download_marker_genes_hmm():
-    command(f"rm -f marker_genes.hmm")
-    command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} marker_genes.hmm")
-
-@retry
-def download_gene_ffn(genome_id, annotated_genes):
-    command(f"rm -f {genome_id}.ffn")
-    command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.ffn")
-
-
-def hmmsearch(genome_id, species_id, num_threads=1):
+def hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1):
     # Input
-    s3_annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
-    download_gene_faa(genome_id, s3_annotated_genes)
-    annotated_genes = f"{genome_id}.faa"
-    assert os.path.isfile(annotated_genes), f"Failed download annotated gene file."
-
-    download_marker_genes_hmm()
-    marker_genes_hmm_model = "marker_genes.hmm"
-    assert os.path.isfile(marker_genes_hmm_model), f"Failed download marker gene HMM model"
+    annotated_genes_s3_path = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
+    annotated_genes = download_reference_lz4(annotated_genes_s3_path)
 
     # Output
     hmmsearch_file = f"{genome_id}.hmmsearch"
 
     # Command
-    if find_files(hmmsearch_file):
+    if find_files(hmmsearch_file): # for debugging purpose
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} {marker_genes_hmm_model} {annotated_genes}")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} {marker_genes_hmm} {annotated_genes}")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {hmmsearch_file} {hmmsearch_file}.bogus", check=False)
@@ -91,7 +95,8 @@ def hmmsearch(genome_id, species_id, num_threads=1):
     return hmmsearch_file
 
 
-def parse_fasta(annotated_genes):
+@retry
+def fetch_genes(annotated_genes):
     """" Lookup of seq_id to sequence for PATRIC genes """
     gene_seqs = {}
     with InputStream(annotated_genes) as genes:
@@ -133,16 +138,14 @@ def find_hits(hmmsearch_file):
     return list(hits.values())
 
 
-def identify_marker_genes(genome_id, species_id):
+def identify_marker_genes(genome_id, species_id, marker_genes_hmm):
 
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
-    hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
 
-    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.ffn.lz4")
-    download_gene_ffn(genome_id, annotated_genes)
-    local_gene_files = f"{genome_id}.ffn"
-    assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
-    genes = parse_fasta(local_gene_files)
+    hmmsearch_file = hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1)
+
+    annotated_genes_s3_path = input_annotations_file(genome_id, species_id, f"{genome_id}.ffn.lz4")
+    genes = fetch_genes(annotated_genes_s3_path)
 
     # Parse local hmmsearch file
     hmmsearch_seq = f"{genome_id}.markers.fa"
@@ -152,7 +155,7 @@ def identify_marker_genes(genome_id, species_id):
         for rec in find_hits(hmmsearch_file):
             marker_gene = genes[rec["query"]].upper()
             marker_info = [species_id, genome_id, rec["query"], len(marker_gene), rec["target"]]
-            o_map.write('\t'.join([str(_) for _ in marker_info]) + '\n')
+            o_map.write('\t'.join(str(mi) for mi in marker_info) + '\n')
             o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
 
     output_files = [hmmsearch_file, hmmsearch_seq, hmmsearch_map]
@@ -199,11 +202,9 @@ def decode_genomes_arg(args, genomes):
 
 def build_marker_genes_master(args):
 
-    # Fetch table of contents from s3.
+    # Fetch table of contents and marker genes HMM model from s3.
     # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = os.path.basename(outputs.genomes)
-    command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
+    local_toc, marker_genes_hmm = multithreading_map(download_reference, [outputs.genomes, inputs.marker_genes_hmm])
 
     _, _, species_for_genome = read_toc(local_toc)
 
@@ -228,7 +229,7 @@ def build_marker_genes_master(args):
             command(f"mkdir {slave_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_marker_genes --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
+        slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_marker_genes --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} --zzz_slave_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {slave_log}"
         with open(f"{slave_subdir}/{slave_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(slave_cmd + "\n")
@@ -253,13 +254,15 @@ def build_marker_genes_slave(args):
     violation = "Please do not call build_merker_genes_slave directly.  Violation"
     assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
     assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
+    assert os.path.isfile(args.zzz_slave_marker_genes_hmm), f"{violation}: Maker genes HMM model file does not exist: {args.zzz_slave_marker_genes_hmm}"
 
     _, _, species_for_genome = read_toc(args.zzz_slave_toc)
 
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
+    marker_genes_hmm = args.zzz_slave_marker_genes_hmm
 
-    output_files = identify_marker_genes(genome_id, species_id)
+    output_files = identify_marker_genes(genome_id, species_id, marker_genes_hmm)
 
     # Upload to S3
     upload_tasks = []
@@ -279,6 +282,10 @@ def register_args(main_func):
                            help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
     subparser.add_argument('--zzz_slave_toc',
                            dest='zzz_slave_toc',
+                           required=False,
+                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
+    subparser.add_argument('--zzz_slave_marker_genes_hmm',
+                           dest='zzz_slave_marker_genes_hmm',
                            required=False,
                            help=SUPPRESS) # "reserved to pass table of contents from master to slave"
     return main_func
