@@ -1,7 +1,6 @@
 import os
 import sys
 from collections import defaultdict
-from hashlib import md5
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath
@@ -49,7 +48,7 @@ def unified_genome_id(genome_id):
 @retry
 def download_genome(genome_id, annotated_genes):
     command(f"rm -f {genome_id}.faa")
-    command(f"aws s3 cp --only-show-errors {cleaned_genome} - | lz4 -dc > {genome_id}.faa")
+    command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.faa")
 
 
 def hmmsearch(genome_id, species_id, num_threads=1):
@@ -174,7 +173,7 @@ def build_marker_genes_slave(args):
 
     dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
-    marker_hmmsearch = hmmsearch(genome_id, species_id, num_threads=1):
+    marker_hmmsearch = hmmsearch(genome_id, species_id, num_threads=1)
     upload(marker_hmmsearch, dest_file)
 
 
