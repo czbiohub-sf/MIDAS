@@ -19,6 +19,13 @@ def output_marker_genes_file(genome_id, species_id, filename):
     # s3://{igg}/marker_genes/phyeco/temp/GUT_GENOME138501.{hmmsearch, markers.fa, markers.map}
     return f"{outputs.marker_genes}/temp/{species_id}/{genome_id}/{filename}"
 
+def lastoutput(genome_id):
+    return f"{genome_id}.markers.map"
+
+
+def destpath(genome_id, species_id, src):
+    return output_marker_genes_file(genome_id, species_id, src + ".lz4")
+
 
 def read_toc(genomes_tsv, deep_sort=False):
     # Read in the table of contents.
@@ -127,10 +134,8 @@ def find_hits(hmmsearch_file):
 
 
 def identify_marker_genes(genome_id, species_id):
-    def destpath(src):
-        return output_marker_genes_file(genome_id, species_id, src + ".lz4")
 
-    dest_file = destpath(f"{genome_id}.hmmsearch")
+    dest_file = destpath(genome_id, species_id, f"{genome_id}.hmmsearch")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
     hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
 
@@ -151,11 +156,9 @@ def identify_marker_genes(genome_id, species_id):
             o_map.write('\t'.join([str(_) for _ in marker_info]) + '\n')
             o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
 
-    output_files = [
-        (hmmsearch_file, dest_file),
-        (hmmsearch_seq, destpath(f"{genome_id}.markers.fa")),
-        (hmmsearch_map, destpath(f"{genome_id}.markers.map"))
-    ]
+    output_files = [hmmsearch_file, hmmsearch_seq, hmmsearch_map]
+    # Make sure output hmmsearch_map last cuz it indicates all other files has successed
+    assert output_files[-1] == lastoutput(genome_id)
 
     return output_files
 
@@ -209,7 +212,7 @@ def build_marker_genes_master(args):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
+        dest_file = destpath(genome_id, species_id, lastoutput(genome_id))
         msg = f"Running HMMsearch for genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -260,9 +263,12 @@ def build_marker_genes_slave(args):
     output_files = identify_marker_genes(genome_id, species_id)
 
     # Upload to S3
-    multithreading_map(upload_star, output_files)
-
-    ## TODO: also need to work on the command for the LOGGING
+    upload_tasks = []
+    for o in output_files[:-1]:
+        upload_tasks.append((o, destpath(genome_id, species_id, hmmsearch_seq)))
+    multithreading_map(upload_star, upload_tasks)
+    # Upload this last because it indicates all other work has succeeded.
+    upload(output_files[-1], destpath(genome_id, species_id, output_files[-1]))
 
 
 def register_args(main_func):
