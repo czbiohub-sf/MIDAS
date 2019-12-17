@@ -159,8 +159,6 @@ def identify_marker_genes(genome_id, species_id):
     # Make sure output hmmsearch_map last cuz it indicates all other files has successed
     assert output_files[-1] == lastoutput(genome_id)
 
-    print(output_files)
-
     return output_files
 
 def build_marker_genes(args):
