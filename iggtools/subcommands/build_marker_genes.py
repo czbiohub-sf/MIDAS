@@ -52,7 +52,7 @@ def download_marker_genes_hmm():
 
 @retry
 def download_gene_ffn(genome_id, annotated_genes):
-    command(f"rm -f {genome_id}.fna")
+    command(f"rm -f {genome_id}.ffn")
     command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.ffn")
 
 
@@ -232,7 +232,7 @@ def build_marker_genes_slave(args):
 
     annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.ffn.lz4")
     download_gene_ffn(genome_id, annotated_genes)
-    local_gene_files = f"{genome_id}.fna"
+    local_gene_files = f"{genome_id}.ffn"
     assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
     genes = parse_fasta(local_gene_files)
     print(genes.keys())
