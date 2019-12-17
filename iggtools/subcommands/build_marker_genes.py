@@ -3,7 +3,7 @@ import sys
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath
+from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath, upload_star
 from iggtools.params import inputs, outputs
 
 
@@ -126,6 +126,38 @@ def find_hits(hmmsearch_file):
     return list(hits.values())
 
 
+def identify_marker_genes(genome_id, species_id):
+    def destpath(src):
+        return output_marker_genes_file(genome_id, species_id, src + lz4")
+
+    dest_file = destpath(f"{genome_id}.hmmsearch")
+    command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
+    hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
+
+    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.ffn.lz4")
+    download_gene_ffn(genome_id, annotated_genes)
+    local_gene_files = f"{genome_id}.ffn"
+    assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
+    genes = parse_fasta(local_gene_files)
+
+    # Parse local hmmsearch file
+    hmmsearch_seq = f"{genome_id}.markers.fa"
+    hmmsearch_map = f"{genome_id}.markers.map"
+
+    with open(hmmsearch_seq, "w") as o_seq, open(hmmsearch_map, "w") as o_map:
+        for rec in find_hits(hmmsearch_file):
+            marker_gene = genes[rec["query"]].upper()
+            marker_info = [species_id, genome_id, rec["query"], len(marker_gene), rec["target"]]
+            o_map.write('\t'.join([str(_) for _ in marker_info]) + '\n')
+            o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
+
+    output_files = [
+        (hmmsearch_file, dest_file),
+        (hmmsearch_seq, destpath(f"{genome_id}.markers.fa")),
+        (hmmsearch_map, destpath(f"{genome_id}.markers.map"))
+    ]
+
+    return output_files
 
 def build_marker_genes(args):
     if args.zzz_slave_toc:
@@ -225,30 +257,11 @@ def build_marker_genes_slave(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
+    output_files = identify_marker_genes(genome_id, species_id)
 
-    dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
-    command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
-    hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
+    # Upload to S3
+    multithreading_map(upload_star, output_files)
 
-    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.ffn.lz4")
-    download_gene_ffn(genome_id, annotated_genes)
-    local_gene_files = f"{genome_id}.ffn"
-    assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
-    genes = parse_fasta(local_gene_files)
-
-    # Parse local hmmsearch file
-    hmmsearch_seq = f"{genome_id}.markers.fa"
-    hmmsearch_map = f"{genome_id}.markers.map"
-
-    with open(hmmsearch_seq, "w") as o_seq, open(hmmsearch_map, "w") as o_map:
-        for rec in find_hits(hmmsearch_file):
-            marker_gene = genes[rec["query"]].upper()
-            marker_info = [species_id, genome_id, rec["query"], len(marker_gene), rec["target"]]
-            o_map.write('\t'.join([str(_) for _ in marker_info]) + '\n')
-            o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
-
-    ## TODO: once the parsing works, then I can work on upload multiple files
-    upload(hmmsearch_file, dest_file)
     ## TODO: also need to work on the command for the LOGGING
 
 
