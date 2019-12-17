@@ -48,7 +48,7 @@ def download_genome(genome_id, annotated_genes):
 @retry
 def download_marker_genes_hmm():
     command(f"rm -f marker_genes.hmm")
-    command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} - | lz4 -dc > marker_genes.hmm")
+    command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} > marker_genes.hmm")
 
 
 def hmmsearch(genome_id, species_id, num_threads=1):
