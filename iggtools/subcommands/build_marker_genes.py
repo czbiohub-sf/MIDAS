@@ -128,7 +128,7 @@ def find_hits(hmmsearch_file):
 
 def identify_marker_genes(genome_id, species_id):
     def destpath(src):
-        return output_marker_genes_file(genome_id, species_id, src + "lz4")
+        return output_marker_genes_file(genome_id, species_id, src + ".lz4")
 
     dest_file = destpath(f"{genome_id}.hmmsearch")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
