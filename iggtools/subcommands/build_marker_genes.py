@@ -7,7 +7,7 @@ from iggtools.common.utils import tsprint, InputStream, parse_table, retry, comm
 from iggtools.params import inputs, outputs
 
 
-CONCURRENT_MARKER_GENES_IDENTIFY = 20
+CONCURRENT_MARKER_GENES_IDENTIFY = 24
 
 
 def input_annotations_file(genome_id, species_id, filename):
