@@ -235,7 +235,6 @@ def build_marker_genes_slave(args):
     local_gene_files = f"{genome_id}.ffn"
     assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
     genes = parse_fasta(local_gene_files)
-    print(genes.keys())
 
     # Parse local hmmsearch file
     hmmsearch_seq = f"{genome_id}.markers.fa"
