@@ -65,7 +65,7 @@ def hmmsearch(genome_id, species_id, num_threads=1):
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {marker_hmmsearch}  {inputs.marker_genes_hmm} {genome_id}.faa")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {marker_hmmsearch}  marker_genes.hmm {genome_id}.faa")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {marker_hmmsearch} {marker_hmmsearch}.bogus", check=False)
