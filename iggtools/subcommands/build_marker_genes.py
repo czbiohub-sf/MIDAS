@@ -135,7 +135,6 @@ def find_hits(hmmsearch_file):
 
 def identify_marker_genes(genome_id, species_id):
 
-    dest_file = destpath(genome_id, species_id, f"{genome_id}.hmmsearch")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
     hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
 
@@ -159,6 +158,8 @@ def identify_marker_genes(genome_id, species_id):
     output_files = [hmmsearch_file, hmmsearch_seq, hmmsearch_map]
     # Make sure output hmmsearch_map last cuz it indicates all other files has successed
     assert output_files[-1] == lastoutput(genome_id)
+
+    print(output_files)
 
     return output_files
 
@@ -265,7 +266,7 @@ def build_marker_genes_slave(args):
     # Upload to S3
     upload_tasks = []
     for o in output_files[:-1]:
-        upload_tasks.append((o, destpath(genome_id, species_id, hmmsearch_seq)))
+        upload_tasks.append((o, destpath(genome_id, species_id, o)))
     multithreading_map(upload_star, upload_tasks)
     # Upload this last because it indicates all other work has succeeded.
     upload(output_files[-1], destpath(genome_id, species_id, output_files[-1]))
