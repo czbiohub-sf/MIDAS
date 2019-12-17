@@ -230,7 +230,6 @@ def build_marker_genes_master(args):
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_marker_genes --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
         with open(f"{slave_subdir}/{slave_log}", "w") as slog:
-            print("here")
             slog.write(msg + "\n")
             slog.write(slave_cmd + "\n")
         try:
@@ -267,6 +266,7 @@ def build_marker_genes_slave(args):
     for o in output_files[:-1]:
         upload_tasks.append((o, destpath(genome_id, species_id, o)))
     multithreading_map(upload_star, upload_tasks)
+
     # Upload this last because it indicates all other work has succeeded.
     upload(output_files[-1], destpath(genome_id, species_id, output_files[-1]))
 
