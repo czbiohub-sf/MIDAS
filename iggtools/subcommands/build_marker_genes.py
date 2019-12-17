@@ -41,7 +41,7 @@ def read_toc(genomes_tsv, deep_sort=False):
 
 # 1. Occasional failures in aws s3 cp require a retry.
 @retry
-def download_genes(genome_id, annotated_genes):
+def download_gene_faa(genome_id, annotated_genes):
     command(f"rm -f {genome_id}.faa")
     command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.faa")
 
@@ -50,11 +50,22 @@ def download_marker_genes_hmm():
     command(f"rm -f marker_genes.hmm")
     command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} marker_genes.hmm")
 
+@retry
+def download_gene_fna(genome_id, annotated_genes):
+    command(f"rm -f {genome_id}.fna")
+    command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.fna")
 
-def hmmsearch(genome_id, num_threads=1):
+
+def hmmsearch(genome_id, species_id, num_threads=1):
     # Input
+    s3_annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
+    download_gene_faa(genome_id, s3_annotated_genes)
     annotated_genes = f"{genome_id}.faa"
+    assert os.path.isfile(annotated_genes), f"Failed download annotated gene file."
+
     download_marker_genes_hmm()
+    marker_genes_hmm_model = "marker_genes.hmm"
+    assert os.path.isfile(marker_genes_hmm_model), f"Failed download marker gene HMM model"
 
     # Output
     hmmsearch_file = f"{genome_id}.hmmsearch"
@@ -64,7 +75,7 @@ def hmmsearch(genome_id, num_threads=1):
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} marker_genes.hmm {annotated_genes}")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} {marker_genes_hmm_model} {annotated_genes}")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {hmmsearch_file} {hmmsearch_file}.bogus", check=False)
@@ -214,19 +225,21 @@ def build_marker_genes_slave(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
-    download_genes(genome_id, annotated_genes)
-    local_gene_files = f"{genome_id}.faa"
 
     dest_file = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch.lz4")
     command(f"aws s3 rm --recursive {output_marker_genes_file(genome_id, species_id, '')}")
-    hmmsearch_file = hmmsearch(genome_id, num_threads=1)
+    hmmsearch_file = hmmsearch(genome_id, species_id, num_threads=1)
+
+    annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.fna.lz4")
+    download_gene_fna(genome_id, annotated_genes)
+    local_gene_files = f"{genome_id}.fna"
+    assert os.path.isfile(local_gene_files), f"Failed download annotated marker DNA sequences"
+    genes = parse_fasta(local_gene_files)
 
     # Parse local hmmsearch file
     hmmsearch_seq = f"{genome_id}.markers.fa"
     hmmsearch_map = f"{genome_id}.markers.map"
 
-    genes = parse_fasta(local_gene_files)
     with open(hmmsearch_seq, "w") as o_seq, open(hmmsearch_map, "w") as o_map:
         for rec in find_hits(hmmsearch_file):
             marker_gene = genes[rec["query"]].upper()
@@ -236,6 +249,7 @@ def build_marker_genes_slave(args):
 
     ## TODO: once the parsing works, then I can work on upload multiple files
     upload(hmmsearch_file, dest_file)
+    ## TODO: also need to work on the command for the LOGGING
 
 
 def register_args(main_func):
