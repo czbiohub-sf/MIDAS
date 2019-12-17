@@ -57,7 +57,7 @@ def hmmsearch(genome_id, species_id, num_threads=1):
     download_genome(genome_id, annotated_genes)
 
     # Output
-    marker_hmmsearch = output_marker_genes_file(genome_id, species_id, f"{genome_id}.hmmsearch")
+    marker_hmmsearch = f"{genome_id}.hmmsearch"
 
     # Command
     if find_files(marker_hmmsearch):
