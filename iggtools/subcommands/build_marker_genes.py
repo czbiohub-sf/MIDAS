@@ -39,22 +39,23 @@ def read_toc(genomes_tsv, deep_sort=False):
     return species, representatives, genomes
 
 
-# Move genome id parsing and name transformations in some central place that all commands can import
-def unified_genome_id(genome_id):
-    return "UHGG" + genome_id.replace("GUT_GENOME", "")
-
-
 # 1. Occasional failures in aws s3 cp require a retry.
 @retry
 def download_genome(genome_id, annotated_genes):
     command(f"rm -f {genome_id}.faa")
     command(f"aws s3 cp --only-show-errors {annotated_genes} - | lz4 -dc > {genome_id}.faa")
 
+@retry
+def download_marker_genes_hmm():
+    command(f"rm -f marker_genes.hmm")
+    command(f"aws s3 cp --only-show-errors {inputs.marker_genes_hmm} - | lz4 -dc > marker_genes.hmm")
+
 
 def hmmsearch(genome_id, species_id, num_threads=1):
     # Input
     annotated_genes = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
     download_genome(genome_id, annotated_genes)
+    download_marker_genes_hmm()
 
     # Output
     marker_hmmsearch = f"{genome_id}.hmmsearch"
