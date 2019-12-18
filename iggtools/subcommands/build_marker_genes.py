@@ -3,11 +3,11 @@ import sys
 from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath, upload_star
+from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath, upload_star, num_physical_cores
 from iggtools.params import inputs, outputs
 
 
-CONCURRENT_MARKER_GENES_IDENTIFY = 24
+CONCURRENT_MARKER_GENES_IDENTIFY = num_physical_cores
 
 
 def input_annotations_file(genome_id, species_id, filename):
@@ -16,7 +16,7 @@ def input_annotations_file(genome_id, species_id, filename):
 
 
 def output_marker_genes_file(genome_id, species_id, filename):
-    # s3://{igg}/marker_genes/phyeco/temp/GUT_GENOME138501.{hmmsearch, markers.fa, markers.map}
+    # s3://{igg}/marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}
     return f"{outputs.marker_genes}/temp/{species_id}/{genome_id}/{filename}"
 
 
@@ -28,29 +28,18 @@ def destpath(genome_id, species_id, src):
     return output_marker_genes_file(genome_id, species_id, src + ".lz4")
 
 
-# 1. Occasional failures in aws s3 cp require a retry.
-@retry
-def download_reference(ref_path):
-    local_path = os.path.basename(ref_path)
-    command(f"rm -f {local_path}")
-    command(f"aws s3 cp --only-show-errors {ref_path} {local_path}")
-    assert os.path.isfile(local_path), f"Failed download reference file {ref_path} to local file {local_path}"
-    return local_path
-
-
 def drop_lz4(filename):
     assert filename.endswith(".lz4")
     return filename[:-4]
 
 
+# 1. Occasional failures in aws s3 cp require a retry.
 @retry
-def download_reference_lz4(ref_path):
+def download_reference(ref_path):
     local_path = os.path.basename(ref_path)
-    if local_path.endswith(".lz4"):
-        local_path = drop_lz4(local_path)
+    local_path = drop_lz4(local_path)
     command(f"rm -f {local_path}")
     command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
-    assert os.path.isfile(local_path), f"Failed download lz4 reference file {ref_path} to local file {local_path}"
     return local_path
 
 
@@ -76,13 +65,14 @@ def read_toc(genomes_tsv, deep_sort=False):
 def hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1):
     # Input
     annotated_genes_s3_path = input_annotations_file(genome_id, species_id, f"{genome_id}.faa.lz4")
-    annotated_genes = download_reference_lz4(annotated_genes_s3_path)
+    annotated_genes = download_reference(annotated_genes_s3_path)
 
     # Output
     hmmsearch_file = f"{genome_id}.hmmsearch"
 
     # Command
-    if find_files(hmmsearch_file): # for debugging purpose
+    if find_files(hmmsearch_file):
+        # This only happens in debug mode, where we can use pre-existing file.
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
@@ -129,7 +119,7 @@ def find_hits(hmmsearch_file):
     for r in parse_hmmsearch(hmmsearch_file):
         if r['evalue'] > max_evalue:
             continue
-        elif min(r['qcov'], r['tcov']) < min_cov:
+        if min(r['qcov'], r['tcov']) < min_cov:
             continue
         if r['target'] not in hits:
             hits[r['target']] = r
@@ -287,7 +277,7 @@ def register_args(main_func):
     subparser.add_argument('--zzz_slave_marker_genes_hmm',
                            dest='zzz_slave_marker_genes_hmm',
                            required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
+                           help=SUPPRESS) # "reserved to common database from master to slave"
     return main_func
 
 
