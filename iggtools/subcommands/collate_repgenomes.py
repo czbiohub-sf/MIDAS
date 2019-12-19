@@ -104,6 +104,7 @@ def collate_repgenomes(args):
     ## Collate
     local_dest_file = os.path.basename(dest_file)
     downloaded_markers_basename = [os.path.basename(dm) for dm in downloaded_markers]
+    print(os.getcwd())
     for dm in downloaded_markers_basename:
         command(f"ls {dm}")
     for fna_files in split(downloaded_markers_basename, 20):  # keep "cat" commands short
