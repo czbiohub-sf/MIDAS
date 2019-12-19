@@ -98,7 +98,7 @@ def collate_repgenomes(args):
     command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
 
     species, representatives, _ = read_toc(local_toc)
-    print(len(species.keys()))
+    print(len(representatives.keys()))
 
     dest_file = output_marker_genes()
     msg = f"Collating marker genes sequences."
@@ -128,7 +128,7 @@ def collate_repgenomes(args):
         representative_id = representatives[species_id]
         s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
         ref_path_list.append(s3_marker_path)
-    print(len_path_list)
+    print(len(ref_path_list))
     downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=10)
 
     ## cat
