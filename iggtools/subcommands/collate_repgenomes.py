@@ -98,7 +98,6 @@ def collate_repgenomes(args):
     command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
 
     species, representatives, _ = read_toc(local_toc)
-    print(len(representatives.keys()))
 
     dest_file = output_marker_genes()
     msg = f"Collating marker genes sequences."
@@ -108,7 +107,6 @@ def collate_repgenomes(args):
             return
         msg = msg.replace("Collating", "Recollating")
     tsprint(msg)
-
 
     slave_log = "collate_repgenomes.log"
     slave_subdir = f"collate_repgenomes"
@@ -128,17 +126,14 @@ def collate_repgenomes(args):
         representative_id = representatives[species_id]
         s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
         ref_path_list.append(s3_marker_path)
-    print(len(ref_path_list))
     downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=10)
 
-    ## cat
+    ## Collate
     local_dest_file = os.path.basename(dest_file)
-    command(f"rm -f {local_dest_file}")
     for fna_files in split(downloaded_markers, 20):  # keep "cat" commands short
         command("cat " + " ".join(fna_files) + " >> {local_dest_file")
 
-
-    ## upload: we only need to upload one file
+    ## Upload
     upload(f"{local_dest_file}", f"{dest_file}", check=False)
 
     ## clean up
