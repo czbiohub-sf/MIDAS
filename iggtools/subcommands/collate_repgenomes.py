@@ -20,6 +20,7 @@ def input_marker_genes_file(genome_id, species_id, filename):
 def output_marker_genes():
     return f"{outputs.marker_genes}/{inputs.marker_set}.fa"
 
+
 def destpath(local_file):
     return f"{outputs.marker_genes}/{local_file}"
 
@@ -118,7 +119,7 @@ def collate_repgenomes(args):
     ## Upload
     upload_tasks = []
     for o in output_files:
-        upload_tasks.append((o, destpath(o)))
+        upload_tasks.append((o, destpath(os.path.basename(o))))
     multithreading_map(upload_star, upload_tasks)
 
     # Upload the fasta sequences in the last
