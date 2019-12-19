@@ -82,7 +82,7 @@ def drop_lz4(filename):
 # 1. Occasional failures in aws s3 cp require a retry.
 @retry
 def download_reference(ref_path_local_base):
-    ref_path, local_bash = ref_path_local_base
+    ref_path, local_base = ref_path_local_base
     local_path = os.path.basename(ref_path)
     local_path = drop_lz4(local_path)
     local_path = f"{local_base}/{local_path}"
