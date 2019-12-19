@@ -136,7 +136,7 @@ def collate_repgenomes(args):
     ## Upload
     upload(f"{local_dest_file}", f"{dest_file}", check=False)
 
-    ## clean up
+    ## Clean up
     if not args.debug:
         command(f"rm -rf {slave_subdir}", check=False)
 
