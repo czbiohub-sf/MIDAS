@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, num_physical_cores, split
+from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, num_physical_cores, split, upload_star
 from iggtools.params import inputs, outputs
 
 
@@ -19,6 +19,9 @@ def input_marker_genes_file(genome_id, species_id, filename):
 
 def output_marker_genes():
     return f"{outputs.marker_genes}/{inputs.marker_set}.fa"
+
+def destpath(local_file):
+    return f"{{outputs.marker_genes}/{local_file}}"
 
 
 def read_toc(genomes_tsv, deep_sort=False):
@@ -109,8 +112,16 @@ def collate_repgenomes(args):
 
     ## Index
     command(f"hs-blastn index {local_dest_file}")
+    index_suffix = ["bwt", "header", "sa", "sequence"]
+    output_files = [f"{local_dest_file}.{isuffix}" for isuffix in index_suffix]
 
     ## Upload
+    upload_tasks = []
+    for o in output_files:
+        upload_tasks.append((o, destpath(o)))
+    multithreading_map(upload_star, upload_tasks)
+
+    # Upload the fasta sequences in the last
     upload(f"{local_dest_file}", f"{dest_file}", check=False)
 
     ## Clean up
