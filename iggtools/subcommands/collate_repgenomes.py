@@ -81,9 +81,11 @@ def drop_lz4(filename):
 
 # 1. Occasional failures in aws s3 cp require a retry.
 @retry
-def download_reference(ref_path):
+def download_reference(ref_path_local_base):
+    ref_path, local_bash = ref_path_local_base
     local_path = os.path.basename(ref_path)
     local_path = drop_lz4(local_path)
+    local_path = f"{local_base}/{local_path}"
     command(f"rm -f {local_path}")
     command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
     return local_path
@@ -125,7 +127,7 @@ def collate_repgenomes(args):
     for species_id in species.keys():
         representative_id = representatives[species_id]
         s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
-        ref_path_list.append(s3_marker_path)
+        ref_path_list.append((s3_marker_path, slave_subdir))
     downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=10)
 
     ## Collate
