@@ -107,6 +107,9 @@ def collate_repgenomes(args):
     for fna_files in split(downloaded_markers, 20):  # keep "cat" commands short
         command("cat " + " ".join(fna_files) + f" >> {local_dest_file}")
 
+    ## Index
+    command(f"hs-blastn index {local_dest_file}")
+
     ## Upload
     upload(f"{local_dest_file}", f"{dest_file}", check=False)
 
