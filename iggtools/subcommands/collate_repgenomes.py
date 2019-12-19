@@ -126,9 +126,10 @@ def collate_repgenomes(args):
     ref_path_list = []
     for species_id in species.keys():
         representative_id = representatives[species_id]
-        s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa")
+        s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
         ref_path_list.append(s3_marker_path)
-    downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=CONCURRENT_MARKER_GENES_IDENTIFY)
+    print(len_path_list)
+    downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=10)
 
     ## cat
     local_dest_file = os.path.basename(dest_file)
@@ -146,7 +147,7 @@ def collate_repgenomes(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('collate_repgenomes', main_func, help='collate marker gene sequences for repgresentative genomes')
+    subparser = add_subcommand('collate_repgenomes', main_func, help='collate marker genes for repgresentative genomes')
     subparser.add_argument('--species',
                            dest='species',
                            required=False,
