@@ -102,9 +102,10 @@ def collate_repgenomes(args):
     downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=20)
 
     ## Collate
-    command(slave_cmd)
     local_dest_file = os.path.basename(dest_file)
     downloaded_markers_basename = [os.path.basename(dm) for dm in downloaded_markers]
+    for dm in downloaded_markers_basename:
+        command(f"ls {dm}")
     for fna_files in split(downloaded_markers_basename, 20):  # keep "cat" commands short
         #command("cat " + " ".join(fna_files) + f" >> {local_dest_file}")
         command("cat " + " ".join(fna_files) + " >> phyeco.fa")
