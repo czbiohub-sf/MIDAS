@@ -60,8 +60,8 @@ def download_reference(ref_path_local_base):
     local_path = os.path.basename(ref_path)
     local_path = drop_lz4(local_path)
     local_path = f"{local_base}/{local_path}"
-    #command(f"rm -f {local_path}")
-    #command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
+    command(f"rm -f {local_path}")
+    command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
     return local_path
 
 
