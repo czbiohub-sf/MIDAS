@@ -22,7 +22,7 @@ def pangenome_file(species_id, component):
 
 
 def annotations_file(species_id, genome_id, component_extension):
-    # s3://microbiome-igg/2.0/prodigal/GUT_GENOMEDDDDDD.{fna, faa, gff, log}
+    # s3://microbiome-igg/2.0/prodigal/GUT_GENOMEDDDDDD.{ffn, gff, ...}
     return f"{outputs.annotations}/{species_id}/{genome_id}/{genome_id}.{component_extension}"
 
 
@@ -49,8 +49,8 @@ def read_toc(genomes_tsv, deep_sort=False):
 @retry
 def clean_genes(packed_ids):
     species_id, genome_id = packed_ids
-    input_annotations = annotations_file(species_id, genome_id, "fna.lz4")
-    output_genes = f"{genome_id}.genes.fna"
+    input_annotations = annotations_file(species_id, genome_id, "ffn.lz4")
+    output_genes = f"{genome_id}.genes.ffn"
     output_info = f"{genome_id}.genes.len"
 
     with open(output_genes, 'w') as o_genes, \
@@ -272,8 +272,8 @@ def build_pangenome_slave(args):
     command("rm -f genes.ffn genes.len")
 
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
-        fna_files, len_files = transpose(temp_files)
-        command("cat " + " ".join(fna_files) + " >> genes.ffn")
+        ffn_files, len_files = transpose(temp_files)
+        command("cat " + " ".join(ffn_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
 
     # The initial clustering to max_percent takes longest.
