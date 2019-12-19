@@ -5,11 +5,7 @@ from iggtools.common.utils import tsprint, InputStream, parse_table, retry, comm
 from iggtools.params import inputs, outputs
 
 
-CONCURRENT_MARKER_GENES_IDENTIFY = num_physical_cores
-
-
-def imported_genome_file(genome_id, species_id, component):
-    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{component}"
+CONCURRENT_MARKER_GENES_DOWNLOAD = num_physical_cores
 
 
 def input_marker_genes_file(genome_id, species_id, filename):
@@ -85,31 +81,29 @@ def collate_repgenomes(args):
         msg = msg.replace("Collating", "Recollating")
     tsprint(msg)
 
-    slave_log = "collate_repgenomes.log"
-    slave_subdir = f"collate_repgenomes"
+    collate_log = "collate_repgenomes.log"
+    collate_subdir = f"collate_repgenomes"
     if not args.debug:
-        command(f"rm -rf {slave_subdir}")
-    if not os.path.isdir(slave_subdir):
-        command(f"mkdir {slave_subdir}")
-    slave_cmd = f"cd {slave_subdir}"
-    with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+        command(f"rm -rf {collate_subdir}")
+    if not os.path.isdir(collate_subdir):
+        command(f"mkdir {collate_subdir}")
+    with open(f"{collate_subdir}/{collate_log}", "w") as slog:
         slog.write(msg + "\n")
-        slog.write(slave_cmd + "\n")
-    command(slave_cmd)
 
     # Download
     ref_path_list = []
     for species_id in species.keys():
         representative_id = representatives[species_id]
         s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
-        ref_path_list.append((s3_marker_path, slave_subdir))
-    downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=20)
+        ref_path_list.append((s3_marker_path, collate_subdir))
+    downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
 
     ## Collate
-    local_dest_file = f"{slave_subdir}/{os.path.basename(dest_file)}"
-    #downloaded_markers_basename = [os.path.basename(dm) for dm in downloaded_markers]
-    for fna_files in split(downloaded_markers, 20):  # keep "cat" commands short
-        command("cat " + " ".join(fna_files) + f" >> {local_dest_file}")
+    local_dest_file = f"{collate_subdir}/{os.path.basename(dest_file)}"
+    for marker_fa_files in split(downloaded_markers, 20):  # keep "cat" commands short
+        command("cat " + " ".join(marker_fa_files) + f" >> {local_dest_file}")
+
+    ## todo: upload fa here to avoid rerun; structure this a little differently
 
     ## Index
     command(f"hs-blastn index {local_dest_file}")
@@ -127,15 +121,11 @@ def collate_repgenomes(args):
 
     ## Clean up
     if not args.debug:
-        command(f"rm -rf {slave_subdir}", check=False)
+        command(f"rm -rf {collate_subdir}", check=False)
 
 
 def register_args(main_func):
     subparser = add_subcommand('collate_repgenomes', main_func, help='collate marker genes for repgresentative genomes')
-    subparser.add_argument('--species',
-                           dest='species',
-                           required=False,
-                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
     return main_func
 
 
