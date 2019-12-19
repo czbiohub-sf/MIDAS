@@ -21,7 +21,7 @@ def output_marker_genes():
     return f"{outputs.marker_genes}/{inputs.marker_set}.fa"
 
 def destpath(local_file):
-    return f"{{outputs.marker_genes}/{local_file}}"
+    return f"{outputs.marker_genes}/{local_file}"
 
 
 def read_toc(genomes_tsv, deep_sort=False):
