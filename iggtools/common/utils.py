@@ -303,6 +303,11 @@ def parse_table(lines, columns, headers=None):
         yield [values[i] for i in column_indexes]
 
 
+def parse_table_as_rowdicts(lines, columns, headers=None):
+    for rowlist in parse_table(lines, columns, headers):
+        yield dict(zip(columns, rowlist))
+
+
 def retry(operation, MAX_TRIES=3):
     # Note the use of a separate random generator for retries so transient
     # errors won't perturb other random streams used in the application.
@@ -467,6 +472,22 @@ def datecode(t=None, local=False):
         day=zt.tm_mday,
         t=int(t)
     )
+
+
+class TimedSection:
+
+    def __init__(self, section_name):
+        self.section_name = section_name
+        self.t_start = None
+
+    def __enter__(self):
+        self.t_start = time.time()
+        tsprint(f"Entering section '{self.section_name}'")
+        return self
+
+    def __exit__(self, _etype, _evalue, _etraceback):
+        tsprint(f"Exiting section '{self.section_name}' after {(time.time() - self.t_start)/60:.1f} minutes")
+        return False  # Do not suppress exceptions
 
 
 if __name__ == "__main__":
