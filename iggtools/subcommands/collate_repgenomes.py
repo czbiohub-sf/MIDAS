@@ -40,38 +40,9 @@ def read_toc(genomes_tsv, deep_sort=False):
     return species, representatives, genomes
 
 
-# Move genome id parsing and name transformations in some central place that all commands can import
-def unified_genome_id(genome_id):
-    return "UHGG" + genome_id.replace("GUT_GENOME", "")
-
-
 @retry
 def find_files_with_retry(f):
     return find_files(f)
-
-
-def decode_species_arg(args, species):
-    selected_species = set()
-    try:  # pylint: disable=too-many-nested-blocks
-        if args.species.upper() == "ALL":
-            selected_species = set(species)
-        else:
-            for s in args.species.split(","):
-                if ":" not in s:
-                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
-                    selected_species.add(s)
-                else:
-                    i, n = s.split(":")
-                    i = int(i)
-                    n = int(n)
-                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
-                    for sid in species:
-                        if int(sid) % n == i:
-                            selected_species.add(sid)
-    except:
-        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
-        raise
-    return sorted(selected_species)
 
 
 def drop_lz4(filename):
@@ -128,12 +99,12 @@ def collate_repgenomes(args):
         representative_id = representatives[species_id]
         s3_marker_path = input_marker_genes_file(representative_id, species_id, f"{representative_id}.markers.fa.lz4")
         ref_path_list.append((s3_marker_path, slave_subdir))
-    downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=10)
+    #downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=20)
 
     ## Collate
     local_dest_file = os.path.basename(dest_file)
     for fna_files in split(downloaded_markers, 20):  # keep "cat" commands short
-        command("cat " + " ".join(fna_files) + " >> {local_dest_file")
+        command("cat " + " ".join(fna_files) + " >> {local_dest_file}")
 
     ## Upload
     upload(f"{local_dest_file}", f"{dest_file}", check=False)
