@@ -103,7 +103,8 @@ def collate_repgenomes(args):
 
     ## Collate
     local_dest_file = os.path.basename(dest_file)
-    for fna_files in split(downloaded_markers, 20):  # keep "cat" commands short
+    downloaded_markers_basename = [os.path.basename(dm) for dm in downloaded_markers]
+    for fna_files in split(downloaded_markers_basename, 20):  # keep "cat" commands short
         command("cat " + " ".join(fna_files) + " >> {local_dest_file}")
 
     ## Upload
