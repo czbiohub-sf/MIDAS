@@ -57,8 +57,8 @@ def download_reference(ref_path_local_base):
     local_path = os.path.basename(ref_path)
     local_path = drop_lz4(local_path)
     local_path = f"{local_base}/{local_path}"
-    command(f"rm -f {local_path}")
-    command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
+    #command(f"rm -f {local_path}")
+    #command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
     return local_path
 
 
@@ -102,6 +102,7 @@ def collate_repgenomes(args):
     downloaded_markers = multithreading_map(download_reference, ref_path_list, num_threads=20)
 
     ## Collate
+    command(slave_cmd)
     local_dest_file = os.path.basename(dest_file)
     downloaded_markers_basename = [os.path.basename(dm) for dm in downloaded_markers]
     for fna_files in split(downloaded_markers_basename, 20):  # keep "cat" commands short
