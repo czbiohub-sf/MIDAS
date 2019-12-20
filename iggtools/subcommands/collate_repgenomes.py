@@ -111,6 +111,8 @@ def collate_repgenomes(args):
     downloaded_marker_seqs = multithreading_map(download_reference, download_seq_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
     downloaded_marker_maps = multithreading_map(download_reference, download_map_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
 
+    print(len(downloaded_marker_maps))
+    print(len(downloaded_marker_seqs))
     ## Collate
     collated_rep_marker_seqs = output_all_rep_marker_genes("fa")
     collated_genes = os.path.basename(collated_rep_marker_seqs)
@@ -145,7 +147,7 @@ def collate_repgenomes(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('collate_repgenomes', main_func, help='collate marker genes for repgresentative genomes')
+    add_subcommand('collate_repgenomes', main_func, help='collate marker genes for repgresentative genomes')
     return main_func
 
 
