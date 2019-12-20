@@ -102,8 +102,6 @@ def collate_repgenome_markers(args):
     downloaded_marker_seqs = multithreading_map(download_reference, download_seq_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
     downloaded_marker_maps = multithreading_map(download_reference, download_map_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
 
-    print(len(downloaded_marker_maps))
-    print(len(downloaded_marker_seqs))
     ## Collate
     collated_rep_marker_seqs = output_all_rep_marker_genes("fa")
     collated_genes = os.path.basename(collated_rep_marker_seqs)
