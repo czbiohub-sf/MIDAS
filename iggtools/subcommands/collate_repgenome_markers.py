@@ -21,15 +21,6 @@ def destpath(local_file):
     return f"{outputs.marker_genes}/{local_file}.lz4"
 
 
-def check_dest_files(dest_file, msg, force):
-    if find_files_with_retry(dest_file):
-        if not force:
-            tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
-            return msg
-        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
-    return msg
-
-
 def read_toc(genomes_tsv, deep_sort=False):
     # Read in the table of contents.
     # We will centralize and improve this soon.
@@ -83,11 +74,15 @@ def collate_repgenome_markers(args):
     collate_log = "collate_repgenome_markers.log"
     collate_subdir = f"collate_repgenome_markers"
 
-    last_output = destpath(collate_log)
+    dest_file = destpath(collate_log)
     msg = f"Collating marker genes sequences."
-    msg = check_dest_files(last_output, msg, args.force)
-    tsprint(msg)
+    if find_files_with_retry(dest_file):
+        if not args.force:
+            tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
+            return
+        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
 
+    tsprint(msg)
     if not args.debug:
         command(f"rm -rf {collate_subdir}")
     if not os.path.isdir(collate_subdir):
