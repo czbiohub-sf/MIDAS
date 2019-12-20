@@ -86,15 +86,14 @@ def collate_repgenome_markers(args):
     last_output = destpath(collate_log)
     msg = f"Collating marker genes sequences."
     msg = check_dest_files(last_output, msg, args.force)
-
     tsprint(msg)
-    with open(f"{collate_subdir}/{collate_log}", "w") as slog:
-        slog.write(msg + "\n")
 
     if not args.debug:
         command(f"rm -rf {collate_subdir}")
     if not os.path.isdir(collate_subdir):
         command(f"mkdir {collate_subdir}")
+    with open(f"{collate_subdir}/{collate_log}", "w") as slog:
+        slog.write(msg + "\n")
 
     # Download
     download_seq_tasks = []
