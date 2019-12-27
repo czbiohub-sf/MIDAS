@@ -1,9 +1,9 @@
 import os
 import sys
-from collections import defaultdict
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath, upload_star, num_physical_cores
+from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
+from iggtools.models.uhgg import UHGG
 from iggtools.params import inputs, outputs
 
 
@@ -26,40 +26,6 @@ def lastoutput(genome_id):
 
 def destpath(genome_id, species_id, src):
     return output_marker_genes_file(genome_id, species_id, src + ".lz4")
-
-
-def drop_lz4(filename):
-    assert filename.endswith(".lz4")
-    return filename[:-4]
-
-
-# 1. Occasional failures in aws s3 cp require a retry.
-@retry
-def download_reference(ref_path):
-    local_path = os.path.basename(ref_path)
-    local_path = drop_lz4(local_path)
-    command(f"rm -f {local_path}")
-    command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
-    return local_path
-
-
-def read_toc(genomes_tsv, deep_sort=False):
-    # Read in the table of contents.
-    # We will centralize and improve this soon.
-    species = defaultdict(dict)
-    representatives = {}
-    genomes = {}
-    with InputStream(genomes_tsv) as table_of_contents:
-        for row in parse_table(table_of_contents, ["genome", "species", "representative", "genome_is_representative"]):
-            genome_id, species_id, representative_id, _ = row
-            species[species_id][genome_id] = row
-            representatives[species_id] = representative_id
-            genomes[genome_id] = species_id
-    if deep_sort:
-        for sid in species.keys():
-            species[sid] = sorted_dict(species[sid])
-        species = sorted_dict(species)
-    return species, representatives, genomes
 
 
 def hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1):
@@ -196,7 +162,8 @@ def build_marker_genes_master(args):
     # This will be read separately by each species build subcommand, so we make a local copy.
     local_toc, marker_genes_hmm = multithreading_map(download_reference, [outputs.genomes, inputs.marker_genes_hmm])
 
-    _, _, species_for_genome = read_toc(local_toc)
+    db = UHGG(local_toc)
+    species_for_genome = db.genomes
 
     def genome_work(genome_id):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
@@ -246,7 +213,8 @@ def build_marker_genes_slave(args):
     assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
     assert os.path.isfile(args.zzz_slave_marker_genes_hmm), f"{violation}: Maker genes HMM model file does not exist: {args.zzz_slave_marker_genes_hmm}"
 
-    _, _, species_for_genome = read_toc(args.zzz_slave_toc)
+    db = UHGG(args.zzz_slave_toc)
+    species_for_genome = db.genomes
 
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]

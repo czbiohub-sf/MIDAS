@@ -4,7 +4,8 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, OutputStream, parse_table, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, transpose, find_files, sorted_dict, upload, upload_star, flatten, pythonpath
+from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, parse_table, transpose, find_files, upload, upload_star, flatten, pythonpath
+from iggtools.models.uhgg import UHGG
 from iggtools.params import outputs
 
 
@@ -24,23 +25,6 @@ def pangenome_file(species_id, component):
 def annotations_file(species_id, genome_id, component_extension):
     # s3://microbiome-igg/2.0/prodigal/GUT_GENOMEDDDDDD.{ffn, gff, ...}
     return f"{outputs.annotations}/{species_id}/{genome_id}/{genome_id}.{component_extension}"
-
-
-def read_toc(genomes_tsv, deep_sort=False):
-    # Read in the table of contents.
-    # We will centralize and improve this soon.
-    species = defaultdict(dict)
-    representatives = {}
-    with InputStream(genomes_tsv) as table_of_contents:
-        for row in parse_table(table_of_contents, ["genome", "species", "representative", "genome_is_representative"]):
-            genome_id, species_id, representative_id, _ = row
-            species[species_id][genome_id] = row
-            representatives[species_id] = representative_id
-    if deep_sort:
-        for sid in species.keys():
-            species[sid] = sorted_dict(species[sid])
-        species = sorted_dict(species)
-    return species, representatives
 
 
 # 1. Occasional failures in aws s3 cp require a retry.
@@ -196,7 +180,8 @@ def build_pangenome_master(args):
     command(f"rm -f {local_toc}")
     command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
 
-    species, _ = read_toc(local_toc)
+    db = UHGG(local_toc)
+    species = db.species
 
     def species_work(species_id):
         assert species_id in species, f"Species {species_id} is not in the database."
@@ -254,7 +239,8 @@ def build_pangenome_slave(args):
     assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
     assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
-    species, _ = read_toc(args.zzz_slave_toc)
+    db = UHGG(args.zzz_slave_toc)
+    species = db.species
     species_id = args.species
 
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."

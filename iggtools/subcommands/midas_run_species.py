@@ -1,10 +1,12 @@
 import json
 import random
 from collections import defaultdict
+from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, parse_table_as_rowdicts, parse_table, multithreading_map, download_reference, TimedSection
+from iggtools.models.uhgg import UHGG
 from iggtools import params
 
 
@@ -41,38 +43,106 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--read_length',
-                           dest='read_length',
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
                            type=int,
                            metavar="INT",
-                           help=f"Trim reads to READ_LENGTH and discard reads with length < READ_LENGTH.  By default, reads are not trimmed or filtered")
+                           help=f"Number of reads to use from input file(s).  (All)")
+    if False:
+        # This is not currently in use.
+        subparser.add_argument('--read_length',
+                               dest='read_length',
+                               type=int,
+                               metavar="INT",
+                               help=f"Trim reads to READ_LENGTH and discard reads with length < READ_LENGTH.  By default, reads are not trimmed or filtered")
     return main_func
 
 
-def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db):
+def readfq(fp):
+    """ https://github.com/lh3/readfq/blob/master/readfq.py
+        A generator function for parsing fasta/fastq records """
+    last = None # this is a buffer keeping the last unprocessed line
+    while True: # mimic closure; is it a bad idea?
+        if not last: # the first record or a record following a fastq
+            for l in fp: # search for the start of the next record
+                if l[0] in '>@': # fasta/q header line
+                    last = l[:-1] # save this line
+                    break
+        if not last:
+            break
+        name, seqs, last = last[1:].partition(" ")[0], [], None
+        for l in fp:  # read the sequence
+            if l[0] in '@+>':
+                last = l[:-1]
+                break
+            seqs.append(l[:-1])
+        if not last or last[0] != '+':  # this is a fasta record
+            yield (name, ''.join(seqs), None)  # yield a fasta record
+            if not last:
+                break
+        else: # this is a fastq record
+            seq, leng, seqs = ''.join(seqs), 0, []
+            for l in fp: # read the quality
+                seqs.append(l[:-1])
+                leng += len(l) - 1
+                if leng >= len(seq):  # have read enough quality
+                    last = None
+                    yield (name, seq, ''.join(seqs))  # yield a fastq record
+                    break
+            if last:  # reach EOF before reading enough quality
+                yield (name, seq, None)  # yield a fasta record instead
+                break
+
+
+def parse_reads(filename, max_reads=None):
+    if not filename:
+        return
+    read_count_filter = None
+    if max_reads != None:
+        read_count_filter = f"head -n {4 * max_reads}"
+    read_count = 0
+    with InputStream(filename, read_count_filter) as fp:
+        for name, seq, _ in readfq(fp):
+            read_count += 1
+            new_name = construct_queryid(name, len(seq))  # We need to encode the length in the query id to be able to recover it from hs-blastn output
+            yield (new_name, seq)
+        if read_count_filter:
+            fp.ignore_errors()
+    tsprint(f"Parsed {read_count} reads from {filename}")
+
+
+def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads):
     m8_file = f"{tempdir}/alignments.m8"
-    cat_cmd = f"cat {r1}"
-    if r2:
-        cat_cmd += f" {r2}"
-    # TODO: Strip irrelvant parts of read ID, see stream_seq in MIDAS
-    command(f"{cat_cmd} | hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -out {m8_file} -evalue 1e-3")
+    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
+    with OutputStream(m8_file, through=blast_command) as blast_input:
+        for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
+            blast_input.write(">" + qid + "\n" + seq + "\n")
     return m8_file
 
 
 def parse_blast(inpath):
     """ Yield formatted record from BLAST m8 file """
     # TODO: Bring schema parser from idseq-dag.
-    formats = [str, str, float, int, float, float, float, float, float, float, float, float]
-    fields = ['query', 'target', 'pid', 'aln', 'mis', 'gaps', 'qstart', 'qend', 'tstart', 'tend', 'evalue', 'score']
+    BLAST_COLUMN_TYPES = [str, str, float, int, float, float, float, float, float, float, float, float, int, int]
+    BLAST_COLUMNS = ['query', 'target', 'pid', 'aln', 'mis', 'gaps', 'qstart', 'qend', 'tstart', 'tend', 'evalue', 'score']
     for line in open(inpath):
         values = line.rstrip().split()
-        yield dict((field, format(value)) for field, format, value in zip(fields, formats, values))
+        yield dict((field, format(value)) for field, format, value in zip(BLAST_COLUMNS, BLAST_COLUMN_TYPES, values))
+
+
+def deconstruct_queryid(rid):
+    qid, qlen = rid.rsplit('_', 1)
+    return qid, int(qlen)
+
+
+def construct_queryid(qid, qlen):
+    return f"{qid}_{qlen}"
 
 
 def query_coverage(aln):
     """ Compute alignment coverage of query """
-    qlen = aln['query'].split('_')[-1] # get qlen from sequence header
-    return float(aln['aln']) / int(qlen)
+    _, qlen = deconstruct_queryid(aln['query'])
+    return aln['aln'] / qlen
 
 
 def find_best_hits(args, marker_info, m8_file, marker_cutoffs):
@@ -178,8 +248,9 @@ def write_abundance(outdir, species_abundance):
         output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['count'], reverse=True)
         for species_id in output_order:
             values = species_abundance[species_id]
-            record = [species_id, values['count'], values['cov'], values['rel_abun']]
-            outfile.write('\t'.join(str(x) for x in record) + '\n')
+            if values['count'] > 0:
+                record = [species_id, values['count'], values['cov'], values['rel_abun']]
+                outfile.write('\t'.join(str(x) for x in record) + '\n')
 
 
 def midas_run_species(args):
@@ -189,18 +260,18 @@ def midas_run_species(args):
     command(f"rm -rf {tempdir}")
     command(f"mkdir -p {tempdir}")
 
-    markers_db_files = multithreading_map(download_reference, ("s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]))
+    markers_db_files = multithreading_map(download_reference, [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"])
 
-    local_toc = download_reference(params.outputs.genomes)
-    species_info, _, _ = read_toc(local_toc)
+    db = UHGG()
+    species_info = db.species
 
-    marker_info = read_marker_info_repgenomes(...)
+    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
 
     with TimedSection("aligning reads to marker-genes database"):
-        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0])
+        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
     with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
-        marker_cutoffs = dict(parse_table(cutoff_params, ["marker_id", "marker_cutoff"]))
+        marker_cutoffs = {marker_id: float(marker_cutoff_str) for marker_id, marker_cutoff_str in parse_table(cutoff_params, ["marker_id", "marker_cutoff"])}
 
     with TimedSection("classifying reads"):
         best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
