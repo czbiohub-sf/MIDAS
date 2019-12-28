@@ -1,9 +1,9 @@
 import os
 import sys
-from collections import defaultdict
 from multiprocessing import Semaphore
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, pythonpath, upload_star
+from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, download_reference
+from iggtools.models.uhgg import UHGG
 from iggtools.params import outputs
 
 
@@ -17,25 +17,6 @@ def imported_genome_file(genome_id, species_id, component):
 def annotations_file(genome_id, species_id, filename):
     # s3://microbiome-igg/2.0/prodigal/GUT_GENOMEDDDDDD.{fna, faa, gff, log}
     return f"{outputs.annotations}/{species_id}/{genome_id}/{filename}"
-
-
-def read_toc(genomes_tsv, deep_sort=False):
-    # Read in the table of contents.
-    # We will centralize and improve this soon.
-    species = defaultdict(dict)
-    representatives = {}
-    genomes = {}
-    with InputStream(genomes_tsv) as table_of_contents:
-        for row in parse_table(table_of_contents, ["genome", "species", "representative", "genome_is_representative"]):
-            genome_id, species_id, representative_id, _ = row
-            species[species_id][genome_id] = row
-            representatives[species_id] = representative_id
-            genomes[genome_id] = species_id
-    if deep_sort:
-        for sid in species.keys():
-            species[sid] = sorted_dict(species[sid])
-        species = sorted_dict(species)
-    return species, representatives, genomes
 
 
 def unified_genome_id(genome_id):
@@ -113,11 +94,10 @@ def annotate_genes_master(args):
 
     # Fetch table of contents from s3.
     # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = os.path.basename(outputs.genomes)
-    command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
+    local_toc = download_reference(outputs.genomes)
 
-    _, _, species_for_genome = read_toc(local_toc)
+    db = UHGG(local_toc)
+    species_for_genome = db.genomes
 
     def genome_work(genome_id):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
@@ -173,7 +153,8 @@ def annotate_genes_slave(args):
     assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
     assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
 
-    _, _, species_for_genome = read_toc(args.zzz_slave_toc)
+    db = UHGG(args.zzz_slave_toc)
+    species_for_genome = db.genomes
 
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]

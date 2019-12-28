@@ -1,7 +1,7 @@
 import os
-from collections import defaultdict
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, parse_table, retry, command, multithreading_map, find_files, sorted_dict, upload, num_physical_cores, split, upload_star
+from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star, download_reference
+from iggtools.models.uhgg import UHGG
 from iggtools.params import inputs, outputs
 
 
@@ -21,55 +21,16 @@ def destpath(local_file):
     return f"{outputs.marker_genes}/{local_file}.lz4"
 
 
-def read_toc(genomes_tsv, deep_sort=False):
-    # Read in the table of contents.
-    # We will centralize and improve this soon.
-    species = defaultdict(dict)
-    representatives = {}
-    genomes = {}
-    with InputStream(genomes_tsv) as table_of_contents:
-        for row in parse_table(table_of_contents, ["genome", "species", "representative", "genome_is_representative"]):
-            genome_id, species_id, rep_id, _ = row
-            species[species_id][genome_id] = row
-            representatives[species_id] = rep_id
-            genomes[genome_id] = species_id
-    if deep_sort:
-        for sid in species.keys():
-            species[sid] = sorted_dict(species[sid])
-        species = sorted_dict(species)
-    return species, representatives, genomes
-
-
 @retry
 def find_files_with_retry(f):
     return find_files(f)
 
 
-def drop_lz4(filename):
-    assert filename.endswith(".lz4")
-    return filename[:-4]
-
-
-# 1. Occasional failures in aws s3 cp require a retry.
-@retry
-def download_reference(ref_path_local_base):
-    ref_path, local_base = ref_path_local_base
-    local_path = drop_lz4(os.path.basename(ref_path))
-    local_path = f"{local_base}/{local_path}"
-    command(f"rm -f {local_path}")
-    command(f"aws s3 cp --only-show-errors {ref_path} - | lz4 -dc > {local_path}")
-    return local_path
-
-
 def collate_repgenome_markers(args):
 
-    # Fetch table of contents from s3.
-    # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = os.path.basename(outputs.genomes)
-    command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
-
-    species, representatives, _ = read_toc(local_toc)
+    db = UHGG()
+    species = db.species
+    representatives = db.representatives
 
     collate_log = "collate_repgenome_markers.log"
     collate_subdir = f"collate_repgenome_markers"

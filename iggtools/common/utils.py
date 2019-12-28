@@ -18,6 +18,14 @@ tslock = multiprocessing.RLock()
 num_vcpu = multiprocessing.cpu_count()
 num_physical_cores = (num_vcpu + 1) // 2
 
+
+COMPRESSORS = {
+    ".lz4": "lz4 -dc",
+    ".bz2": "bzip2 -dc",   # consider lbzip2 if available
+    ".gz": "gzip -dc"
+}
+
+
 def timestamp(t):
     # We do not use "{:.3f}".format(time.time()) because its result may be
     # up to 0.5 ms in the future due to rounding.  We want flooring here.
@@ -87,7 +95,10 @@ class InputStream:
     Wildcards in path are also supported, but must expand to precisely 1 matching file.
     '''
 
-    def __init__(self, path, filters=None, check_path=True, binary=False):
+    def __init__(self, path, through=None, filters=None, check_path=True, binary=False):
+        if through != None:
+            assert filters == None
+            filters = through
         if check_path:
             path = smart_glob(path, expected=1)[0]
         cat = 'set -o pipefail; '
@@ -141,7 +152,10 @@ class OutputStream:
     Same idea as InputStream, but for output.  Handles compression etc transparently.
     '''
 
-    def __init__(self, path, filters=None, binary=False):
+    def __init__(self, path, through=None, filters=None, binary=False):
+        if through != None:
+            assert filters == None
+            filters = through
         if path.startswith("s3://"):
             cat = f"aws s3 --quiet cp - {path}"
         else:
@@ -301,6 +315,11 @@ def parse_table(lines, columns, headers=None):
         if len(headers) != len(values):
             assert False, f"Line {i} has {len(values)} columns;  was expecting {len(headers)}."
         yield [values[i] for i in column_indexes]
+
+
+def parse_table_as_rowdicts(lines, columns, headers=None):
+    for rowlist in parse_table(lines, columns, headers):
+        yield dict(zip(columns, rowlist))
 
 
 def retry(operation, MAX_TRIES=3):
@@ -467,6 +486,43 @@ def datecode(t=None, local=False):
         day=zt.tm_mday,
         t=int(t)
     )
+
+
+class TimedSection:
+
+    def __init__(self, section_name, quiet=True):
+        self.section_name = section_name
+        self.t_start = None
+        self.quiet = quiet
+
+    def __enter__(self):
+        self.t_start = time.time()
+        if not self.quiet:
+            tsprint(f"Entering section '{self.section_name}'")
+        return self
+
+    def __exit__(self, _etype, _evalue, _etraceback):
+        tsprint(f"Took {(time.time() - self.t_start)/60:.1f} minutes for {self.section_name}")
+        return False  # Do not suppress exceptions
+
+
+def uncompressed(filename):
+    fn, ext = os.path.splitext(filename)
+    if ext in COMPRESSORS:
+        return fn, COMPRESSORS[ext]
+    return filename, "cat"
+
+
+# Occasional failures in aws s3 cp require a retry.
+@retry
+def download_reference(ref_path):
+    local_path = os.path.basename(ref_path)
+    local_path, uncompress_cmd = uncompressed(local_path)
+    if os.path.exists(local_path):
+        tsprint(f"Overwriting pre-existing {local_path} with reference download.")  # TODO:  Reuse instead of re-download.  Requires versioning.
+        command(f"rm -f {local_path}")
+    command(f"aws s3 cp --only-show-errors {ref_path} - | {uncompress_cmd} > {local_path}")
+    return local_path
 
 
 if __name__ == "__main__":

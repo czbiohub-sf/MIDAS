@@ -1,4 +1,4 @@
-from argparse import ArgumentParser, SUPPRESS
+from argparse import ArgumentParser, SUPPRESS, RawDescriptionHelpFormatter
 from iggtools import version
 from iggtools.params import batch
 from iggtools.params.outputs import opsdir
@@ -15,7 +15,8 @@ def _new(_):
     parser = ArgumentParser(
         prog="iggtools",
         description=summary,
-        epilog=f"For more information, see {wiki}"
+        epilog=f"For more information, see {wiki}",
+        formatter_class=RawDescriptionHelpFormatter
     )
     parser.add_argument(
         '-v',
