@@ -515,13 +515,19 @@ def uncompressed(filename):
 
 # Occasional failures in aws s3 cp require a retry.
 @retry
-def download_reference(ref_path):
-    local_path = os.path.basename(ref_path)
+def download_reference(ref_path, local_dir="."):
+    local_path = os.path.join(local_dir, os.path.basename(ref_path))
     local_path, uncompress_cmd = uncompressed(local_path)
     if os.path.exists(local_path):
         tsprint(f"Overwriting pre-existing {local_path} with reference download.")  # TODO:  Reuse instead of re-download.  Requires versioning.
         command(f"rm -f {local_path}")
-    command(f"aws s3 cp --only-show-errors {ref_path} - | {uncompress_cmd} > {local_path}")
+    if not os.path.exists(local_dir):
+        command(f"mkdir -p {local_dir}")
+    try:
+        command(f"set -o pipefail; aws s3 cp --only-show-errors {ref_path} - | {uncompress_cmd} > {local_path}")
+    except:
+        command(f"rm -f {local_path}")
+        raise
     return local_path
 
 
