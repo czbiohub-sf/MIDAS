@@ -63,13 +63,13 @@ def register_args(main_func):
                            dest='aln_speed',
                            default='very-sensitive',
                            choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
-                           help='Alignment speed/sensitivity (very-sensitive)')
+                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
     subparser.add_argument('--aln_mode',
                            type=str,
                            dest='aln_mode',
                            default='local',
                            choices=['local', 'global'],
-                           help='Global/local read alignment (local)')
+                           help='Global/local read alignment (local, corresponds to the bowtie2 --local).  Global corresponds to the bowtie2 default --end-to-end.')
     subparser.add_argument('--aln_interleaved',
                            action='store_true',
                            default=False,
@@ -104,7 +104,8 @@ def pangenome_align(args, tempdir):
     """ Use Bowtie2 to map reads to all specified genome species """
 
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
-    local_vs_global = "--local" if args.aln_mode == "local" else ""
+    aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
+    aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
     r2 = ""
     if args.r2:
         r1 = f"-1 {args.r1}"
@@ -115,7 +116,7 @@ def pangenome_align(args, tempdir):
         r1 = f"-U {args.r1}"
 
     try:
-        command(f"set -o pipefail;  bowtie2 --no-unal -x {tempdir}/pangenomes {max_reads} --{args.aln_speed} {local_vs_global} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - > {tempdir}/pangenomes.bam")
+        command(f"set -o pipefail;  bowtie2 --no-unal -x {tempdir}/pangenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - > {tempdir}/pangenomes.bam")
     except:
         command(f"rm -f {tempdir}/pangenomes.bam")
         raise
