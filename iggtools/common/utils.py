@@ -316,23 +316,21 @@ def select_from_tsv(input_lines, selected_columns=None, schema=None, result_stru
 
     the generator
 
-        select_from_tsv(input_stream)
+        select_from_tsv(input_stream, selected_columns=["name", "height"])
 
     would yield
 
-       ("tommy", "9", "120"),
-       ("masha", "7", "122"),
+       ("tommy", "120"),
+       ("masha", "122"),
        ...
 
-    It's possible to request just certain columns
+    Note how in the above example all values returned are strings.
 
-        select_from_tsv(input_stream, selected_columns=["name", "height"])
+    Column type information may be specified as follows
 
-    Optionally, column type information may be specified
+        select_from_tsv(input_stream, selected_columns={"name": str, "height": float})
 
-        select_from_tsv(input_stream, selected_columns={"name":str, "height": float})
-
-    affecting the result as follows
+    yielding
 
         ("tommy", 120.0),
         ("masha", 122.0),
@@ -342,7 +340,7 @@ def select_from_tsv(input_lines, selected_columns=None, schema=None, result_stru
 
         select_from_tsv(input_stream, selected_columns=["name", "height"], schema={"name": str, "age": int, "height": float})
 
-    Conversely, specifyng a schema argument means the first line of input is expected to contain values, not columnd headers.
+    Specifyng a schema argument means the first line of input should contain values, not columnd headers.
 
     Type information may be specified in either the selected_columns or the schema argument.
 
@@ -352,7 +350,11 @@ def select_from_tsv(input_lines, selected_columns=None, schema=None, result_stru
        {"name": "masha", "height": 122.0},
        ...
 
+    When a schema argument is provided, leaving selected_columns unspecified is equivalent to selecting all columns from the schema.
+
+    At least one of the schema or selected_columns arguments must be specified, even if the schema could be inferred from the input headers.  This makes applications more robust.
     """
+    assert schema != None or selected_columns != None, "at least one of these arguments must be specified"
     lines = strip_eol(input_lines)
     j = 0
     if schema == None:
