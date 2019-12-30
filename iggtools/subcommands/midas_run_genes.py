@@ -2,7 +2,7 @@ import json
 from collections import defaultdict
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, parse_table, multithreading_hashmap, download_reference, split
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
 from iggtools.params import inputs, outputs
 
 
@@ -87,13 +87,12 @@ def build_pangenome_db(tempdir, centroids):
 
 def parse_species_profile(outdir):
     "Return map of species_id to coverage for the species present in the sample."
-    spfilename = f"{outdir}/species/species_profile.txt"
-    with InputStream(spfilename) as sppf:
-        return {species_id: float(species_coverage_str) for species_id, species_coverage_str in parse_table(sppf, ["species_id", "coverage"])}
+    with InputStream(f"{outdir}/species/species_profile.txt") as stream:
+        return dict(select_from_tsv(stream, {"species_id": str, "coverage": float}))
 
 
 def select_species(species_profile, coverage_threshold):
-    return {species_id: species_coverage for species_id, species_coverage in species_profile.items() if species_coverage > coverage_threshold}
+    return {species_id: species_coverage for species_id, species_coverage in species_profile.items() if species_coverage >= coverage_threshold}
 
 
 def pangenome_file(species_id, component):

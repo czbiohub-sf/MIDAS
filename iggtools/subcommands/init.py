@@ -1,5 +1,5 @@
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, find_files, InputStream, OutputStream, parse_table
+from iggtools.common.utils import tsprint, find_files, InputStream, OutputStream, select_from_tsv
 from iggtools.params import inputs, outputs
 
 def init(args):
@@ -18,7 +18,7 @@ def init(args):
 
     id_remap = {}
     with InputStream(inputs.alt_species_ids) as ids:
-        for row in parse_table(ids, ["alt_species_id", "species_id"]):
+        for row in select_from_tsv(ids, selected_columns=["alt_species_id", "species_id"]):
             new_id, old_id = row
             id_remap[old_id] = new_id
 
@@ -29,7 +29,7 @@ def init(args):
         out.write("\t".join(target_columns) + "\n")
 
         with InputStream(inputs.genomes2species) as g2s:
-            for row in parse_table(g2s, ["MAG_code", "Species_id"]):
+            for row in select_from_tsv(g2s, selected_columns=["MAG_code", "Species_id"]):
                 genome, representative = row
                 species = id_remap[representative]
                 genome_is_representative = str(int(genome == representative))
