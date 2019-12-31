@@ -1,5 +1,8 @@
 import json
 from collections import defaultdict
+import numpy as np
+import Bio.SeqIO
+import pysam
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
@@ -122,6 +125,128 @@ def pangenome_align(args, tempdir):
         raise
 
 
+def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < min_pid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < min_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < min_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < min_aln_cov:
+        return False
+    return True
+
+
+def count_mapped_bp(args, tempdir, genes):
+    """ Count number of bp mapped to each gene across pangenomes """
+    bam_path = f"{tempdir}/genes/temp/pangenomes.bam'"
+    bamfile = pysam.AlignmentFile(bam_path, "rb")
+
+    # loop over alignments, sum values per gene
+    for aln in bamfile.fetch(until_eof=True):
+        gene_id = bamfile.getrname(aln.reference_id)
+        gene = genes[gene_id]
+        gene["aligned_reads"] += 1
+        if keep_read(aln, args.mapid, args.readq, args.mapq, args.aln_cov):
+            gene["mapped_reads"] += 1
+            gene["depth"] += len(aln.query_alignment_sequence) / float(gene["length"])
+
+    tsprint("Pangenome count_mapped_bp:  total aligned reads: %s" % sum(g["aligned_reads"] for g in genes.values()))
+    tsprint("Pangenome count_mapped_bp:  total mapped reads: %s" % sum(g["mapped_reads"] for g in genes.values()))
+
+    # Group gene depths by species
+    gene_depths = defaultdict(list)
+    for g in genes.values():
+        gene_depths[g["species_id"]].append(g["depth"])
+
+    # loop over species, compute summaries
+    num_covered_genes = {}
+    mean_coverage = {}
+    for species_id, depths in gene_depths.items():
+        non_zero_depths = [d for d in depths if d > 0]
+        num_covered_genes = len(non_zero_depths)
+        mean_coverage[species_id] = np.mean(non_zero_depths) if non_zero_depths else 0
+        num_covered_genes[species_id] = num_covered_genes
+
+    return num_covered_genes, mean_coverage
+
+
+def normalize(genes):
+    """ Count number of bp mapped to each marker gene """
+    # compute marker depth
+    species_markers = defaultdict(lambda: defaultdict(int))
+    for gene in genes.values():
+        gene_marker_id = gene["marker_id"]
+        if gene_marker_id:
+            species_markers[gene["species_id"]][gene_marker_id] += gene["depth"]
+    # compute median marker depth
+    species_markers_coverage = {species_id: np.median(marker_depths) for species_id, marker_depths in species_markers.items()}
+    # normalize genes by median marker depth
+    for gene in genes.values():
+        species_id = gene["species_id"]
+        marker_coverage = species_markers_coverage[species_id]
+        if marker_coverage > 0:
+            gene["copies"] = gene["depth"] / marker_coverage
+    return species_markers_coverage
+
+
+def write_results(tempdir, species, num_covered_genes, markers_coverage, mean_coverage):
+    # open outfiles for each species_id
+    header = ['gene_id', 'count_reads', 'coverage', 'copy_number']
+    for species_id, species_genes in species:
+        path = f"{tempdir}/genes/output/{species_id}.genes.gz"
+        with OutputStream(path) as sp_out:
+            sp_out.write('\t'.join(header) + '\n')
+            for gene_id, gene in species_genes.items():
+                values = [gene_id, gene["mapped_reads"], gene["depth"], gene["copies"]]
+                sp_out.write('\t'.join([str(v) for v in values]) + '\n')
+    # summary stats
+    header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
+    path = f"{tempdir}/genes/summary.txt"
+    with OutputStream(path) as file:
+        file.write('\t'.join(header) + '\n')
+        for species_id, species_genes in species.items():
+            aligned_reads = sum(g["algined_reads"] for g in species_genes)
+            mapped_reads = sum(g["mapped_reads"] for g in species_genes)
+            pangenome_size = len(species_genes)
+            values = [species_id, pangenome_size, num_covered_genes[species_id], num_covered_genes[species_id] / pangenome_size, mean_coverage[species_id], markers_coverage[species_id], aligned_reads, mapped_reads]
+            file.write('\t'.join(str(v) for v in values) + '\n')
+
+
+def pangenome_coverage(args, tempdir, species, genes):
+    """ Compute coverage of pangenome for species_id and write results to disk """
+    num_covered_genes, species_mean_coverage = count_mapped_bp(args, tempdir, genes)
+    species_markers_coverage = normalize(genes)
+    write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+
+
+def scan_centroids(centroids_files):
+    species = defaultdict(dict)
+    genes = {}
+    for species_id, centroid_filename in centroids_files:
+        with InputStream(centroid_filename) as file:
+            for centroid in Bio.SeqIO.parse(file, 'fasta'):
+                centroid_gene_id = centroid.id
+                centroid_gene = {
+                    "centroid_gene_id": centroid_gene_id,
+                    "species_id": species_id,
+                    "length": len(centroid.seq),
+                    "depth": 0.0,
+                    "aligned_reads": 0,
+                    "mapped_reads": 0,
+                    "copies": 0.0,
+                }
+                species[species_id][centroid_gene_id] = centroid_gene
+                genes[centroid_gene_id] = centroid_gene
+    return species, genes
+
+
 def midas_run_genes(args):
 
     tempdir = f"{args.outdir}/genes/temp_sc{args.species_cov}"
@@ -138,11 +263,15 @@ def midas_run_genes(args):
         return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
 
     # Download centroids.ffn for every species
-    centroids = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
+    centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
 
-    build_pangenome_db(tempdir, centroids)
+    build_pangenome_db(tempdir, centroids_files)
 
     pangenome_align(args, tempdir)
+
+    species, genes = scan_centroids(centroids_files)
+
+    pangenome_coverage(args, tempdir, species, genes)
 
 
 @register_args
