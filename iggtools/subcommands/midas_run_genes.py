@@ -1,8 +1,9 @@
 import json
+import os
 from collections import defaultdict
 import numpy as np
 import Bio.SeqIO
-import pysam
+from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
@@ -11,7 +12,11 @@ from iggtools.params import inputs, outputs
 
 DEFAULT_ALN_COV = 0.75
 DEFAULT_SPECIES_COVERAGE = 3.0
+DEFAULT_ALN_MAPID = 94.0
+DEFAULT_ALN_READQ = 20
+DEFAULT_ALN_MAPQ = 0
 
+DECIMALS = ".6f"
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
@@ -25,11 +30,6 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--mapid',
-                           dest='mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {inputs.marker_genes_hmm_cutoffs}")
     subparser.add_argument('--max_reads',
                            dest='max_reads',
                            type=int,
@@ -56,11 +56,18 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--readq',
-                           dest='readq',
+    subparser.add_argument('--aln_readq',
+                           dest='aln_readq',
                            type=int,
                            metavar="INT",
-                           help=f"Discard reads with mean quality < READQ (20)")
+                           default=DEFAULT_ALN_READQ,
+                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_ALN_MAPID,
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
     subparser.add_argument('--aln_speed',
                            type=str,
                            dest='aln_speed',
@@ -82,10 +89,14 @@ def register_args(main_func):
 
 
 def build_pangenome_db(tempdir, centroids):
+    if all(os.path.exists(f"{tempdir}/pangenomes.{ext}") for ext in ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]):
+        tsprint("Skipping bowtie2-build as database files appear to exist.")
+        return
+    command(f"rm -f {tempdir}/pangenomes.fa")
     command(f"touch {tempdir}/pangenomes.fa")
     for files in split(centroids.values(), 20):  # keep "cat" commands short
         command("cat " + " ".join(files) + f" >> {tempdir}/pangenomes.fa")
-    command(f"bowtie2-build --threads {num_physical_cores} {tempdir}/pangenomes.fa {tempdir}/pangenomes")
+    command(f"bowtie2-build --threads {num_physical_cores} {tempdir}/pangenomes.fa {tempdir}/pangenomes > {tempdir}/bowtie2-build.log")
 
 
 def parse_species_profile(outdir):
@@ -106,6 +117,10 @@ def pangenome_file(species_id, component):
 def pangenome_align(args, tempdir):
     """ Use Bowtie2 to map reads to all specified genome species """
 
+    if args.debug and os.path.exists(f"{tempdir}/pangenomes.bam"):
+        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/pangenomes.bam")
+        return
+
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
     aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
     aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
@@ -119,7 +134,7 @@ def pangenome_align(args, tempdir):
         r1 = f"-U {args.r1}"
 
     try:
-        command(f"set -o pipefail;  bowtie2 --no-unal -x {tempdir}/pangenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - > {tempdir}/pangenomes.bam")
+        command(f"set -o pipefail; bowtie2 --no-unal -x {tempdir}/pangenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - > {tempdir}/pangenomes.bam")
     except:
         command(f"rm -f {tempdir}/pangenomes.bam")
         raise
@@ -144,51 +159,55 @@ def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
 
 
 def count_mapped_bp(args, tempdir, genes):
-    """ Count number of bp mapped to each gene across pangenomes """
-    bam_path = f"{tempdir}/genes/temp/pangenomes.bam'"
-    bamfile = pysam.AlignmentFile(bam_path, "rb")
+    """ Count number of bp mapped to each gene across pangenomes.  Return number covered genes and average gene depth per species.  Result contains only covered species, but being a defaultdict, would yield 0 for any uncovered species, which is appropriate. """
+    bam_path = f"{tempdir}/pangenomes.bam"
+    bamfile = AlignmentFile(bam_path, "rb")
+    covered_genes = {}
 
     # loop over alignments, sum values per gene
     for aln in bamfile.fetch(until_eof=True):
         gene_id = bamfile.getrname(aln.reference_id)
         gene = genes[gene_id]
         gene["aligned_reads"] += 1
-        if keep_read(aln, args.mapid, args.readq, args.mapq, args.aln_cov):
+        if keep_read(aln, args.aln_mapid, args.aln_readq, DEFAULT_ALN_MAPQ, args.aln_cov):
             gene["mapped_reads"] += 1
             gene["depth"] += len(aln.query_alignment_sequence) / float(gene["length"])
+            covered_genes[gene_id] = gene
 
     tsprint("Pangenome count_mapped_bp:  total aligned reads: %s" % sum(g["aligned_reads"] for g in genes.values()))
     tsprint("Pangenome count_mapped_bp:  total mapped reads: %s" % sum(g["mapped_reads"] for g in genes.values()))
 
-    # Group gene depths by species
-    gene_depths = defaultdict(list)
-    for g in genes.values():
-        gene_depths[g["species_id"]].append(g["depth"])
+    # Filter to genes with non-zero depth, then group by species
+    nonzero_gene_depths = defaultdict(list)
+    for g in covered_genes.values():
+        gene_depth = g["depth"]
+        if gene_depth > 0:  # This should always pass, because ags.aln_cov is always >0.
+            species_id = g["species_id"]
+            nonzero_gene_depths[species_id].append(gene_depth)
 
-    # loop over species, compute summaries
-    num_covered_genes = {}
-    mean_coverage = {}
-    for species_id, depths in gene_depths.items():
-        non_zero_depths = [d for d in depths if d > 0]
-        num_covered_genes = len(non_zero_depths)
-        mean_coverage[species_id] = np.mean(non_zero_depths) if non_zero_depths else 0
-        num_covered_genes[species_id] = num_covered_genes
+    # Compute number of covered genes per species, and average gene depth.
+    num_covered_genes = defaultdict(int)
+    mean_coverage = defaultdict(float)
+    for species_id, non_zero_depths in nonzero_gene_depths.items():
+        num_covered_genes[species_id] = len(non_zero_depths)
+        mean_coverage[species_id] = np.mean(non_zero_depths)
 
-    return num_covered_genes, mean_coverage
+    return num_covered_genes, mean_coverage, covered_genes
 
 
-def normalize(genes):
-    """ Count number of bp mapped to each marker gene """
+def normalize(genes, covered_genes, markers):
+    """ Normalize gene depth by median marker depth, to infer gene copy count.  Return median marker coverage for each covered species in a defaultdict, so that accessing an uncovered species would appropriately yield 0. """
     # compute marker depth
     species_markers = defaultdict(lambda: defaultdict(int))
-    for gene in genes.values():
-        gene_marker_id = gene["marker_id"]
-        if gene_marker_id:
-            species_markers[gene["species_id"]][gene_marker_id] += gene["depth"]
-    # compute median marker depth
-    species_markers_coverage = {species_id: np.median(marker_depths) for species_id, marker_depths in species_markers.items()}
-    # normalize genes by median marker depth
-    for gene in genes.values():
+    for gene_id, marker_id in markers:
+        g = genes[gene_id]
+        species_markers[g["species_id"]][marker_id] += g["depth"]
+    # compute median marker depth for each species
+    species_markers_coverage = defaultdict(float)
+    for species_id, marker_depths in species_markers.items():
+        species_markers_coverage[species_id] = np.median(list(marker_depths.values()))   # np.median doesn't take iterators
+    # infer copy count for each covered gene
+    for gene in covered_genes.values():
         species_id = gene["species_id"]
         marker_coverage = species_markers_coverage[species_id]
         if marker_coverage > 0:
@@ -196,40 +215,49 @@ def normalize(genes):
     return species_markers_coverage
 
 
-def write_results(tempdir, species, num_covered_genes, markers_coverage, mean_coverage):
+def write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage):
+    if not os.path.exists(f"{tempdir}/genes/output"):
+        command(f"mkdir -p {tempdir}/genes/output")
     # open outfiles for each species_id
     header = ['gene_id', 'count_reads', 'coverage', 'copy_number']
-    for species_id, species_genes in species:
-        path = f"{tempdir}/genes/output/{species_id}.genes.gz"
+    for species_id, species_genes in species.items():
+        path = f"{tempdir}/genes/output/{species_id}.genes.lz4"
         with OutputStream(path) as sp_out:
             sp_out.write('\t'.join(header) + '\n')
             for gene_id, gene in species_genes.items():
-                values = [gene_id, gene["mapped_reads"], gene["depth"], gene["copies"]]
-                sp_out.write('\t'.join([str(v) for v in values]) + '\n')
+                if gene["depth"] == 0:
+                    # Sparse by default here.  You can get the pangenome_size from the summary file, emitted below.
+                    continue
+                # TODO perhaps truncate precision a bit...
+                values = [gene_id, str(gene["mapped_reads"]), format(gene["depth"], DECIMALS), format(gene["copies"], DECIMALS)]
+                sp_out.write('\t'.join(values) + '\n')
     # summary stats
     header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
     path = f"{tempdir}/genes/summary.txt"
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_genes in species.items():
-            aligned_reads = sum(g["algined_reads"] for g in species_genes)
-            mapped_reads = sum(g["mapped_reads"] for g in species_genes)
+            # No sparsity here -- should be extremely rare for a species row to be all 0.
+            aligned_reads = sum(g["aligned_reads"] for g in species_genes.values())
+            mapped_reads = sum(g["mapped_reads"] for g in species_genes.values())
             pangenome_size = len(species_genes)
-            values = [species_id, pangenome_size, num_covered_genes[species_id], num_covered_genes[species_id] / pangenome_size, mean_coverage[species_id], markers_coverage[species_id], aligned_reads, mapped_reads]
-            file.write('\t'.join(str(v) for v in values) + '\n')
-
-
-def pangenome_coverage(args, tempdir, species, genes):
-    """ Compute coverage of pangenome for species_id and write results to disk """
-    num_covered_genes, species_mean_coverage = count_mapped_bp(args, tempdir, genes)
-    species_markers_coverage = normalize(genes)
-    write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+            values = [
+                species_id,
+                str(pangenome_size),
+                str(num_covered_genes[species_id]),
+                format(num_covered_genes[species_id] / pangenome_size, DECIMALS),
+                format(species_mean_coverage[species_id], DECIMALS),
+                format(species_markers_coverage[species_id], DECIMALS),
+                str(aligned_reads),
+                str(mapped_reads)
+            ]
+            file.write('\t'.join(values) + '\n')
 
 
 def scan_centroids(centroids_files):
     species = defaultdict(dict)
     genes = {}
-    for species_id, centroid_filename in centroids_files:
+    for species_id, centroid_filename in centroids_files.items():
         with InputStream(centroid_filename) as file:
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
                 centroid_gene_id = centroid.id
@@ -244,34 +272,58 @@ def scan_centroids(centroids_files):
                 }
                 species[species_id][centroid_gene_id] = centroid_gene
                 genes[centroid_gene_id] = centroid_gene
+
     return species, genes
+
+
+def scan_markers(genes, marker_genes_map_file):
+    markers = []
+    with InputStream(marker_genes_map_file) as mg_map:
+        for gene_id, marker_id in select_from_tsv(mg_map, ["gene_id", "marker_id"], {"species_id": str, "genome_id": str, "gene_id": str, "gene_len": int, "marker_id": str}):
+            if gene_id in genes:
+                markers.append((gene_id, marker_id))
+    return markers
 
 
 def midas_run_genes(args):
 
     tempdir = f"{args.outdir}/genes/temp_sc{args.species_cov}"
 
-    command(f"rm -rf {tempdir}")
-    command(f"mkdir -p {tempdir}")
+    if args.debug and os.path.exists(tempdir):
+        tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
+    else:
+        command(f"rm -rf {tempdir}")
+        command(f"mkdir -p {tempdir}")
 
-    # Species profile must exist, it's output by run_midas_species
-    full_species_profile = parse_species_profile(args.outdir)
+    try:
+        # The full species profile must exist -- it is output by run_midas_species.
+        # Restrict to species above requested coverage.
+        full_species_profile = parse_species_profile(args.outdir)
+        species_profile = select_species(full_species_profile, args.species_cov)
 
-    species_profile = select_species(full_species_profile, args.species_cov)
+        def download_centroid(species_id):
+            return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
 
-    def download_centroid(species_id):
-        return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
+        # Download centroids.ffn for every species in the restricted species profile.
+        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
 
-    # Download centroids.ffn for every species
-    centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
+        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+        # Also colocate/cache/download in master for multiple slave subcommand invocations.
+        marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
 
-    build_pangenome_db(tempdir, centroids_files)
+        build_pangenome_db(tempdir, centroids_files)
+        pangenome_align(args, tempdir)
 
-    pangenome_align(args, tempdir)
-
-    species, genes = scan_centroids(centroids_files)
-
-    pangenome_coverage(args, tempdir, species, genes)
+        # Compute coverage of pangenome for each present species and write results to disk
+        species, genes = scan_centroids(centroids_files)
+        num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
+        markers = scan_markers(genes, marker_genes_map)
+        species_markers_coverage = normalize(genes, covered_genes, markers)
+        write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
+            command(f"rm -rf {tempdir}", check=False)
 
 
 @register_args
