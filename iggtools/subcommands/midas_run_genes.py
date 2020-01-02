@@ -7,7 +7,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
-from iggtools.params import inputs, outputs
+from iggtools.params import outputs
 
 
 DEFAULT_ALN_COV = 0.75
@@ -215,25 +215,24 @@ def normalize(genes, covered_genes, markers):
     return species_markers_coverage
 
 
-def write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage):
-    if not os.path.exists(f"{tempdir}/genes/output"):
-        command(f"mkdir -p {tempdir}/genes/output")
+def write_results(outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage):
+    if not os.path.exists(f"{outdir}/genes/output"):
+        command(f"mkdir -p {outdir}/genes/output")
     # open outfiles for each species_id
     header = ['gene_id', 'count_reads', 'coverage', 'copy_number']
     for species_id, species_genes in species.items():
-        path = f"{tempdir}/genes/output/{species_id}.genes.lz4"
+        path = f"{outdir}/genes/output/{species_id}.genes.lz4"
         with OutputStream(path) as sp_out:
             sp_out.write('\t'.join(header) + '\n')
             for gene_id, gene in species_genes.items():
                 if gene["depth"] == 0:
                     # Sparse by default here.  You can get the pangenome_size from the summary file, emitted below.
                     continue
-                # TODO perhaps truncate precision a bit...
                 values = [gene_id, str(gene["mapped_reads"]), format(gene["depth"], DECIMALS), format(gene["copies"], DECIMALS)]
                 sp_out.write('\t'.join(values) + '\n')
     # summary stats
     header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
-    path = f"{tempdir}/genes/summary.txt"
+    path = f"{outdir}/genes/summary.txt"
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_genes in species.items():
@@ -319,7 +318,7 @@ def midas_run_genes(args):
         num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
         markers = scan_markers(genes, marker_genes_map)
         species_markers_coverage = normalize(genes, covered_genes, markers)
-        write_results(tempdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+        write_results(args.outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
