@@ -4,7 +4,7 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, parse_table, transpose, find_files, upload, upload_star, flatten, pythonpath
+from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
 from iggtools.models.uhgg import UHGG
 from iggtools.params import outputs
 
@@ -77,7 +77,7 @@ def parse_uclust(uclust_file, select_columns):
     # The uclust TSV file does not contain a header line.  So, we have to hardcode the schema here.  Then select specified columns.
     all_uclust_columns = ['type', 'cluster_id', 'size', 'pid', 'strand', 'skip1', 'skip2', 'skip3', 'gene_id', 'centroid_id']
     with InputStream(uclust_file) as ucf:
-        for r in parse_table(ucf, select_columns, all_uclust_columns):
+        for r in select_from_tsv(ucf, select_columns, all_uclust_columns):
             yield r
 
 

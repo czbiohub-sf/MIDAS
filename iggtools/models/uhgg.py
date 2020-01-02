@@ -1,7 +1,7 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import parse_table, sorted_dict, InputStream
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream
 
 
 class UHGG:  # pylint: disable=too-few-public-methods
@@ -18,7 +18,7 @@ def _UHGG_load(toc_tsv, deep_sort=False):
     representatives = {}
     genomes = {}
     with InputStream(toc_tsv) as table_of_contents:
-        for row in parse_table(table_of_contents, ["genome", "species", "representative", "genome_is_representative"]):
+        for row in select_from_tsv(table_of_contents, selected_columns=["genome", "species", "representative", "genome_is_representative"]):
             genome_id, species_id, representative_id, _ = row
             species[species_id][genome_id] = row
             representatives[species_id] = representative_id

@@ -5,7 +5,7 @@ from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, parse_table_as_rowdicts, parse_table, multithreading_map, download_reference, TimedSection
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, TimedSection
 from iggtools.models.uhgg import UHGG
 from iggtools import params
 
@@ -120,14 +120,20 @@ def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads):
     return m8_file
 
 
-def parse_blast(inpath):
-    """ Yield formatted record from BLAST m8 file """
-    # TODO: Bring schema parser from idseq-dag.
-    BLAST_COLUMN_TYPES = [str, str, float, int, float, float, float, float, float, float, float, float, int, int]
-    BLAST_COLUMNS = ['query', 'target', 'pid', 'aln', 'mis', 'gaps', 'qstart', 'qend', 'tstart', 'tend', 'evalue', 'score']
-    for line in open(inpath):
-        values = line.rstrip().split()
-        yield dict((field, format(value)) for field, format, value in zip(BLAST_COLUMNS, BLAST_COLUMN_TYPES, values))
+BLAST_M8_SCHEMA = {
+    'query': str,
+    'target': str,
+    'pid': float,
+    'aln': int,
+    'mis': float,
+    'gaps': float,
+    'qstart': float,
+    'qend': float,
+    'tstart': float,
+    'tend': float,
+    'evalue': float,
+    'score': float,
+}
 
 
 def deconstruct_queryid(rid):
@@ -149,22 +155,23 @@ def find_best_hits(args, marker_info, m8_file, marker_cutoffs):
     """ Find top scoring alignment for each read """
     best_hits = {}
     i = 0
-    for aln in parse_blast(m8_file):
-        i += 1
-        cutoff = args.mapid
-        if cutoff == None:
-            marker_id = marker_info[aln['target']]['marker_id'] # get gene family from marker_info
-            cutoff = marker_cutoffs[marker_id]
-        if aln['pid'] < cutoff: # does not meet marker cutoff
-            continue
-        if query_coverage(aln) < args.aln_cov: # filter local alignments
-            continue
-        if aln['query'] not in best_hits: # record aln
-            best_hits[aln['query']] = [aln]
-        elif best_hits[aln['query']][0]['score'] == aln['score']: # add aln
-            best_hits[aln['query']] += [aln]
-        elif best_hits[aln['query']][0]['score'] < aln['score']: # update aln
-            best_hits[aln['query']] = [aln]
+    with InputStream(m8_file) as m8_stream:
+        for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
+            i += 1
+            cutoff = args.mapid
+            if cutoff == None:
+                marker_id = marker_info[aln['target']]['marker_id'] # get gene family from marker_info
+                cutoff = marker_cutoffs[marker_id]
+            if aln['pid'] < cutoff: # does not meet marker cutoff
+                continue
+            if query_coverage(aln) < args.aln_cov: # filter local alignments
+                continue
+            if aln['query'] not in best_hits: # record aln
+                best_hits[aln['query']] = [aln]
+            elif best_hits[aln['query']][0]['score'] == aln['score']: # add aln
+                best_hits[aln['query']] += [aln]
+            elif best_hits[aln['query']][0]['score'] < aln['score']: # update aln
+                best_hits[aln['query']] = [aln]
     tsprint(f"  total alignments: {i}")
     return list(best_hits.values())
 
@@ -205,8 +212,8 @@ def assign_non_unique(alns, unique_alns, marker_info):
 
 def read_marker_info_repgenomes(map_file):
     columns = ["species_id", "genome_id", "gene_id", "gene_length", "marker_id"]
-    with InputStream(map_file) as impf:
-        return {r['gene_id']: r for r in parse_table_as_rowdicts(impf, columns, columns)}
+    with InputStream(map_file) as map_file_stream:
+        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=columns, result_structure=dict)}
 
 
 def sum_marker_gene_lengths(marker_info):
@@ -241,7 +248,7 @@ def normalize_counts(species_alns, total_gene_length):
 
 def write_abundance(outdir, species_abundance):
     """ Write species results to specified output file """
-    outpath = f"{outdir}/species/species_profile.txt"
+    outpath = f"{outdir}/species/species_profile.txt"  # TODO:  Share this across midas_run_ steps
     with OutputStream(outpath) as outfile:
         fields = ['species_id', 'count_reads', 'coverage', 'relative_abundance']
         outfile.write('\t'.join(fields) + '\n')
@@ -271,7 +278,7 @@ def midas_run_species(args):
         m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
     with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
-        marker_cutoffs = {marker_id: float(marker_cutoff_str) for marker_id, marker_cutoff_str in parse_table(cutoff_params, ["marker_id", "marker_cutoff"])}
+        marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
     with TimedSection("classifying reads"):
         best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
