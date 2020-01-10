@@ -10,6 +10,7 @@ import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
 from iggtools.params import outputs
+from iggtools.models.uhgg import UHGG
 
 
 DEFAULT_ALN_COV = 0.75
@@ -363,11 +364,15 @@ def midas_run_snps(args):
         species_profile = select_species(full_species_profile, args.species_cov)
 
         local_toc = download_reference(outputs.genomes)
+        tsprint(f"local_toc=>{local_toc}")
         db = UHGG(local_toc)
+        tsprint(f"finished here?")
         representatives = db.representatives
         tsprint(f"representatives: {representatives}")
 
         def download_contigs(species_id):
+            s3_file_path = imported_genome_file(representatives[species_id], species_id, ".fna.lz4")
+            tsprint(f"import_genome_file=> {s3_file_path}")
             return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
