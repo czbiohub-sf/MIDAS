@@ -191,11 +191,7 @@ def repgenome_align(args, tempdir):
         r1 = f"-U {args.r1}"
 
     try:
-        my_command = f"set -o pipefail; bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - | samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam"
-        tsprint("this is my command\n {my_command}")
-
-        command(f"set -o pipefail; \
-                bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
+        command(f"set -o pipefail; bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
                 samtools view --threads {num_physical_cores} -b - | \
                 samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam")
     except:
@@ -209,7 +205,7 @@ def samtools_index(tempdir, args):
         tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
         return
     try:
-        command(f"samtools index --threads {num_physical_cores} {tempdir}/repgenomes.bam")
+        command(f"samtools index -@ {num_physical_cores} {tempdir}/repgenomes.bam")
     except:
         command(f"rm -f {tempdir}/repgenomes.bam.bai")
         raise
