@@ -202,7 +202,7 @@ def repgenome_align(args, tempdir):
 
 def samtools_index(tempdir, args):
     if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
-        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
+        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
         return
     try:
         command(f"samtools index -@ {num_physical_cores} {tempdir}/repgenomes.bam")
