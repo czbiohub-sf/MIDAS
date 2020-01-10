@@ -194,13 +194,15 @@ def repgenome_align(args, tempdir):
         my_command = f"set -o pipefail; | \
                 bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
                 samtools view --threads {num_physical_cores} -b - | \
-                samtools sort --threads {num_physical_socres} -o {tempdir}/repgenomes.bam"
+                samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam"
         tsprint("this is my command\n {my_command}")
+
         command(f"set -o pipefail; | \
                 bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
                 samtools view --threads {num_physical_cores} -b - | \
-                samtools sort --threads {num_physical_socres} -o {tempdir}/repgenomes.bam")
+                samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam")
     except:
+        tsprint("Repgnome align run into error")
         command(f"rm -f {tempdir}/repgenomes.bam")
         raise
 
