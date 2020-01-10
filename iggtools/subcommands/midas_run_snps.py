@@ -174,7 +174,6 @@ def build_repgenome_db(tempdir, contigs):
 
 def repgenome_align(args, tempdir):
     "Use Bowtie2 to map reads to specified representative genomes"
-
     if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam"):
         tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
         return
@@ -192,7 +191,7 @@ def repgenome_align(args, tempdir):
         r1 = f"-U {args.r1}"
 
     try:
-        command(f"set -o pipefail; \
+        command(f"set -o pipefail; | \
                 bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
                 samtools view --threads {num_physical_cores} -b - | \
                 samtools sort --threads {num_physical_socres} -o {tempdir}/repgenomes.bam")
@@ -381,7 +380,6 @@ def midas_run_snps(args):
 
         # Use Bowtie2 to map reads to a representative genomes
         build_repgenome_db(tempdir, contigs_files)
-        tsprint("finished here")
         repgenome_align(args, tempdir)
 
         # Use mpileup to identify SNPs
