@@ -1,13 +1,17 @@
 import json
 import os
 from collections import defaultdict
+import multiprocessing
+
 import numpy as np
-import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
+import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
 from iggtools.params import outputs
+
+
 
 
 DEFAULT_ALN_COV = 0.75
@@ -256,8 +260,9 @@ def species_pileup(species_id):
 
         zero_rows_allowed = not args['sparse']
 
+        # loog over alignments for current species_id
         tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
-        with pysam.AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
+        with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why do we need to sorted ?
 
                 if contigs[contig_id]["species_id"] != species_id:
