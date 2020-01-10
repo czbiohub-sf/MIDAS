@@ -364,14 +364,11 @@ def midas_run_snps(args):
         species_profile = select_species(full_species_profile, args.species_cov)
 
         local_toc = download_reference(outputs.genomes)
-        tsprint(f"local_toc=>{local_toc}")
         db = UHGG(local_toc)
-        tsprint(f"finished here?")
         representatives = db.representatives
-        tsprint(f"representatives: {representatives}")
 
         def download_contigs(species_id):
-            s3_file_path = imported_genome_file(representatives[species_id], species_id, ".fna.lz4")
+            s3_file_path = imported_genome_file(representatives[species_id], species_id, "fna.lz4")
             tsprint(f"import_genome_file=> {s3_file_path}")
             return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4"), f"{tempdir}/{species_id}")
 
