@@ -379,9 +379,9 @@ def midas_run_snps(args):
         tsprint(f"CONTIG DB stats - total contigs: {db_stats['total_seqs']}")
         tsprint(f"CONTIG DB stats - total base-pairs: {db_stats['total_length']}")
 
-
         # Use Bowtie2 to map reads to a representative genomes
         build_repgenome_db(tempdir, contigs_files)
+        tsprint("finished here")
         repgenome_align(args, tempdir)
 
         # Use mpileup to identify SNPs
