@@ -368,9 +368,7 @@ def midas_run_snps(args):
         representatives = db.representatives
 
         def download_contigs(species_id):
-            s3_file_path = imported_genome_file(representatives[species_id], species_id, "fna.lz4")
-            tsprint(f"import_genome_file=> {s3_file_path}")
-            return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4"), f"{tempdir}/{species_id}")
+            return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
