@@ -136,7 +136,7 @@ def select_species(species_profile, coverage_threshold):
     return {species_id: species_coverage for species_id, species_coverage in species_profile.items() if species_coverage >= coverage_threshold}
 
 
-def imported_genome_file(genome_id， species_id, component):
+def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
@@ -148,9 +148,9 @@ def initialize_contigs(contigs_files):
         with InputStream(contig_filename) as file:
             for rec in Bio.SeqIO.parse(file, 'fasta'):
                 contigs[rec.id] = {
-                    "contig_seq" = str(rec.seq),
-                    "contig_len" = len(rec.seq),
-                    "species_id" = species_id,
+                    "contig_seq": str(rec.seq),
+                    "contig_len": len(rec.seq),
+                    "species_id": species_id,
                 }
                 db_stats['total_length'] += contigs[rec.id]["contig_len"]
                 db_stats['total_seqs'] += 1
@@ -249,7 +249,7 @@ def species_pileup(species_id):
         }
 
     def keep_read(x):
-        return(keep_read_worker(x, args.min_pid, args.min_readq, args.min_mapq, args.min_aln_cov, aln_stats))
+        return keep_read_worker(x, args.min_pid, args.min_readq, args.min_mapq, args.min_aln_cov, aln_stats)
 
     path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
@@ -271,10 +271,10 @@ def species_pileup(species_id):
 
                 counts = bamfile.count_coverage(
                     contig_id,
-                    start = 0,
-                    end = contig_length,
-                    quality_threshold = args.aln_baseq,
-                    read_callback = keep_read)
+                    start=0,
+                    end=contig_length,
+                    quality_threshold=args.aln_baseq,
+                    read_callback=keep_read)
 
                 for i in range(0, contig_length):
                     ref_pos = i + 1
@@ -305,7 +305,7 @@ def pysam_pileup(args, species_ids, contigs):
     global_args = args
 
     global global_contigs
-	global_contigs = contigs
+    global_contigs = contigs
 
     # Run pileups per species in parallel
     # We might not need this for contigs.  It was an attempt to eliminate the nonserializable subprocess argument.  Which is args.
@@ -340,7 +340,7 @@ def write_snps_summary(species_alnstats, outfile):
         file.write('\t'.join(header) + '\n')
         for species_id, species_aln in species_alnstats.items():
             ## to make sure the dict key orders are preserved
-            file.write('\t'.join([ species_id, map(str, species_aln.values()) ]))
+            file.write('\t'.join([species_id, map(str, species_aln.values())]))
             ## moved the DECIMALS to the calculation of the values
 
 
