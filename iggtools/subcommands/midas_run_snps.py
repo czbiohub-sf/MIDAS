@@ -223,7 +223,7 @@ def keep_read_worker(aln, my_args, aln_stats):
     if np.mean(aln.query_qualities) < my_args.aln_readq:
         return False
     # min map quality
-    if aln.mapping_quality < my_args.aln_mapq
+    if aln.mapping_quality < my_args.aln_mapq:
         return False
     # min aln cov
     if align_len / float(query_len) < my_args.aln_cov:
@@ -253,6 +253,7 @@ def species_pileup(species_id):
 
     path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
+    tsprint("here")
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
 
