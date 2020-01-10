@@ -375,9 +375,9 @@ def midas_run_snps(args):
         contigs, db_stats = initialize_contigs(contigs_files)
 
         # print out database stats
-        tsprint(f"total genomes: {db_stats['species']}")
-        tsprint(f"total contigs: {db_stats['total_seqs']}")
-        tsprint(f"total base-pairs: {db_stats['total_length']}")
+        tsprint(f"CONTIG DB stats - total genomes: {db_stats['species']}")
+        tsprint(f"CONTIG DB stats - total contigs: {db_stats['total_seqs']}")
+        tsprint(f"CONTIG DB stats - total base-pairs: {db_stats['total_length']}")
 
 
         # Use Bowtie2 to map reads to a representative genomes
