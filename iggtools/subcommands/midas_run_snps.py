@@ -249,7 +249,7 @@ def species_pileup(species_id):
         }
 
     def keep_read(x):
-        return keep_read_worker(x, args.min_pid, args.min_readq, args.min_mapq, args.min_aln_cov, aln_stats)
+        return keep_read_worker(x, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov, aln_stats)
 
     path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
@@ -297,7 +297,7 @@ def species_pileup(species_id):
 
 
 def pysam_pileup(args, species_ids, contigs):
-    # Counting alleles
+    "Counting alleles"
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
     # so we can make it a global, although that is certainly living dangerously.
@@ -384,7 +384,6 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
-        print(list(species_profile.keys()))
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
