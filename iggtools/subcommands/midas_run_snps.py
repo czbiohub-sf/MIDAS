@@ -315,8 +315,10 @@ def pysam_pileup(args, species_ids, contigs):
 
     # Update alignment stats for species
     species_alnstats = defaultdict()
+    tsprint("start inside 2")
     mp = multiprocessing.Pool(int(args.threads))
 
+    tsprint("start inside 2")
     for species_id, aln_stats in mp.starmap(species_pileup, species_ids):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
@@ -385,6 +387,7 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
+        tsprint("start")
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
