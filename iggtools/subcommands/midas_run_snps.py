@@ -372,7 +372,7 @@ def midas_run_snps(args):
 
         # Download repgenome_id.fna for every species in the restricted species profile.
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
-        tsprint(f"########################contigs_files => {contigs_files}}")
+        tsprint(f"########################contigs_files => {contigs_files}")
         contigs, db_stats = initialize_contigs(contigs_files)
         tsprint(f"contigs => {contigs}")
 
