@@ -211,22 +211,22 @@ def samtools_index(tempdir, args):
         raise
 
 
-def keep_read_worker(aln, min_pid, min_readq, min_mapq, min_aln_cov, aln_stats):
+def keep_read_worker(aln, my_args, aln_stats):
     aln_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
     # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < min_pid:
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < my_args.aln_mapid:
         return False
     # min read quality
-    if np.mean(aln.query_qualities) < min_readq:
+    if np.mean(aln.query_qualities) < my_args.aln_readq:
         return False
     # min map quality
-    if aln.mapping_quality < min_mapq:
+    if aln.mapping_quality < my_args.aln_mapq
         return False
     # min aln cov
-    if align_len / float(query_len) < min_aln_cov:
+    if align_len / float(query_len) < my_args.aln_cov:
         return False
     return True
 
@@ -249,7 +249,7 @@ def species_pileup(species_id):
         }
 
     def keep_read(x):
-        return keep_read_worker(x, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov, aln_stats)
+        return keep_read_worker(x, global_args, aln_stats)
 
     path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
