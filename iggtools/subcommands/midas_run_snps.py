@@ -198,7 +198,10 @@ def repgenome_align(args, tempdir):
         raise
 
 
-def index_bam(tempdir, ):
+def samtools_index(tempdir, args):
+    if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
+        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
+        return
     try:
         command(f"samtools index --threads {num_physical_cores} {tempdir}/repgenomes.bam")
     except:
@@ -340,7 +343,6 @@ def write_snps_summary(species_alnstats, outfile):
             ## moved the DECIMALS to the calculation of the values
 
 
-
 def midas_run_snps(args):
 
     tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}"
@@ -378,10 +380,7 @@ def midas_run_snps(args):
         repgenome_align(args, tempdir)
 
         # Use mpileup to identify SNPs
-        if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
-            tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
-        else:
-            index_bam(tempdir)
+        samtools_index(tempdir, args)
         species_alnstats = pysam_pileup(args, species_profile.keys(), contigs)
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
