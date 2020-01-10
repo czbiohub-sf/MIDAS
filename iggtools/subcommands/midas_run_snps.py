@@ -384,7 +384,7 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
-        print(species_profile.keys())
+        print(list(species_profile.keys()))
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
