@@ -198,12 +198,7 @@ def repgenome_align(args, tempdir):
         raise
 
 
-def index_bam(tempdir):
-
-    if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
-        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
-        return
-
+def index_bam(tempdir, ):
     try:
         command(f"samtools index --threads {num_physical_cores} {tempdir}/repgenomes.bam")
     except:
@@ -289,7 +284,8 @@ def species_pileup(species_id):
                         file.write('\t'.join([str(val) for val in values])+'\n')
                     aln_stats['genome_length'] += 1
                     aln_stats['total_depth'] += depth
-                    if depth > 0: aln_stats['covered_bases'] += 1
+                    if depth > 0:
+                        aln_stats['covered_bases'] += 1
 
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
@@ -366,18 +362,26 @@ def midas_run_snps(args):
         representatives = db.representatives
 
         def download_contigs(species_id):
-            return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4", f"{tempdir}/{species_id}"))
+            return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
         contigs, db_stats = initialize_contigs(contigs_files)
+        # print out database stats
+        tsprint(f"total genomes: {db_stats['species']}")
+        tsprint(f"total contigs: {db_stats['total_seqs']}")
+        tsprint(f"total base-pairs: {db_stats['total_length']}")
+
 
         # Use Bowtie2 to map reads to a representative genomes
         build_repgenome_db(tempdir, contigs_files)
         repgenome_align(args, tempdir)
 
         # Use mpileup to identify SNPs
-        index_bam(tempdir)
+        if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
+            tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
+        else:
+            index_bam(tempdir)
         species_alnstats = pysam_pileup(args, species_profile.keys(), contigs)
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
