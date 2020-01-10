@@ -12,8 +12,6 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, InputStr
 from iggtools.params import outputs
 
 
-
-
 DEFAULT_ALN_COV = 0.75
 DEFAULT_SPECIES_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
@@ -367,6 +365,7 @@ def midas_run_snps(args):
         local_toc = download_reference(outputs.genomes)
         db = UHGG(local_toc)
         representatives = db.representatives
+        tsprint(f"representatives: {representatives}")
 
         def download_contigs(species_id):
             return download_reference(imported_genome_file(representatives[species_id], species_id, ".fna.lz4"), f"{tempdir}/{species_id}")
