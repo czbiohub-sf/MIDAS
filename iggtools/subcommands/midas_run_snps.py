@@ -247,7 +247,7 @@ def species_pileup(species_id):
         "aligned_reads":0,
         "mapped_reads":0,
         }
-
+    tsprint("here?")
     def keep_read(x):
         return keep_read_worker(x, global_args, aln_stats)
 
