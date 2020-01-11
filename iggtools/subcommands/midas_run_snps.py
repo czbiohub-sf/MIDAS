@@ -298,7 +298,7 @@ def species_pileup(species_id):
 
 
 def pysam_pileup(args, species_ids, contigs):
-    "Counting alleles"
+    #Counting alleles
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
     # so we can make it a global, although that is certainly living dangerously.
@@ -317,6 +317,13 @@ def pysam_pileup(args, species_ids, contigs):
     species_alnstats = defaultdict()
     mp = multiprocessing.Pool(num_physical_cores)
     ### We stop here...
+    tsprint("pysam_pileup")
+    tsprint(f"{contigs}")
+    tsprint(species_ids)
+    argument_list = []
+    for species_id in species_ids:
+        argument_list.append([species_id])
+    tsprint(f"{argument_list}")
     for species_id, aln_stats in mp.starmap(species_pileup, species_ids):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
