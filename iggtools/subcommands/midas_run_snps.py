@@ -351,6 +351,7 @@ def write_snps_summary(species_alnstats, outfile):
     with OutputStream(outfile) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_aln in species_alnstats.items():
+            tsprint(f"{species_aln}")
             ## to make sure the dict key orders are preserved
             file.write('\t'.join([species_id, map(str, species_aln.values())]))
             ## moved the DECIMALS to the calculation of the values
@@ -395,8 +396,7 @@ def midas_run_snps(args):
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
-        write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
-
+        write_snps_summary(species_alnstats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
