@@ -397,6 +397,8 @@ def midas_run_snps(args):
         tsprint("start")
         tsprint(list(species_profile.keys()))
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
+
+        tspring("SHOULD NOT BE HERE YET")
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
     except:
