@@ -250,6 +250,7 @@ def species_pileup(species_id):
     def keep_read(x):
         return keep_read_worker(x, args, aln_stats)
 
+    tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
     output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
     if not os.path.exists(output_dir):
         command(f"mkdir -p {output_dir}")
@@ -262,7 +263,6 @@ def species_pileup(species_id):
         zero_rows_allowed = not args.sparse
 
         # loog over alignments for current species_id
-        tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
 
             for contig_id in sorted(list(contigs.keys())): # why do we need to sorted ?
@@ -394,11 +394,7 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
-        tsprint("start")
-        tsprint(list(species_profile.keys()))
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
-
-        tspring("SHOULD NOT BE HERE YET")
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/summary.txt")
 
     except:
