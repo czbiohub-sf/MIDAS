@@ -355,7 +355,7 @@ def write_snps_summary(species_alnstats, outfile):
             tsprint(f"{species_aln.values()}")
             tsprint(map(str, list(species_aln.values())))
             values = list(species_aln)
-            file.write('\t'.join(map(str, [species_id, values])))
+            file.write('\t'.join(map(str, [[species_id], values])))
             ## moved the DECIMALS to the calculation of the values
 
 
