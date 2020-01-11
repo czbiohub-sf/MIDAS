@@ -289,6 +289,7 @@ def species_pileup(species_id):
                     count_t = counts[3][i]
                     values = [contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t]
                     if depth > 0 or zero_rows_allowed:
+                        tsprint("write")
                         file.write('\t'.join([str(val) for val in values])+'\n')
                     aln_stats['genome_length'] += 1
                     aln_stats['total_depth'] += depth
