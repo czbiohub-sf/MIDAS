@@ -250,7 +250,11 @@ def species_pileup(species_id):
     def keep_read(x):
         return keep_read_worker(x, global_args, aln_stats)
 
-    path = f"{args.outdir}/snps/output/{species_id}.snps"
+    output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
+    if not os.path.exists(output_dir):
+        command(f"mkdir -p {output_dir}")
+
+    path = f"{output_dir}/{species_id}.snps"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
     tsprint(f"path=> {path}")
     with OutputStream(path) as file:
@@ -302,9 +306,6 @@ def species_pileup(species_id):
 
 def pysam_pileup(args, species_ids, contigs):
     #Counting alleles
-    output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
-    if not os.path.exists(output_dir):
-        command(f"mkdir -p {output_dir}")
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
     # so we can make it a global, although that is certainly living dangerously.
