@@ -252,7 +252,7 @@ def species_pileup(species_id):
 
     path = f"{args.outdir}/snps/output/{species_id}.snps"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
-
+    tsprint("path=>{path}")
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
 
@@ -261,6 +261,7 @@ def species_pileup(species_id):
         # loog over alignments for current species_id
         tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
+
             for contig_id in sorted(list(contigs.keys())): # why do we need to sorted ?
 
                 contig = contigs[contig_id]
@@ -293,12 +294,16 @@ def species_pileup(species_id):
                     aln_stats['total_depth'] += depth
                     if depth > 0:
                         aln_stats['covered_bases'] += 1
+
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
 def pysam_pileup(args, species_ids, contigs):
     #Counting alleles
+    output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
+    if not os.path.exists(output_dir):
+        command(f"mkdir -p {output_dir}")
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
     # so we can make it a global, although that is certainly living dangerously.
@@ -316,15 +321,10 @@ def pysam_pileup(args, species_ids, contigs):
     # Update alignment stats for species
     species_alnstats = defaultdict()
     mp = multiprocessing.Pool(num_physical_cores)
-    ### We stop here...
-    tsprint("pysam_pileup")
-    tsprint(f"{contigs['UHGG143505_C0_L5444.9k_H7fb7ad'].keys()}")
-    tsprint(species_ids)
 
     argument_list = []
     for species_id in species_ids:
         argument_list.append([species_id])
-    tsprint(f"{argument_list}")
 
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
