@@ -247,29 +247,29 @@ def species_pileup(species_id):
         "aligned_reads":0,
         "mapped_reads":0,
         }
-    tsprint("here?")
     def keep_read(x):
         return keep_read_worker(x, global_args, aln_stats)
 
     path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
-    tsprint("here")
+
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
 
-        zero_rows_allowed = not args['sparse']
+        zero_rows_allowed = not args.sparse
 
         # loog over alignments for current species_id
         tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why do we need to sorted ?
 
-                if contigs[contig_id]["species_id"] != species_id:
+                contig = contigs[contig_id]
+                if contig["species_id"] != species_id:
                     continue
 
                 # Unpack frequently used variables
-                contig_length = int(contigs[contig_id]["contig_length"])
-                contig_seq = contigs[contig_id]["contig_seq"]
+                contig_length = int(contig["contig_len"])
+                contig_seq = contig["contig_seq"]
 
                 counts = bamfile.count_coverage(
                     contig_id,
@@ -293,7 +293,7 @@ def species_pileup(species_id):
                     aln_stats['total_depth'] += depth
                     if depth > 0:
                         aln_stats['covered_bases'] += 1
-
+    tsprint(json.dumps({species_id: aln_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
@@ -318,13 +318,14 @@ def pysam_pileup(args, species_ids, contigs):
     mp = multiprocessing.Pool(num_physical_cores)
     ### We stop here...
     tsprint("pysam_pileup")
-    tsprint(f"{contigs.keys()}")
     tsprint(f"{contigs['UHGG143505_C0_L5444.9k_H7fb7ad'].keys()}")
     tsprint(species_ids)
+
     argument_list = []
     for species_id in species_ids:
         argument_list.append([species_id])
     tsprint(f"{argument_list}")
+
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
