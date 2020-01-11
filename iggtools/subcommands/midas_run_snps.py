@@ -318,13 +318,14 @@ def pysam_pileup(args, species_ids, contigs):
     mp = multiprocessing.Pool(num_physical_cores)
     ### We stop here...
     tsprint("pysam_pileup")
-    tsprint(f"{contigs}")
+    tsprint(f"{contigs.keys()}")
+    tsprint(f"{contigs['UHGG143505_C0_L5444.9k_H7fb7ad'].keys()}")
     tsprint(species_ids)
     argument_list = []
     for species_id in species_ids:
         argument_list.append([species_id])
     tsprint(f"{argument_list}")
-    for species_id, aln_stats in mp.starmap(species_pileup, species_ids):
+    for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
             "covered_bases": int(aln_stats['covered_bases']),
