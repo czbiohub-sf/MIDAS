@@ -250,7 +250,7 @@ def species_pileup(species_id):
     def keep_read(x):
         return keep_read_worker(x, global_args, aln_stats)
 
-    path = f"{args.outdir}/snps/output/{species_id}.snps.lz4"
+    path = f"{args.outdir}/snps/output/{species_id}.snps"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
 
     with OutputStream(path) as file:
