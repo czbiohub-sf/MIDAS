@@ -175,7 +175,7 @@ def build_repgenome_db(tempdir, contigs):
 def repgenome_align(args, tempdir):
     "Use Bowtie2 to map reads to specified representative genomes"
     if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam"):
-        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
+        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
         return
 
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
@@ -195,7 +195,7 @@ def repgenome_align(args, tempdir):
                 samtools view --threads {num_physical_cores} -b - | \
                 samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam")
     except:
-        tsprint("Repgnome align run into error")
+        tsprint("Repgenome align run into error")
         command(f"rm -f {tempdir}/repgenomes.bam")
         raise
 
@@ -248,18 +248,17 @@ def species_pileup(species_id):
         "mapped_reads":0,
         }
     def keep_read(x):
-        return keep_read_worker(x, global_args, aln_stats)
+        return keep_read_worker(x, args, aln_stats)
 
     output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
     if not os.path.exists(output_dir):
         command(f"mkdir -p {output_dir}")
 
-    path = f"{output_dir}/{species_id}.snps"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
-    tsprint(f"path=> {path}")
+    path = f"{output_dir}/{species_id}.snps.lz4"
     with OutputStream(path) as file:
-        file.write('\t'.join(header) + '\n')
 
+        file.write('\t'.join(header) + '\n')
         zero_rows_allowed = not args.sparse
 
         # loog over alignments for current species_id
