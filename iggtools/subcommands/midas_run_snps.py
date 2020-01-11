@@ -228,6 +228,7 @@ def keep_read_worker(aln, my_args, aln_stats):
     # min aln cov
     if align_len / float(query_len) < my_args.aln_cov:
         return False
+    aln_stats['mapped_reads'] += 1
     return True
 
 
