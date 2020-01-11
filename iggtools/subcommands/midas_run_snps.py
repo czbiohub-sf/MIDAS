@@ -252,7 +252,7 @@ def species_pileup(species_id):
 
     path = f"{args.outdir}/snps/output/{species_id}.snps"
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
-    tsprint("path=>{path}")
+    tsprint(f"path=> {path}")
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
 
