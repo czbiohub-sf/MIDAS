@@ -232,7 +232,7 @@ def keep_read_worker(aln, my_args, aln_stats):
     return True
 
 
-def species_pileup(species_id, tempdir):
+def species_pileup(species_id, tempdir, output_dir):
 
     global global_args
     args = global_args
@@ -251,13 +251,9 @@ def species_pileup(species_id, tempdir):
     def keep_read(x):
         return keep_read_worker(x, args, aln_stats)
 
-    #tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
-    output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
-    if not os.path.exists(output_dir):
-        command(f"mkdir -p {output_dir}")
-
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
     path = f"{output_dir}/{species_id}.snps.lz4"
+
     with OutputStream(path) as file:
 
         file.write('\t'.join(header) + '\n')
@@ -303,7 +299,7 @@ def species_pileup(species_id, tempdir):
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
-def pysam_pileup(args, species_ids, contigs, tempdir):
+def pysam_pileup(args, species_ids, contigs, tempdir, output_dir):
     #Counting alleles
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
@@ -323,12 +319,7 @@ def pysam_pileup(args, species_ids, contigs, tempdir):
     species_alnstats = defaultdict()
     mp = multiprocessing.Pool(num_physical_cores)
 
-    argument_list = []
-    for species_id in species_ids:
-        argument_list.append([species_id])
-
-    argument_list = [(sp_id, tempdir)for sp_id in species_ids]
-
+    argument_list = [(sp_id, tempdir, output_dir)for sp_id in species_ids]
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
@@ -357,18 +348,20 @@ def write_snps_summary(species_alnstats, outfile):
             values = list(species_aln.values())
             values.insert(0, species_id)
             file.write('\t'.join(map(str, values)) + '\n')
-            ## moved the DECIMALS to the calculation of the values
 
 
 def midas_run_snps(args):
 
     tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}"
-
     if args.debug and os.path.exists(tempdir):
         tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
     else:
         command(f"rm -rf {tempdir}")
         command(f"mkdir -p {tempdir}")
+
+    output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
+    if not os.path.exists(output_dir):
+        command(f"mkdir -p {output_dir}")
 
     try:
         # The full species profile must exist -- it is output by run_midas_species.
@@ -398,9 +391,10 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
-        species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs, tempdir)
+        species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs, tempdir, output_dir)
 
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
+
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
