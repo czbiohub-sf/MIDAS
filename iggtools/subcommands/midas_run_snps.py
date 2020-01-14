@@ -232,7 +232,7 @@ def keep_read_worker(aln, my_args, aln_stats):
     return True
 
 
-def species_pileup(species_id):
+def species_pileup(species_id, tempdir):
 
     global global_args
     args = global_args
@@ -251,7 +251,7 @@ def species_pileup(species_id):
     def keep_read(x):
         return keep_read_worker(x, args, aln_stats)
 
-    tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
+    #tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}" # idealy should pass on as parameter
     output_dir = f"{args.outdir}/snps/output_sc{args.species_cov}"
     if not os.path.exists(output_dir):
         command(f"mkdir -p {output_dir}")
@@ -327,6 +327,8 @@ def pysam_pileup(args, species_ids, contigs):
     for species_id in species_ids:
         argument_list.append([species_id])
 
+    argument_list = [(sp_id, tempdir)for sp_id in species_ids]
+
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
@@ -397,6 +399,7 @@ def midas_run_snps(args):
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
         species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
+
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
     except:
         if not args.debug:

@@ -12,6 +12,7 @@ from iggtools import params
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
+DEFAULT_ALN_MAPID = 94.0
 
 
 def register_args(main_func):
@@ -32,11 +33,11 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Word size for BLAST search ({DEFAULT_WORD_SIZE}).  Use word sizes > 16 for greatest efficiency.")
-    subparser.add_argument('--mapid',
-                           dest='mapid',
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {params.inputs.marker_genes_hmm_cutoffs}")
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {params.inputs.marker_genes_hmm_cutoffs}")
     subparser.add_argument('--aln_cov',
                            dest='aln_cov',
                            default=DEFAULT_ALN_COV,
@@ -158,7 +159,7 @@ def find_best_hits(args, marker_info, m8_file, marker_cutoffs):
     with InputStream(m8_file) as m8_stream:
         for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
             i += 1
-            cutoff = args.mapid
+            cutoff = args.aln_mapid
             if cutoff == None:
                 marker_id = marker_info[aln['target']]['marker_id'] # get gene family from marker_info
                 cutoff = marker_cutoffs[marker_id]
@@ -184,7 +185,6 @@ def assign_unique(alns, species_info, marker_info):
     for aln in alns:
         if len(aln) == 1:
             unique += 1
-            #species_id = aln[0]['target'].split('_')[0]
             species_id = marker_info[aln[0]['target']]['species_id']
             unique_alns[species_id].append(aln[0])
         else:
