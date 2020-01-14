@@ -232,13 +232,13 @@ def keep_read_worker(aln, my_args, aln_stats):
     return True
 
 
-def species_pileup(species_id, tempdir, output_dir):
+def species_pileup(species_id, contigs, tempdir, output_dir):
 
     global global_args
     args = global_args
 
-    global global_contigs
-    contigs = global_contigs
+    #global global_contigs
+    #contigs = global_contigs
 
     # Summary statistics
     aln_stats = {
@@ -300,7 +300,7 @@ def species_pileup(species_id, tempdir, output_dir):
 
 
 def pysam_pileup(args, species_ids, contigs, tempdir, output_dir):
-    #Counting alleles
+    "Counting alleles and run pileups per species in parallel"
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
     # so we can make it a global, although that is certainly living dangerously.
@@ -309,17 +309,16 @@ def pysam_pileup(args, species_ids, contigs, tempdir, output_dir):
     global global_args
     global_args = args
 
-    global global_contigs
-    global_contigs = contigs
+    #global global_contigs
+    #global_contigs = contigs
 
-    # Run pileups per species in parallel
     # We might not need this for contigs.  It was an attempt to eliminate the nonserializable subprocess argument.  Which is args.
 
     # Update alignment stats for species
     species_alnstats = defaultdict()
     mp = multiprocessing.Pool(num_physical_cores)
 
-    argument_list = [(sp_id, tempdir, output_dir)for sp_id in species_ids]
+    argument_list = [(sp_id, contigs, tempdir, output_dir)for sp_id in species_ids]
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
