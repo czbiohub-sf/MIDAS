@@ -303,7 +303,7 @@ def species_pileup(species_id, tempdir):
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
-def pysam_pileup(args, species_ids, contigs):
+def pysam_pileup(args, species_ids, contigs, tempdir):
     #Counting alleles
 
     # We cannot pass args to a subprocess unfortunately because args['log'] is an object;
@@ -398,7 +398,7 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(tempdir, args)
-        species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs)
+        species_alnstats = pysam_pileup(args, list(species_profile.keys()), contigs, tempdir)
 
         write_snps_summary(species_alnstats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
     except:
