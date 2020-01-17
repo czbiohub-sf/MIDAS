@@ -27,7 +27,7 @@ def unified_genome_id(genome_id):
 @retry
 def download_genome(genome_id, cleaned_genome):
     command(f"rm -f {genome_id}.fasta")
-    command(f"aws s3 cp --only-show-errors {cleaned_genome} - | lz4 -dc > {genome_id}.fasta")
+    command(f"aws s3 cp --only-show-errors --no-sign-request {cleaned_genome} - | lz4 -dc > {genome_id}.fasta")
 
 
 def annotate_genome(genome_id, species_id):

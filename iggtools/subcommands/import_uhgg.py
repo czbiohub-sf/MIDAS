@@ -87,7 +87,7 @@ def import_uhgg_master(args):
     # This will be read separately by each species build subcommand, so we make a local copy.
     local_toc = os.path.basename(outputs.genomes)
     command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
+    command(f"aws s3 cp --only-show-errors --no-sign-request {outputs.genomes} {local_toc}")
 
     db = UHGG(local_toc)
     species_for_genome = db.genomes
