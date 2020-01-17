@@ -284,7 +284,7 @@ def smart_ls(pdir, missing_ok=True, memory=None):
                 s3_dir = pdir
                 if not s3_dir.endswith("/"):
                     s3_dir += "/"
-                output = backtick(["aws", "s3", "ls", s3_dir])
+                output = backtick(["aws", "s3", "ls", '--no-sign-request', s3_dir])
                 rows = output.strip().split('\n')
                 result = [r.split()[-1] for r in rows]
             else:
