@@ -150,7 +150,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
             }
             contigs_db_stats['total_length'] += contigs[rec.id]["contig_len"]
             contigs_db_stats['total_seqs'] += 1
-
+    print("hi1")
     # Summary statistics
     aln_stats = {
         "genome_length": 0,
@@ -195,7 +195,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                     aln_stats['total_depth'] += depth
                     if depth > 0:
                         aln_stats['covered_bases'] += 1
-
+    print("hi2")
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
@@ -208,9 +208,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
     contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
 
     mp = multiprocessing.Pool(num_physical_cores)
-    print("start")
     argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats)for sp_id in species_ids]
-    print("end")
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
@@ -227,7 +225,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
             sp_stats["mean_coverage"] = format(sp_stats["total_depth"] / sp_stats["covered_bases"], DECIMALS)
 
         species_pileup_stats[species_id] = sp_stats
-
+    print("finished")
     tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
     tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
     tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")
