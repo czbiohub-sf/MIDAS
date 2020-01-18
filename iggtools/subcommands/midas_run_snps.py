@@ -137,9 +137,8 @@ def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
-def keep_read_worker(aln, args, aln_stats=None):
-    if not aln_stats:
-        aln_stats['aligned_reads'] += 1
+def keep_read_worker(aln, args):
+    aln_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
@@ -157,9 +156,7 @@ def keep_read_worker(aln, args, aln_stats=None):
     if align_len / float(query_len) < args.aln_cov:
         return False
 
-    if not aln_stats:
-        aln_stats['mapped_reads'] += 1
-
+    aln_stats['mapped_reads'] += 1
     return True
 
 
@@ -216,12 +213,15 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                     count_g = counts[2][ref_pos]
                     count_t = counts[3][ref_pos]
                     values = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
+
                     if depth > 0 or zero_rows_allowed:
                         file.write('\t'.join(str(val) for val in values) + '\n')
+
                     aln_stats['genome_length'] += 1
                     aln_stats['total_depth'] += depth
                     if depth > 0:
                         aln_stats['covered_bases'] += 1
+
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
@@ -235,6 +235,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
 
     mp = multiprocessing.Pool(num_physical_cores)
     argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats)for sp_id in species_ids]
+
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
@@ -245,13 +246,15 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
             "fraction_covered": 0.0,
             "mean_coverage": 0.0,
         }
+
         if sp_stats["genome_length"] > 0:
             sp_stats["fraction_covered"] = format(sp_stats["covered_bases"] / sp_stats["genome_length"], DECIMALS)
+
         if sp_stats["covered_bases"] > 0:
             sp_stats["mean_coverage"] = format(sp_stats["total_depth"] / sp_stats["covered_bases"], DECIMALS)
 
         species_pileup_stats[species_id] = sp_stats
-    print("finished")
+    
     tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
     tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
     tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")

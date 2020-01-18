@@ -9,7 +9,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
 from iggtools.params import outputs
 from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, keep_read
 
 
 DEFAULT_ALN_COV = 0.75
@@ -112,7 +112,7 @@ def count_mapped_bp(args, tempdir, genes):
         gene_id = bamfile.getrname(aln.reference_id)
         gene = genes[gene_id]
         gene["aligned_reads"] += 1
-        if keep_read_worker(aln, args, aln_stats=None):
+        if keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov):
             gene["mapped_reads"] += 1
             gene["depth"] += len(aln.query_alignment_sequence) / float(gene["length"])
             covered_genes[gene_id] = gene
