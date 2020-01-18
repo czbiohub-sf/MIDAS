@@ -6,8 +6,10 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
 from iggtools.params import outputs
+from iggtools.common.samples import parse_species_profile, select_species
+from iggtools.common.bowtie2 import build_bowtie2_db
 
 
 DEFAULT_ALN_COV = 0.75
@@ -86,27 +88,6 @@ def register_args(main_func):
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
 
     return main_func
-
-
-def build_pangenome_db(tempdir, centroids):
-    if all(os.path.exists(f"{tempdir}/pangenomes.{ext}") for ext in ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]):
-        tsprint("Skipping bowtie2-build as database files appear to exist.")
-        return
-    command(f"rm -f {tempdir}/pangenomes.fa")
-    command(f"touch {tempdir}/pangenomes.fa")
-    for files in split(centroids.values(), 20):  # keep "cat" commands short
-        command("cat " + " ".join(files) + f" >> {tempdir}/pangenomes.fa")
-    command(f"bowtie2-build --threads {num_physical_cores} {tempdir}/pangenomes.fa {tempdir}/pangenomes > {tempdir}/bowtie2-build.log")
-
-
-def parse_species_profile(outdir):
-    "Return map of species_id to coverage for the species present in the sample."
-    with InputStream(f"{outdir}/species/species_profile.txt") as stream:
-        return dict(select_from_tsv(stream, {"species_id": str, "coverage": float}))
-
-
-def select_species(species_profile, coverage_threshold):
-    return {species_id: species_coverage for species_id, species_coverage in species_profile.items() if species_coverage >= coverage_threshold}
 
 
 def pangenome_file(species_id, component):
@@ -309,8 +290,7 @@ def midas_run_genes(args):
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
         marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
-
-        build_pangenome_db(tempdir, centroids_files)
+        build_bowtie2_db(tempdir, "pangenomes", centroids_files)
         pangenome_align(args, tempdir)
 
         # Compute coverage of pangenome for each present species and write results to disk

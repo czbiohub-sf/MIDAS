@@ -8,9 +8,11 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, split
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multithreading_hashmap, download_reference
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
+from iggtools.common.samples import parse_species_profile, select_species
+from iggtools.common.bowtie2 import build_bowtie2_db
 
 
 DEFAULT_ALN_COV = 0.75
@@ -131,30 +133,8 @@ def register_args(main_func):
     return main_func
 
 
-def parse_species_profile(outdir):
-    "Return map of species_id to coverage for the species present in the sample."
-    with InputStream(f"{outdir}/species/species_profile.txt") as stream:
-        return dict(select_from_tsv(stream, {"species_id": str, "coverage": float}))
-
-
-def select_species(species_profile, coverage_threshold):
-    return {species_id: species_coverage for species_id, species_coverage in species_profile.items() if species_coverage >= coverage_threshold}
-
-
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-
-def build_repgenome_db(tempdir, contigs_files):
-    "Build Bowtie2 database of representative genomes for the species present in the sample"
-    if all(os.path.exists(f"{tempdir}/repgenomes.{ext}") for ext in ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]):
-        tsprint("Skipping bowtie2-build as database files appear to exist.")
-        return
-    command(f"rm -f {tempdir}/repgenomes.fa")
-    command(f"touch {tempdir}/repgenomes.fa")
-    for files in split(contigs_files.values(), 20):
-        command("cat " + " ".join(files) + f" >> {tempdir}/repgenomes.fa")
-    command(f"bowtie2-build --threads {num_physical_cores} {tempdir}/repgenomes.fa {tempdir}/repgenomes > {tempdir}/bowtie2-build.log")
 
 
 def repgenome_align(args, tempdir):
@@ -355,7 +335,7 @@ def midas_run_snps(args):
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
 
         # Use Bowtie2 to map reads to a representative genomes
-        build_repgenome_db(tempdir, contigs_files)
+        build_bowtie2_db(tempdir, "repgenomes", contigs_files)
         repgenome_align(args, tempdir)
 
         # Use mpileup to identify SNPs
