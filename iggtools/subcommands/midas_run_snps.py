@@ -150,7 +150,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
             }
             contigs_db_stats['total_length'] += contigs[rec.id]["contig_len"]
             contigs_db_stats['total_seqs'] += 1
-    print("hi1")
+
     # Summary statistics
     aln_stats = {
         "genome_length": 0,
@@ -164,7 +164,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
 
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
     path = f"{outputdir}/{species_id}.snps.lz4"
-
+    print("hi1")
     with OutputStream(path) as file:
 
         file.write('\t'.join(header) + '\n')
@@ -174,13 +174,14 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why need to sort?
                 contig = contigs[contig_id]
+                print(contig)
                 counts = bamfile.count_coverage(
                     contig_id,
                     start=0,
                     end=contig["contig_len"],
                     quality_threshold=args.aln_baseq,
                     read_callback=keep_read)
-
+                print("hi3")
                 for ref_pos in range(0, contig["contig_len"]):
                     ref_allele = contig["contig_seq"][ref_pos]
                     depth = sum([counts[nt][ref_pos] for nt in range(4)])
