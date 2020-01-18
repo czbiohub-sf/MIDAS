@@ -223,6 +223,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                         aln_stats['covered_bases'] += 1
 
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
+    print(contigs_db_stats)
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
