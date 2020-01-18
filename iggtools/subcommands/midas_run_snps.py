@@ -12,7 +12,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, InputStr
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, keep_read_worker
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
 
 
 DEFAULT_ALN_COV = 0.75
@@ -135,6 +135,32 @@ def register_args(main_func):
 
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
+
+
+def keep_read_worker(aln, args, aln_stats=None):
+    if not aln_stats:
+        aln_stats['aligned_reads'] += 1
+
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < args.aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < args.aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < args.aln_cov:
+        return False
+
+    if not aln_stats:
+        aln_stats['mapped_reads'] += 1
+
+    return True
 
 
 def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db_stats):

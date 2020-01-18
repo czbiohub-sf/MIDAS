@@ -60,34 +60,6 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
         raise
 
 
-def keep_read_worker(aln, args, aln_stats=None):
-    print(args)
-    if not aln_stats:
-        aln_stats['aligned_reads'] += 1
-
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < args.aln_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < args.aln_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < args.aln_cov:
-        return False
-
-    if not aln_stats:
-        aln_stats['mapped_reads'] += 1
-    print(aln_stats)
-    return True
-
-
-
 def samtools_index(args, bt2_db_dir, bt2_db_name):
     if args.debug and os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.bam.bai"):
         tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bt2_db_dir}/{bt2_db_name}.bam")
