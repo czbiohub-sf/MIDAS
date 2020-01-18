@@ -9,7 +9,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
 from iggtools.params import outputs
 from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, keep_read
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
 
 
 DEFAULT_ALN_COV = 0.75
@@ -101,8 +101,30 @@ def pangenome_file(species_id, component):
     return f"{outputs.pangenomes}/{species_id}/{component}"
 
 
+def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < min_pid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < min_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < min_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < min_aln_cov:
+        return False
+    return True
+
+
 def count_mapped_bp(args, tempdir, genes):
-    """ Count number of bp mapped to each gene across pangenomes.  Return number covered genes and average gene depth per species.  Result contains only covered species, but being a defaultdict, would yield 0 for any uncovered species, which is appropriate. """
+    """ Count number of bp mapped to each gene across pangenomes.
+    Return number covered genes and average gene depth per species.
+    Result contains only covered species, but being a defaultdict,
+    would yield 0 for any uncovered species, which is appropriate.
+    """
     bam_path = f"{tempdir}/pangenomes.bam"
     bamfile = AlignmentFile(bam_path, "rb")
     covered_genes = {}
@@ -139,7 +161,10 @@ def count_mapped_bp(args, tempdir, genes):
 
 
 def normalize(genes, covered_genes, markers):
-    """ Normalize gene depth by median marker depth, to infer gene copy count.  Return median marker coverage for each covered species in a defaultdict, so that accessing an uncovered species would appropriately yield 0. """
+    """ Normalize gene depth by median marker depth, to infer gene copy count.
+    Return median marker coverage for each covered species in a defaultdict,
+    so that accessing an uncovered species would appropriately yield 0.
+    """
     # compute marker depth
     species_markers = defaultdict(lambda: defaultdict(int))
     for gene_id, marker_id in markers:

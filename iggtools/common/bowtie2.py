@@ -3,7 +3,6 @@ import os
 from iggtools.common.utils import tsprint, num_physical_cores, command, split
 
 
-
 def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
     """
     Build Bowtie2 database of representative genomes or centroid genes
@@ -70,20 +69,3 @@ def samtools_index(args, bt2_db_dir, bt2_db_name):
     except:
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam.bai")
         raise
-
-def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < min_pid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < min_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < min_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < min_aln_cov:
-        return False
-    return True
