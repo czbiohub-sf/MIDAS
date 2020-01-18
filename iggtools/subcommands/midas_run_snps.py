@@ -12,7 +12,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, InputStr
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
 
 
 DEFAULT_ALN_COV = 0.75
@@ -135,45 +135,6 @@ def register_args(main_func):
 
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-
-def repgenome_align(args, tempdir):
-    "Use Bowtie2 to map reads to specified representative genomes"
-    if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam"):
-        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
-        return
-
-    max_reads = f"-u {args.max_reads}" if args.max_reads else ""
-    aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
-    aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
-    r2 = ""
-    if args.r2:
-        r1 = f"-1 {args.r1}"
-        r2 = f"-2 {args.r2}"
-    elif args.aln_interleaved:
-        r1 = f"--interleaved {args.r1}"
-    else:
-        r1 = f"-U {args.r1}"
-
-    try:
-        command(f"set -o pipefail; bowtie2 --no-unal -x {tempdir}/repgenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | \
-                samtools view --threads {num_physical_cores} -b - | \
-                samtools sort --threads {num_physical_cores} -o {tempdir}/repgenomes.bam")
-    except:
-        tsprint("Repgenome align run into error")
-        command(f"rm -f {tempdir}/repgenomes.bam")
-        raise
-
-
-def samtools_index(tempdir, args):
-    if args.debug and os.path.exists(f"{tempdir}/repgenomes.bam.bai"):
-        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {tempdir}/repgenomes.bam")
-        return
-    try:
-        command(f"samtools index -@ {num_physical_cores} {tempdir}/repgenomes.bam")
-    except:
-        command(f"rm -f {tempdir}/repgenomes.bam.bai")
-        raise
 
 
 def keep_read_worker(aln, my_args, aln_stats):
@@ -335,11 +296,12 @@ def midas_run_snps(args):
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
 
         # Use Bowtie2 to map reads to a representative genomes
-        build_bowtie2_db(tempdir, "repgenomes", contigs_files)
-        repgenome_align(args, tempdir)
+        bt2_db_name = "repgenomes"
+        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
+        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
 
         # Use mpileup to identify SNPs
-        samtools_index(tempdir, args)
+        samtools_index(args, tempdir, bt2_db_name)
         species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
 
         write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")

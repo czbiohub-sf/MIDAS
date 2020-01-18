@@ -6,10 +6,10 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
 from iggtools.params import outputs
 from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
 
 
 DEFAULT_ALN_COV = 0.75
@@ -93,32 +93,6 @@ def register_args(main_func):
 def pangenome_file(species_id, component):
     # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
     return f"{outputs.pangenomes}/{species_id}/{component}"
-
-
-def pangenome_align(args, tempdir):
-    """ Use Bowtie2 to map reads to all specified genome species """
-
-    if args.debug and os.path.exists(f"{tempdir}/pangenomes.bam"):
-        tsprint(f"Skipping alignment in debug mode as temporary data exists: {tempdir}/pangenomes.bam")
-        return
-
-    max_reads = f"-u {args.max_reads}" if args.max_reads else ""
-    aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
-    aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
-    r2 = ""
-    if args.r2:
-        r1 = f"-1 {args.r1}"
-        r2 = f"-2 {args.r2}"
-    elif args.aln_interleaved:
-        r1 = f"--interleaved {args.r1}"
-    else:
-        r1 = f"-U {args.r1}"
-
-    try:
-        command(f"set -o pipefail; bowtie2 --no-unal -x {tempdir}/pangenomes {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2} | samtools view --threads {num_physical_cores} -b - > {tempdir}/pangenomes.bam")
-    except:
-        command(f"rm -f {tempdir}/pangenomes.bam")
-        raise
 
 
 def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
@@ -291,7 +265,7 @@ def midas_run_genes(args):
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
         marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
         build_bowtie2_db(tempdir, "pangenomes", centroids_files)
-        pangenome_align(args, tempdir)
+        bowtie2_align(args, tempdir, "pangenomes", sort_aln=False)
 
         # Compute coverage of pangenome for each present species and write results to disk
         species, genes = scan_centroids(centroids_files)
