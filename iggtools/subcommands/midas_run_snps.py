@@ -159,13 +159,13 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         "aligned_reads":0,
         "mapped_reads":0,
         }
+
     def keep_read(x):
-        print(x)
         return keep_read_worker(x, args, aln_stats)
 
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
     path = f"{outputdir}/{species_id}.snps.lz4"
-    print("hi1")
+
     with OutputStream(path) as file:
 
         file.write('\t'.join(header) + '\n')
@@ -181,7 +181,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                     end=contig["contig_len"],
                     quality_threshold=args.aln_baseq,
                     read_callback=keep_read)
-                print("hi3")
+
                 for ref_pos in range(0, contig["contig_len"]):
                     ref_allele = contig["contig_seq"][ref_pos]
                     depth = sum([counts[nt][ref_pos] for nt in range(4)])
@@ -196,7 +196,6 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                     aln_stats['total_depth'] += depth
                     if depth > 0:
                         aln_stats['covered_bases'] += 1
-    print("hi2")
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 

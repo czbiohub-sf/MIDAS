@@ -61,6 +61,7 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
 
 
 def keep_read_worker(aln, args, aln_stats=None):
+    print(args)
     if not aln_stats:
         aln_stats['aligned_reads'] += 1
 
@@ -82,7 +83,7 @@ def keep_read_worker(aln, args, aln_stats=None):
 
     if not aln_stats:
         aln_stats['mapped_reads'] += 1
-
+    print(aln_stats)
     return True
 
 
