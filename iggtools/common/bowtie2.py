@@ -19,7 +19,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
     for files in split(downloaded_files.values(), 20):  # keep "cat" commands short
         command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
-    command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_dir}/{bt2_db_name}.fa {bt2_db_dir}/bt2_db_name > {bt2_db_dir}/bowtie2-build.log")
+    command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_dir}/{bt2_db_name}.fa {bt2_db_dir}/{bt2_db_name} > {bt2_db_dir}/bowtie2-build.log")
 
 
 def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
@@ -58,6 +58,28 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
         tsprint(f"Bowtie2 align to {bt2_db_dir}/{bt2_db_name}.bam run into error")
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam")
         raise
+
+
+def keep_read_worker(aln, my_args, aln_stats=None):
+    aln_stats['aligned_reads'] += 1
+
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < my_args.aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < my_args.aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < my_args.aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < my_args.aln_cov:
+        return False
+    aln_stats['mapped_reads'] += 1
+    return True
+
 
 
 def samtools_index(args, bt2_db_dir, bt2_db_name):
