@@ -174,7 +174,6 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why need to sort?
                 contig = contigs[contig_id]
-                print(contig)
                 counts = bamfile.count_coverage(
                     contig_id,
                     start=0,
