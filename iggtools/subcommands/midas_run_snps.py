@@ -160,6 +160,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         "mapped_reads":0,
         }
     def keep_read(x):
+        print(x)
         return keep_read_worker(x, args, aln_stats)
 
     header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
@@ -174,7 +175,6 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why need to sort?
                 contig = contigs[contig_id]
-                print(contig_id)
                 counts = bamfile.count_coverage(
                     contig_id,
                     start=0,
