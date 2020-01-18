@@ -353,11 +353,7 @@ def midas_run_snps(args):
 
         # Download repgenome_id.fna for every species in the restricted species profile.
         contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
-
-        #contigs, db_stats = initialize_contigs(contigs_files)
-        # print out database stats
-
-
+        
         # Use Bowtie2 to map reads to a representative genomes
         build_repgenome_db(tempdir, contigs_files)
         repgenome_align(args, tempdir)
