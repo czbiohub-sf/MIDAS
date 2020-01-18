@@ -137,7 +137,7 @@ def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
-def keep_read_worker(aln, args):
+def keep_read_worker(aln, args, aln_stats):
     aln_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
@@ -254,7 +254,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
             sp_stats["mean_coverage"] = format(sp_stats["total_depth"] / sp_stats["covered_bases"], DECIMALS)
 
         species_pileup_stats[species_id] = sp_stats
-    
+
     tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
     tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
     tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")
