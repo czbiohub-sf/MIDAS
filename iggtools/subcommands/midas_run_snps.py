@@ -162,8 +162,10 @@ def keep_read_worker(aln, args, aln_stats):
 
 def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db_stats):
     # Read in contigs information for current species_id
+
     contigs = {}
-    contigs_db_stats['species_counts'] += 1
+    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
+
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             contigs[rec.id] = {
@@ -223,7 +225,6 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
                         aln_stats['covered_bases'] += 1
 
     tsprint(json.dumps({species_id: aln_stats}, indent=4))
-    print(contigs_db_stats)
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
@@ -235,7 +236,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
     contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
 
     mp = multiprocessing.Pool(num_physical_cores)
-    argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats)for sp_id in species_ids]
+    argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats) for sp_id in species_ids]
 
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
