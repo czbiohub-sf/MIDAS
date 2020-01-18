@@ -49,35 +49,40 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
         bt2_command = f"bowtie2 --no-unal -x {bt2_db_dir}/{bt2_db_name} {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2}"
         if sort_aln:
             command(f"set -o pipefail; {bt2_command} | \
-                    samtools view --threads {num_physical_cores} -b - > {bt2_db_dir}/{bt2_db_name}.bam")
-        else:
-            command(f"set -o pipefail; {bt2_command} | \
                     samtools view --threads {num_physical_cores} -b - | \
                     samtools sort --threads {num_physical_cores} -o {bt2_db_dir}/{bt2_db_name}.bam")
+        else:
+            command(f"set -o pipefail; {bt2_command} | \
+                    samtools view --threads {num_physical_cores} -b - > {bt2_db_dir}/{bt2_db_name}.bam")
     except:
         tsprint(f"Bowtie2 align to {bt2_db_dir}/{bt2_db_name}.bam run into error")
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam")
         raise
 
 
-def keep_read_worker(aln, my_args, aln_stats=None):
-    aln_stats['aligned_reads'] += 1
+def keep_read_worker(aln, args, aln_stats=None):
+    if not aln_stats:
+        aln_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
+
     # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < my_args.aln_mapid:
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
         return False
     # min read quality
-    if np.mean(aln.query_qualities) < my_args.aln_readq:
+    if np.mean(aln.query_qualities) < args.aln_readq:
         return False
     # min map quality
-    if aln.mapping_quality < my_args.aln_mapq:
+    if aln.mapping_quality < args.aln_mapq:
         return False
     # min aln cov
-    if align_len / float(query_len) < my_args.aln_cov:
+    if align_len / float(query_len) < args.aln_cov:
         return False
-    aln_stats['mapped_reads'] += 1
+
+    if not aln_stats:
+        aln_stats['mapped_reads'] += 1
+
     return True
 
 

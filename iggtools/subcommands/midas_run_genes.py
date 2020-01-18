@@ -70,6 +70,12 @@ def register_args(main_func):
                            metavar="FLOAT",
                            default=DEFAULT_ALN_MAPID,
                            help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+    subparser.add_argument('--aln_mapq',
+                           dest='aln_mapq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_MAPQ,
+                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
     subparser.add_argument('--aln_speed',
                            type=str,
                            dest='aln_speed',
@@ -95,24 +101,6 @@ def pangenome_file(species_id, component):
     return f"{outputs.pangenomes}/{species_id}/{component}"
 
 
-def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < min_pid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < min_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < min_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < min_aln_cov:
-        return False
-    return True
-
-
 def count_mapped_bp(args, tempdir, genes):
     """ Count number of bp mapped to each gene across pangenomes.  Return number covered genes and average gene depth per species.  Result contains only covered species, but being a defaultdict, would yield 0 for any uncovered species, which is appropriate. """
     bam_path = f"{tempdir}/pangenomes.bam"
@@ -124,7 +112,7 @@ def count_mapped_bp(args, tempdir, genes):
         gene_id = bamfile.getrname(aln.reference_id)
         gene = genes[gene_id]
         gene["aligned_reads"] += 1
-        if keep_read(aln, args.aln_mapid, args.aln_readq, DEFAULT_ALN_MAPQ, args.aln_cov):
+        if keep_read_worker(aln, args, aln_stats=None):
             gene["mapped_reads"] += 1
             gene["depth"] += len(aln.query_alignment_sequence) / float(gene["length"])
             covered_genes[gene_id] = gene
@@ -160,7 +148,7 @@ def normalize(genes, covered_genes, markers):
     # compute median marker depth for each species
     species_markers_coverage = defaultdict(float)
     for species_id, marker_depths in species_markers.items():
-        species_markers_coverage[species_id] = np.median(list(marker_depths.values()))   # np.median doesn't take iterators
+        species_markers_coverage[species_id] = np.median(list(marker_depths.values())) # np.median doesn't take iterators
     # infer copy count for each covered gene
     for gene in covered_genes.values():
         species_id = gene["species_id"]
@@ -263,15 +251,17 @@ def midas_run_genes(args):
 
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
-        marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
-        build_bowtie2_db(tempdir, "pangenomes", centroids_files)
-        bowtie2_align(args, tempdir, "pangenomes", sort_aln=False)
+        bt2_db_name = "pangenomes"
+        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
+        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=False)
 
         # Compute coverage of pangenome for each present species and write results to disk
+        marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
         species, genes = scan_centroids(centroids_files)
         num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
         markers = scan_markers(genes, marker_genes_map)
         species_markers_coverage = normalize(genes, covered_genes, markers)
+
         write_results(args.outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
     except:
         if not args.debug:
