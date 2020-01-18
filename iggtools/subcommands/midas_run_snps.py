@@ -172,7 +172,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
 
         # Loop over alignment for current species's contigs
         with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
-            for contig_id in sorted(list(contigs.keys())):
+            for contig_id in sorted(list(contigs.keys())): # why need to sort?
                 contig = contigs[contig_id]
                 counts = bamfile.count_coverage(
                     contig_id,
@@ -208,8 +208,9 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
     contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
 
     mp = multiprocessing.Pool(num_physical_cores)
+    print("start")
     argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats)for sp_id in species_ids]
-
+    print("end")
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
         sp_stats = {
             "genome_length": int(aln_stats['genome_length']),
