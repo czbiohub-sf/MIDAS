@@ -98,17 +98,17 @@ def identify_samples(sample_list):
         assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
 
         species_profile = f"{midas_output_path}/species/species_profile.txt"
-        assert os.path.exists(species_profile), f"Missing species profile: {profile}"
+        assert os.path.exists(species_profile), f"Missing MIDAS species profile: {species_profile}"
 
         samples["species_profile"] = species_profile
-    
+
     return samples
 
 
 def read_abundance(species_profile_dir):
     "Return map of species_id to coverage for the species present in the sample."
     with InputStream(f"{species_profile_dir}") as stream:
-        return dict(select_from_tsv(stream, selected_columns = species_abundance_schema))
+        return dict(select_from_tsv(stream, selected_columns=species_abundance_schema))
 
 
 def store_data(args, samples, species_ids):
@@ -116,7 +116,7 @@ def store_data(args, samples, species_ids):
     data = []
     for species_id in species_ids:
         data[species_id] = {}
-        for field in ['relative_abundance', 'coverage','count_reads']:
+        for field in ['relative_abundance', 'coverage', 'count_reads']:
             data[species_id][field] = []
 
     # I think this one liner should be able to
@@ -127,7 +127,7 @@ def store_data(args, samples, species_ids):
         # samples.parse_species_profile()
         abundance = read_abundance(species_profile)
         for species_id, values in abundance.items():
-            for field in ['relative_abundance', 'coverage','count_reads']:
+            for field in ['relative_abundance', 'coverage', 'count_reads']:
                 if field in values:
                     data[species_id][field].append(values[field])
     # data[species_id] has three separate tablles
@@ -161,7 +161,7 @@ def compute_stats(args, data):
 def write_abundance(args, samples, data):
     for field in ['relative_abundance', 'coverage', 'count_reads']:
         with OutputStream(f"{args.outdir}/{field}.txt") as outfile:
-            outfile.write("\t".join(["species_id"] + [sample_name in samples.keys()]) + "\n")
+            outfile.write("\t".join(["species_id"] + list(samples.keys())) + "\n")
             for species_id in data:
                 outfile.write(species_id)
                 for x in data[species_id][field]:
