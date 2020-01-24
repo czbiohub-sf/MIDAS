@@ -14,6 +14,7 @@ DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
 
+DECIMALS = ".6f"
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_species', main_func, help='compute species abundance profile for given sample(s)')
@@ -256,7 +257,7 @@ def write_abundance(outdir, species_abundance):
         for species_id in output_order:
             values = species_abundance[species_id]
             if values['count'] > 0:
-                record = [species_id, values['count'], values['cov'], values['rel_abun']]
+                record = [species_id, values['count'], format(values['cov'], DECIMALS), format(values['rel_abun'], DECIMALS)]
                 outfile.write('\t'.join(str(x) for x in record) + '\n')
 
 

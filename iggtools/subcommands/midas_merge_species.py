@@ -19,18 +19,24 @@ def register_args(main_func):
     subparser.add_argument('outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('-input',
+    if False:
+        subparser.add_argument('-input',
+                               dest='input',
+                               type=str,
+                               required=True,
+                               help=f"Input to sample directories output by run_midas.py; see '-t' for details")
+        subparser.add_argument('-input_type',
+                               dest='intype',
+                               type=str,
+                               required=True,
+                               metavar="INPUT_TYPE",
+                               choices=['list', 'file', 'dir'],
+                               help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
+    subparser.add_argument('--sample_list',
                            dest='input',
                            type=str,
                            required=True,
-                           help=f"Input to sample directories output by run_midas.py; see '-t' for details")
-    subparser.add_argument('-input_type',
-                           dest='intype',
-                           type=str,
-                           required=True,
-                           metavar="INPUT_TYPE",
-                           choices=['list', 'file', 'dir'],
-                           help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
     subparser.add_argument('--sample_depth',
                            dest='sample_depth',  # min_cov
                            type=float,
@@ -75,7 +81,11 @@ def decode_indirs_arg(args):
     return indirs
 
 
-def identify_samples(indirs):
+def identify_samples(sample_list):
+
+    with InputStream(f"{species_profile_dir}") as stream:
+        samples = dict(select_from_tsv(stream, schema = {"sample_name":str, "midas_output_dir":str}))
+    print(samples)
     samples = {}
     for sample_dir in indirs:
         sample_name = os.path.basename(sample_dir)
@@ -165,8 +175,9 @@ def write_abundance(args, samples, data):
 
 def midas_merge_species(args):
     # List samples and species
-    sample_dirs = decode_indirs_arg(args)
-    samples = identify_samples(sample_dirs)
+
+    #sample_dirs = decode_indirs_arg(args)
+    samples = identify_samples(args.sample_list)
 
     db = UHGG()
     species_info = db.species
