@@ -83,20 +83,22 @@ def decode_indirs_arg(args):
 
 def identify_samples(sample_list):
 
-    with InputStream(f"{species_profile_dir}") as stream:
-        samples = dict(select_from_tsv(stream, schema = {"sample_name":str, "midas_output_dir":str}))
+    with InputStream(sample_list) as stream:
+        samples = dict(select_from_tsv(stream, schema={"sample_name":str, "midas_output_dir":str}))
     print(samples)
-    samples = {}
-    for sample_dir in indirs:
-        sample_name = os.path.basename(sample_dir)
-        species_profile = f"{sample_dir}/species/species_profile.txt"
-        assert os.path.exists(species_profile), f"Missing species profile: {sprofile}"
 
-        if sample_name in samples:
-            tsprint(f"Warning: sample {sample_name} specified more than once. Skipping {sample_dir}}")
-        samples[sample_name] = species_profile
-    if samples:
-        sys.exit(f"Error: no specified samples with species profile.")
+    if False:
+        samples = {}
+        for sample_dir in indirs:
+            sample_name = os.path.basename(sample_dir)
+            species_profile = f"{sample_dir}/species/species_profile.txt"
+            assert os.path.exists(species_profile), f"Missing species profile: {profile}"
+
+            if sample_name in samples:
+                tsprint(f"Warning: sample {sample_name} specified more than once. Skipping {sample_dir}")
+            samples[sample_name] = species_profile
+        if samples:
+            sys.exit(f"Error: no specified samples with species profile.")
     return samples
 
 
