@@ -92,17 +92,14 @@ def decode_indirs_arg(args):
 def identify_samples(sample_list):
 
     with InputStream(sample_list) as stream:
-        samples = dict(select_from_tsv(stream, selected_columns={"sample_name":str, "midas_output_path":str}))
+        samples = dict(select_from_tsv(stream, selected_columns=["sample_name", "midas_output_path"]))
 
     for sample_name in samples.keys():
         midas_output_path = samples[sample_name]
         assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
-
         species_profile = f"{midas_output_path}/species/species_profile.txt"
         assert os.path.exists(species_profile), f"Missing MIDAS species profile: {species_profile}"
-
-        samples["species_profile"] = species_profile
-
+        samples[sample_name] = species_profile
     return samples
 
 
