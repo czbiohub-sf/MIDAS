@@ -14,6 +14,14 @@ from iggtools import params
 DEFAULT_SAMPLE_DEPTH = 1.0
 
 
+species_abundance_schema = {
+    "species_id": str,
+    "count_reads": int,
+    "coverage": float,
+    "relative_abundance": float
+}
+
+
 def register_args(main_func):
     subparser = add_subcommand('midas_merge_species', main_func, help='merge MIDAS species abundance results across metagenomic samples')
     subparser.add_argument('outdir',
@@ -33,7 +41,7 @@ def register_args(main_func):
                                choices=['list', 'file', 'dir'],
                                help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
     subparser.add_argument('--sample_list',
-                           dest='input',
+                           dest='sample_list',
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to midas_run_species.py output directories")
@@ -84,36 +92,23 @@ def decode_indirs_arg(args):
 def identify_samples(sample_list):
 
     with InputStream(sample_list) as stream:
-        samples = dict(select_from_tsv(stream, schema={"sample_name":str, "midas_output_dir":str}))
-    print(samples)
+        samples = dict(select_from_tsv(stream, selected_columns={"sample_name":str, "midas_output_path":str}))
 
-    if False:
-        samples = {}
-        for sample_dir in indirs:
-            sample_name = os.path.basename(sample_dir)
-            species_profile = f"{sample_dir}/species/species_profile.txt"
-            assert os.path.exists(species_profile), f"Missing species profile: {profile}"
+    for sample_name, midas_output_path in samples.items():
+        assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
 
-            if sample_name in samples:
-                tsprint(f"Warning: sample {sample_name} specified more than once. Skipping {sample_dir}")
-            samples[sample_name] = species_profile
-        if samples:
-            sys.exit(f"Error: no specified samples with species profile.")
+        species_profile = f"{midas_output_path}/species/species_profile.txt"
+        assert os.path.exists(species_profile), f"Missing species profile: {profile}"
+
+        samples["species_profile"] = species_profile
+    
     return samples
-
-
-species_abundance_schema = {
-    "species_id": str,
-    "count_reads": int,
-    "coverage": float,
-    "relative_abundance": float
-}
 
 
 def read_abundance(species_profile_dir):
     "Return map of species_id to coverage for the species present in the sample."
     with InputStream(f"{species_profile_dir}") as stream:
-        return dict(select_from_tsv(stream, schema = species_abundance_schema))
+        return dict(select_from_tsv(stream, selected_columns = species_abundance_schema))
 
 
 def store_data(args, samples, species_ids):
