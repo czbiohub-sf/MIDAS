@@ -27,19 +27,6 @@ def register_args(main_func):
     subparser.add_argument('outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    if False:
-        subparser.add_argument('-input',
-                               dest='input',
-                               type=str,
-                               required=True,
-                               help=f"Input to sample directories output by run_midas.py; see '-t' for details")
-        subparser.add_argument('-input_type',
-                               dest='intype',
-                               type=str,
-                               required=True,
-                               metavar="INPUT_TYPE",
-                               choices=['list', 'file', 'dir'],
-                               help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
     subparser.add_argument('--sample_list',
                            dest='sample_list',
                            type=str,
@@ -53,6 +40,18 @@ def register_args(main_func):
                            help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_SAMPLE_DEPTH})")
     if False:
         # This is not currently in use.
+        subparser.add_argument('-input',
+                               dest='input',
+                               type=str,
+                               required=True,
+                               help=f"Input to sample directories output by run_midas.py; see '-t' for details")
+        subparser.add_argument('-input_type',
+                               dest='intype',
+                               type=str,
+                               required=True,
+                               metavar="INPUT_TYPE",
+                               choices=['list', 'file', 'dir'],
+                               help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
         subparser.add_argument('--max_samples',
                                dest='max_samples',
                                type=int,
@@ -61,39 +60,9 @@ def register_args(main_func):
     return main_func
 
 
-
-def decode_indirs_arg(args):
-
-    assert args.intype in ["dir", "file", "list"], f"Specified input type {args.intype} is not valid."
-    indirs = []
-
-    if args.intype == "dir":
-        assert os.path.isdir(args.input), f"Specied input directory {args.input} does not exist."
-        for indir in os.listdir(args.input):
-            assert os.path.isdir(indir), f"Specified input file {indir} does not exist."
-            indirs.append(f"{args.input}/{indir}")
-
-    if args.intype == "file":
-        assert os.path.isfile(args.input), f"Specified input file {args.input} does not exist."
-        with InputStream(args.input) as fin:
-            for line in fin:
-                indir = line.rstrip().rstrip('/')
-                assert os.path.isdir(indir), f"Specified input file {indir} does not exist."
-                indirs.append(indir)
-
-    if args.intype == "list":
-        for indir in args.input.split(','):
-            assert os.path.isdir(indir), f"Specified input file {indir} does not exist."
-            indirs.append(indir)
-
-    return indirs
-
-
 def identify_samples(sample_list):
-
     with InputStream(sample_list) as stream:
         samples = dict(select_from_tsv(stream, selected_columns=["sample_name", "midas_output_path"]))
-
     for sample_name in samples.keys():
         midas_output_path = samples[sample_name]
         assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
@@ -178,6 +147,9 @@ def midas_merge_species(args):
     species_info = db.species
 
     # Read in data and computate stats
+    for sample_name, species_profile in samples.items():
+        with InputStream(species_profile) as instream:
+            select_from_tsv(instream, selected_columns=species_abundance_schema)
 
 
 
