@@ -99,6 +99,10 @@ def cal_prevalence(rowvector, threshold):
     return sum(1 if val >= threshold else 0 for val in rowvector)
 
 
+def format_data(x):
+    return format(x, DECIMALS) if isinstance(x, float) else str(x)
+
+
 def compute_stats(tabundance, tcoverage, args):
 
     assert tabundance.keys() == tcoverage.keys(), f"Transposed abundance matrix and coverage matrix have different species ids"
@@ -130,7 +134,7 @@ def write_results(samples, transposed, stats, outdir, sort_by="median_coverage")
         with OutputStream(path) as outfile:
             outfile.write("\t".join(header) + "\n")
             for values in data.values():
-                outfile.write("\t".join(map(str, values)) + "\n")
+                outfile.write("\t".join(map(format_data, values)) + "\n")
 
     # Order species in stats by descending relative abundance
     outfile = f"{outdir}/species_prevalence.tsv"
@@ -141,7 +145,7 @@ def write_results(samples, transposed, stats, outdir, sort_by="median_coverage")
         sorted_species = sorted(((row[sort_by], row["species_id"]) for row in stats.values()), reverse=True)
         for spec_tuple in sorted_species:
             species_id = spec_tuple[1]
-            values = map(lambda x: format(x, DECIMALS) if isinstance(x, float) else str(x), list(stats[species_id].values()))
+            values = map(format_data, list(stats[species_id].values()))
             ostream.write("\t".join(values) + "\n")
 
 
