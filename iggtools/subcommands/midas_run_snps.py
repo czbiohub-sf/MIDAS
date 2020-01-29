@@ -26,6 +26,18 @@ DEFAULT_ALN_TRIM = 0
 DECIMALS = ".3f"
 
 
+snps_summary_schema = {
+    "species_id": str,
+    "genome_length": int,
+    "covered_bases": int,
+    "total_depth": int,
+    "aligned_reads": int,
+    "mapped_reads": int,
+    "fraction_covered": float,
+    "mean_coverage": float
+}
+
+
 def register_args(main_func):
     subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
     subparser.add_argument('outdir',
@@ -266,7 +278,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
 
 def write_snps_summary(species_pileup_stats, outfile):
     """ Get summary of mapping statistics """
-    header = ['species_id', 'genome_length', 'covered_bases', 'total_depth', 'aligned_reads', 'mapped_reads', 'fraction_covered', 'mean_coverage']
+    header = snps_summary_schema.keys()
     with OutputStream(outfile) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_aln in species_pileup_stats.items():
