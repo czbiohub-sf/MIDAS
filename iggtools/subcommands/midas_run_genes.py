@@ -92,6 +92,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--threads',
+                           default=num_physical_cores,
+                           help=f"Number of threads used by subprocesses (e.g. bowtie2-build, bowtie2, samtools view), default {num_physical_cores}")
+
 
     return main_func
 
@@ -272,13 +276,13 @@ def midas_run_genes(args):
             return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
 
         # Download centroids.ffn for every species in the restricted species profile.
-        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
+        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=args.threads)
 
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
         bt2_db_name = "pangenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=False)
+        build_bowtie2_db(tempdir, bt2_db_name, centroids_files, threads=args.threads)
+        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=False, threads=args.threads)
 
         # Compute coverage of pangenome for each present species and write results to disk
         marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"

@@ -49,6 +49,9 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--threads',
+                           default=num_physical_cores,
+                           help=f"Number of threads used by subprocesses (e.g. hs-blastn), default {num_physical_cores}")
     if False:
         # This is not currently in use.
         subparser.add_argument('--read_length',
@@ -112,9 +115,9 @@ def parse_reads(filename, max_reads=None):
     tsprint(f"Parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads):
+def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads, threads):
     m8_file = f"{tempdir}/alignments.m8"
-    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
+    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {threads} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
@@ -275,7 +278,7 @@ def midas_run_species(args):
     marker_info = read_marker_info_repgenomes(markers_db_files[-1])
 
     with TimedSection("aligning reads to marker-genes database"):
-        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads, args.threads)
 
     with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))

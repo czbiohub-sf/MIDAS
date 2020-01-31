@@ -49,6 +49,9 @@ def register_args(main_func):
                            metavar='FLOAT',
                            default=DEFAULT_SPECIES_COVERAGE,
                            help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
+    subparser.add_argument('--threads',
+                           default=num_physical_cores,
+                           help=f"Number of threads used by subprocesses (e.g. hs-blastn), default {num_physical_cores}")
     if False:
         # This is unused.
         subparser.add_argument('--species_topn',
@@ -228,14 +231,14 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
-def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
+def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files, threads=1):
     "Counting alleles and run pileups per species in parallel"
 
     # Update alignment stats for species
     species_pileup_stats = defaultdict()
     contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
 
-    mp = multiprocessing.Pool(num_physical_cores)
+    mp = multiprocessing.Pool(args.threads)
     argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats) for sp_id in species_ids]
 
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
@@ -302,16 +305,16 @@ def midas_run_snps(args):
             return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=args.threads)
 
         # Use Bowtie2 to map reads to a representative genomes
         bt2_db_name = "repgenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
+        build_bowtie2_db(tempdir, bt2_db_name, contigs_files, threads=args.threads)
+        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True, threads=args.threads)
 
         # Use mpileup to identify SNPs
-        samtools_index(args, tempdir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+        samtools_index(args, tempdir, bt2_db_name, threads=args.threads)
+        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files, threads=args.threads)
 
         write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
 
