@@ -6,7 +6,7 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.samples import parse_species_profile, select_species
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
