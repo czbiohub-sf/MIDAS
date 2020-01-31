@@ -50,7 +50,7 @@ def register_args(main_func):
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
     subparser.add_argument('--threads',
-                           default=num_physical_cores,
+                           default=num_physical_cores, type=int,
                            help=f"Number of threads used by subprocesses (e.g. hs-blastn), default {num_physical_cores}")
     if False:
         # This is not currently in use.

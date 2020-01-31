@@ -50,7 +50,7 @@ def register_args(main_func):
                            default=DEFAULT_SPECIES_COVERAGE,
                            help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
     subparser.add_argument('--threads',
-                           default=num_physical_cores,
+                           default=num_physical_cores, type=int,
                            help=f"Number of threads used by subprocesses (e.g. hs-blastn), default {num_physical_cores}")
     if False:
         # This is unused.

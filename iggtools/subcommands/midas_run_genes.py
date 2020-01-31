@@ -93,7 +93,7 @@ def register_args(main_func):
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
     subparser.add_argument('--threads',
-                           default=num_physical_cores,
+                           default=num_physical_cores, type=int,
                            help=f"Number of threads used by subprocesses (e.g. bowtie2-build, bowtie2, samtools view), default {num_physical_cores}")
 
 
