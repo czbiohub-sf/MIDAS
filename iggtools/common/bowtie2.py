@@ -48,11 +48,11 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False, threads=1):
         bt2_command = f"bowtie2 --no-unal -x {bt2_db_dir}/{bt2_db_name} {max_reads} --{aln_mode} --{aln_speed} --threads {threads} -q {r1} {r2}"
         if sort_aln:
             command(f"set -o pipefail; {bt2_command} | \
-                    samtools view --threads {threads} -b - | \
-                    samtools sort --threads {threads} -o {bt2_db_dir}/{bt2_db_name}.bam")
+                    samtools view -@ {threads} -b - | \
+                    samtools sort -@ {threads} -o {bt2_db_dir}/{bt2_db_name}.bam")
         else:
             command(f"set -o pipefail; {bt2_command} | \
-                    samtools view --threads {threads} -b - > {bt2_db_dir}/{bt2_db_name}.bam")
+                    samtools view -@ {threads} -b - > {bt2_db_dir}/{bt2_db_name}.bam")
     except:
         tsprint(f"Bowtie2 align to {bt2_db_dir}/{bt2_db_name}.bam run into error")
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam")
