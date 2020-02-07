@@ -43,6 +43,9 @@ def register_args(main_func):
                            metavar='FLOAT',
                            default=DEFAULT_SPECIES_COVERAGE,
                            help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
+    subparser.add_argument('--species',
+                           help=("File listing set of species IDs to search "
+                                 "against. When set, species_cov is ignored."))
     if False:
         # This is unused.
         subparser.add_argument('--species_topn',
@@ -99,6 +102,19 @@ def register_args(main_func):
 def pangenome_file(species_id, component):
     # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
     return f"{outputs.pangenomes}/{species_id}/{component}"
+
+
+def dump_species_list(species, tempdir):
+    path = f"{tempdir}/species_list.txt"
+    with OutputStream(path) as file:
+        for species in species:
+            file.write(species + "\n")
+    return path
+
+
+def load_species_list(path):
+    with InputStream(path) as file:
+        return [species_id.strip() for species_id in file]
 
 
 def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
@@ -254,25 +270,33 @@ def scan_markers(genes, marker_genes_map_file):
 
 def midas_run_genes(args):
 
-    tempdir = f"{args.outdir}/genes/temp_sc{args.species_cov}"
+    if args.species is not None:
+        args.species_cov = 'X'
 
+    tempdir = f"{args.outdir}/genes/temp_sc{args.species_cov}"
     if args.debug and os.path.exists(tempdir):
         tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
     else:
         command(f"rm -rf {tempdir}")
         command(f"mkdir -p {tempdir}")
 
-    try:
+    if args.species is None:
         # The full species profile must exist -- it is output by run_midas_species.
         # Restrict to species above requested coverage.
         full_species_profile = parse_species_profile(args.outdir)
         species_profile = select_species(full_species_profile, args.species_cov)
+        species_list_path = dump_species_list(list(species_profile.keys()), tempdir)
+    else:
+        species_list_path = args.species
+
+    try:
+        species_list = load_species_list(species_list_path)
 
         def download_centroid(species_id):
             return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
 
-        # Download centroids.ffn for every species in the restricted species profile.
-        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
+        # Download centroids.ffn for every species in the species list.
+        centroids_files = multithreading_hashmap(download_centroid, species_list, num_threads=20)
 
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
