@@ -52,7 +52,7 @@ def register_args(main_func):
     subparser.add_argument('--species',
                            help=("File listing set of species IDs to search "
                                  "against. When set, species_cov is ignored."))
-    subparser.add_arugment('--prebuilt-index',
+    subparser.add_argument('--prebuilt-index',
                            help=("Prebuilt species index.  The --species flag"
                                  "must be set and the index *must match* the "
                                  "list given."))
