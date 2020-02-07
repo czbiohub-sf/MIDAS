@@ -149,7 +149,8 @@ def dump_species_list(species, tempdir):
 
 
 def load_species_list(path):
-    return [species_id for species_id in InputStream(path)]
+    with InputStream(path) as file:
+        return [species_id.strip() for species_id in file]
 
 
 def keep_read_worker(aln, args, aln_stats):
