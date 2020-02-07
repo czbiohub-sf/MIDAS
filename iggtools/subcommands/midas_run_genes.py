@@ -46,6 +46,10 @@ def register_args(main_func):
     subparser.add_argument('--species',
                            help=("File listing set of species IDs to search "
                                  "against. When set, species_cov is ignored."))
+    subparser.add_argument('--prebuilt-index',
+                           help=("Prebuilt species index.  The --species flag"
+                                 "must be set and the index *must match* the "
+                                 "list given."))
     if False:
         # This is unused.
         subparser.add_argument('--species_topn',
@@ -280,6 +284,8 @@ def midas_run_genes(args):
         command(f"rm -rf {tempdir}")
         command(f"mkdir -p {tempdir}")
 
+    bt2_db_name = "pangenomes"
+
     if args.species is None:
         # The full species profile must exist -- it is output by run_midas_species.
         # Restrict to species above requested coverage.
@@ -288,6 +294,9 @@ def midas_run_genes(args):
         species_list_path = dump_species_list(list(species_profile.keys()), tempdir)
     else:
         species_list_path = args.species
+        if args.prebuilt_index:
+            for suffix in ['1.bt2', '2.bt2', '3.bt2', '4.bt2', 'rev.1.bt2', 'rev.2.bt2', 'fa']:  # FIXME: Make sure LARGE index looks like this.
+                command(f"ln -rs {args.prebuilt_index}.{suffix} {tempdir}/{bt2_db_name}.{suffix}")
 
     try:
         species_list = load_species_list(species_list_path)
@@ -300,8 +309,10 @@ def midas_run_genes(args):
 
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
-        bt2_db_name = "pangenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
+        if not args.prebuilt_index:
+            build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
+
+        # Use Bowtie2 to map reads to pangenomes
         bowtie2_align(args, tempdir, bt2_db_name, sort_aln=False)
 
         # Compute coverage of pangenome for each present species and write results to disk
