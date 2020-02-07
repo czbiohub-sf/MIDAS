@@ -293,6 +293,9 @@ def write_snps_summary(species_pileup_stats, outfile):
 
 def midas_run_snps(args):
 
+    if args.species is not None:
+        args.species_cov = 'X'
+
     tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}"
     if args.debug and os.path.exists(tempdir):
         tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
