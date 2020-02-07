@@ -126,8 +126,7 @@ def register_args(main_func):
                                dest='aln_adjust_mq',
                                default=False,
                                help='Adjust MAPQ (False)')
-    subparser.add_argument('--sparse',
-                           dest='sparse',
+    subparser.add_argument('--sparse', action='store_true',
                            default=False,
                            help=f"Omit zero rows from output.")
     return main_func
