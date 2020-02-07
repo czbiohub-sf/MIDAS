@@ -270,7 +270,7 @@ def midas_run_species(args):
     command(f"rm -rf {tempdir}")
     command(f"mkdir -p {tempdir}")
 
-    markers_db_files = multithreading_map(download_reference, [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"])
+    markers_db_files = multithreading_map(download_reference, [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"], num_threads=20)
 
     db = UHGG()
     species_info = db.species

@@ -276,7 +276,7 @@ def midas_run_genes(args):
             return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
 
         # Download centroids.ffn for every species in the restricted species profile.
-        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=args.threads)
+        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
 
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # Also colocate/cache/download in master for multiple slave subcommand invocations.
