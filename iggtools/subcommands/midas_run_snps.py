@@ -305,7 +305,8 @@ def midas_run_snps(args):
             return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=args.threads)
+        # Since this is *not* CPU bound, we use 20 threads.
+        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
 
         # Use Bowtie2 to map reads to a representative genomes
         bt2_db_name = "repgenomes"
