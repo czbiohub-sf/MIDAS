@@ -49,6 +49,9 @@ def register_args(main_func):
                            metavar='FLOAT',
                            default=DEFAULT_SPECIES_COVERAGE,
                            help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
+    subparser.add_argument('--species',
+                           help=("File listing set of species IDs to search "
+                                 "against. When set, species_cov is ignored."))
     if False:
         # This is unused.
         subparser.add_argument('--species_topn',
@@ -135,6 +138,18 @@ def register_args(main_func):
 
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
+
+
+def dump_species_list(species, tempdir):
+    path = f"{tempdir}/species_list.txt"
+    with OutputStream(path) as file:
+        for species in species:
+            file.write(species + "\n")
+    return path
+
+
+def load_species_list(path):
+    return [species_id for species_id in InputStream(path)]
 
 
 def keep_read_worker(aln, args, aln_stats):
@@ -288,12 +303,17 @@ def midas_run_snps(args):
     if not os.path.exists(outputdir):
         command(f"mkdir -p {outputdir}")
 
-    try:
+    if args.species is None:
         # The full species profile must exist -- it is output by run_midas_species.
         # Restrict to species above requested coverage.
         full_species_profile = parse_species_profile(args.outdir)
         species_profile = select_species(full_species_profile, args.species_cov)
+        species_list_path = dump_species_list(list(species_profile.keys()), tempdir)
+    else:
+        species_list_path = args.species
 
+    try:
+        species_list = load_species_list(species_list_path)
         local_toc = download_reference(outputs.genomes)
         db = UHGG(local_toc)
         representatives = db.representatives
@@ -302,7 +322,7 @@ def midas_run_snps(args):
             return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
         # Download repgenome_id.fna for every species in the restricted species profile.
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+        contigs_files = multithreading_hashmap(download_contigs, species_list, num_threads=20)
 
         # Use Bowtie2 to map reads to a representative genomes
         bt2_db_name = "repgenomes"
@@ -311,7 +331,7 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(args, tempdir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+        species_pileup_stats = pysam_pileup(args, species_list, tempdir, outputdir, contigs_files)
 
         write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
 
