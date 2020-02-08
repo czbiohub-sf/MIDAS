@@ -10,7 +10,7 @@ from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 
 
-DEFAULT_SAMPLE_COUNTS = 1
+DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
 
@@ -126,10 +126,9 @@ def register_args(main_func):
     subparser.add_argument('--allele_type',
                            dest='allele_type',
                            type=str,
-                           metavar="STR",
                            default=DEFAULT_ALLELE_TYPE,
                            choices=['sample_counts', 'read_counts'],
-                           help=f"Methods to call pooled major/minoe alleles based on ({DEFAULT_ALLELE_TYPE}).")
+                           help=f"Methods to call pooled major/minor alleles based on (Default method: {DEFAULT_ALLELE_TYPE}).")
     subparser.add_argument('--allele_freq',
                            dest='allele_freq',
                            type=float,
@@ -162,7 +161,7 @@ def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
-def read_samples(sample_list):
+def read_samples(sample_list, genome_depth):
     """
     Input: read in Table-of-Content: sample_name\tpath/to/midas/snps.dir
 
@@ -170,13 +169,13 @@ def read_samples(sample_list):
     """
 
     with InputStream(sample_list) as stream:
-        samples = dict(select_from_tsv(stream, selected_columns=["sample_names", "midas_output_path"]))
+        samples = dict(select_from_tsv(stream, selected_columns=["sample_name", "midas_output_path"]))
 
     for sample_name in samples.keys():
         midas_output_path = samples[sample_name]
         assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
 
-        snps_summary = f"{midas_output_path}/snps/summary.txt"
+        snps_summary = f"{midas_output_path}/snps/output_sc{genome_depth}/summary.txt"
         assert os.path.exists(snps_summary), f"Missing MIDAS snps profile: {snps_summary}"
 
         samples[sample_name] = snps_summary
@@ -242,11 +241,13 @@ def select_species(samples, args):
             species_samples[species_id]["genome_coverage"].append(mean_coverage)
 
     # Filter out low prevalent species
+    species_samples_pass = defaultdict()
     for species_id in sort_species(species_samples, "sample_counts"):
         if species_samples[species_id]["sample_counts"] < args.sample_counts:
             continue
+        species_samples_pass[species_id] = species_samples[species_id]
 
-    return species_samples
+    return species_samples_pass
 
 
 def read_contig_ids(contigs_file):
@@ -254,7 +255,7 @@ def read_contig_ids(contigs_file):
     with InputStream(contigs_file) as stream:
         for line in stream:
             if line.startswith(">"):
-                contig_ids.append(line.rstrip("\n").split("_")[1:])
+                contig_ids.append(line.rstrip("\n")[1:])
     return contig_ids
 
 
@@ -272,13 +273,12 @@ def collect_contigs(species_samples, tempdir):
         return download_reference(imported_genome_file(genome_id, species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
     # species_id: local path to the downloaded representative genome fasta file
-    genome_files = multithreading_hashmap(download_contigs, list(species_samples.keys()), num_threads=20)
+    species_ids = list(species_samples.keys())
+    genome_files = multithreading_hashmap(download_contigs, species_ids, num_threads=20)
 
     # species_id: list of contig_ids
-    species_contigs = multithreading_map(read_contig_ids, ((k, v) for k, v in genome_files.items()))
-
-    # make sure species_contigs works
-    tsprint(species_contigs)
+    contig_ids = multithreading_map(read_contig_ids, list(genome_files.values()))
+    species_contigs = dict(zip(species_ids, contig_ids))
 
     return species_contigs
 
@@ -312,6 +312,7 @@ def accumulate(accumulator, ps_args):
     we need to see ALL samples before any compute.
     """
 
+    print("start accumulate")
     args, contig_ids, sample_index, midas_snps_dir, total_sample_counts, genome_coverage = ps_args
 
     table_iterator = read_snps_pileup(midas_snps_dir, contig_ids)
@@ -420,8 +421,8 @@ def pool_and_write(accumulator, sample_names, outdir, args):
                 OutputStream(snps_info_fp) as stream_info:
 
         stream_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
-        stream_freq.write("\t".join(["site_id", sample_names]) + "\n")
-        stream_depth.write("\t".join(["site_id", sample_names]) + "\n")
+        stream_freq.write("site_id\t" + "\t".join(sample_names) + "\n")
+        stream_depth.write("site_id\t" + "\t".join(sample_names) + "\n")
 
         for site_id, site_info in accumulator.items():
 
@@ -470,16 +471,26 @@ def pool_and_write(accumulator, sample_names, outdir, args):
     return "done"
 
 
-def per_species_worker(species_id, species_sample, contig_ids, samples_midas, args, outdir):
+def per_species_worker(arguments):
+
+    species_id, species_sample, contig_ids, samples_midas, args, outdir = arguments
 
     sample_names = species_sample["sample_name"]
     genome_coverage = species_sample["genome_coverage"]
-    outdir = f"{outdir}/{species_id}"
 
+    outdir = f"{outdir}/{species_id}"
+    command(f"rm -rf {outdir}")
+    command(f"mkdir -p {outdir}")
+    print("start")
+    for sample_index, sample_name  in enumerate(sample_names):
+        print(sample_name)
+    print("end")
+    
+    #print(sample_names)
     # Scan over ALL the samples passing the genome filters
     accumulator = dict()
     for sample_index, sample_name  in enumerate(sample_names):
-
+        tsprint(f"{species_id} - {sample_name}")
         sample_genome_cov = genome_coverage[sample_index]
         midas_snps_dir = samples_midas[sample_name]
         total_sample_counts = len(sample_names)
@@ -487,9 +498,8 @@ def per_species_worker(species_id, species_sample, contig_ids, samples_midas, ar
         ps_args = (args, contig_ids, sample_index, midas_snps_dir, total_sample_counts, sample_genome_cov)
         accumulate(accumulator, ps_args)
 
-    flag = pool_and_write(accumulator, sample_names, outdir, args)
-
-    assert flag == "done"
+    #flag = pool_and_write(accumulator, sample_names, outdir, args)
+    #assert flag == "done"
 
 
 def midas_merge_snps(args):
@@ -502,7 +512,7 @@ def midas_merge_snps(args):
         command(f"mkdir -p {outdir}")
 
 
-    paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.prevalence}.sm{args.snp_maf}"
+    paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.site_prev}.sm{args.snp_maf}"
     tempdir = f"{outdir}/temp_{paramstr}"
     if args.debug and os.path.exists(tempdir):
         tsprint(f"INFO:  Reusing existing temp intermediate data in {tempdir} according to --debug flag.")
@@ -512,21 +522,22 @@ def midas_merge_snps(args):
 
 
     # Read in table of content: list of samples
-    samples_midas = read_samples(args.sample_list)
+    samples_midas = read_samples(args.sample_list, args.genome_depth)
 
     # Select species
     species_samples = select_species(samples_midas, args)
 
     # Collect contig_ids for each species
-    species_contigs = collect_contigs(species_samples, tempdir)
+    species_contigs = collect_contigs(species_samples, outdir)
 
     # Accumulate read_counts and sample_counts across ALL the sample passing the genome filters;
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
+    #print(species_samples)
     for species_id in species_samples.keys():
         argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
 
-    multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
+    multithreading_map(per_species_worker, argument_list, num_threads=1)#num_physical_cores
 
 
 @register_args
