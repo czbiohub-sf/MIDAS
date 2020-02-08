@@ -17,6 +17,7 @@ DEFAULT_GENOME_COVERAGE = 0.4
 DEFAULT_SITE_DEPTH = 1
 DEFAULT_SITE_RATIO = 2.0
 DEFAULT_SITE_PREV = 0.80
+DEFAULT_SITE_MAF = 0.1
 DEFAULT_ALLELE_FREQ = 0.01
 
 DEFAULT_SNP_MAF = 0
@@ -121,6 +122,12 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            help=f"Minimum fraction of sample where genomic site satifying the site filters ({DEFAULT_SITE_PREV})")
+    subparser.add_argument('--site_maf', # newly added
+                           dest='site_maf',
+                           default=DEFAULT_SITE_MAF,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Minimum minor allele frequency to call a pooled SNP site ({DEFAULT_SITE_MAF})")
 
     # SNPs calling
     subparser.add_argument('--allele_type',
@@ -283,15 +290,15 @@ def collect_contigs(species_samples, tempdir):
     return species_contigs
 
 
-def read_snps_pileup(snps_pile_path, contig_ids):
-    with InputStream(snps_pile_path) as instream:
+def acgt_string(A, C, G, T):
+    return ','.join(map(str, (A, C, G, T)))
+
+
+def read_snps_pileup(snps_pileup_path, contig_ids):
+    with InputStream(snps_pileup_path) as instream:
         for row in select_from_tsv(instream, selected_columns=snps_pileup_schema, result_structure=dict):
             if row["ref_id"] in contig_ids:
                 yield row
-
-
-def acgt_string(A, C, G, T):
-    return ','.join(map(str, (A, C, G, T)))
 
 
 def accumulate(accumulator, ps_args):
@@ -312,10 +319,9 @@ def accumulate(accumulator, ps_args):
     we need to see ALL samples before any compute.
     """
 
-    print("start accumulate")
-    args, contig_ids, sample_index, midas_snps_dir, total_sample_counts, genome_coverage = ps_args
+    args, contig_ids, sample_index, snps_pileup_dir, total_sample_counts, genome_coverage = ps_args
 
-    table_iterator = read_snps_pileup(midas_snps_dir, contig_ids)
+    table_iterator = read_snps_pileup(snps_pileup_dir, contig_ids)
 
     # Output column indices
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
@@ -374,12 +380,12 @@ def accumulate(accumulator, ps_args):
         acc[9 + sample_index] = acgt_str
 
 
-def call_alleles(alleles_all, site_depth, allele_freq):
+def call_alleles(alleles_all, site_depth, site_maf):
     """
     After seeing data across ALL the samples, we can compute the pooled allele frequencies and call alleles.
     """
     # keep alleles passing the min allele frequency
-    alleles_above_cutoff = tuple(al for al in alleles_all if al[0] / site_depth >= allele_freq)
+    alleles_above_cutoff = tuple(al for al in alleles_all if al[1] / site_depth >= site_maf)
 
     # classify SNPs type
     number_alleles = len(alleles_above_cutoff)
@@ -389,8 +395,8 @@ def call_alleles(alleles_all, site_depth, allele_freq):
         # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
         # the one that comes later in the "ACGT" lexicographic order.
         alleles_above_cutoff = sorted(alleles_above_cutoff, reverse=True)[:2]
-        major_allele = alleles_above_cutoff[0][1]
-        minor_allele = alleles_above_cutoff[-1][1] # for fixed sites, same as major allele
+        major_allele = alleles_above_cutoff[0][0]
+        minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
     else:
         sys.exit("Error: no alleles for pooled site: This should not happen")
 
@@ -404,15 +410,13 @@ def pool_and_write(accumulator, sample_names, outdir, args):
         + no need to re-accumulate with potentially downstream bugs
 
     Output: after seeing ALL samples' pileup data, we compute the pooled statistics for each site
-
-        * follow the genomiesite ordering to compute
         - start with pooled_major_alleles and pooled_minor_alleles
         - then easily site_counts and site_depth
         - then calcualte the per sample list for sample_depths
         - then sample_mafs
     """
 
-    snps_info_fp = f"{outdir}/snps_info.tsv.lz4v"
+    snps_info_fp = f"{outdir}/snps_info.tsv.lz4"
     snps_freq_fp = f"{outdir}/snps_freqs.tsv.lz4"
     snps_depth_fp = f"{outdir}/snps_depth.tsv.lz4"
     # TODO: snps_summary.tsv ...
@@ -433,16 +437,16 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             if prevalence < args.site_prev:
                 continue
 
-            site_counts = (rcA, rcC, rcG, rcT)
-            site_depth = sum(site_counts)
-
             # compute the pooled major allele based on the pooled-read-counts (abundance) or pooled-sample-counts (prevalence)
             if args.allele_type == "read_counts":
-                alleles_all = ((rcA, 'A'), (rcC, 'C'), (rcG, 'G'), (rcT, 'T'))
+                site_counts = (rcA, rcC, rcG, rcT)
+                alleles_all = (('A', rcA), ('C', rcC), ('G', rcG), ('T', rcT))
             else:
-                alleles_all = ((scA, 'A'), (scC, 'C'), (scG, 'G'), (scT, 'T'))
+                site_counts = (scA, scC, scG, scT)
+                alleles_all = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
 
-            major_allele, minor_allele, snp_type = call_alleles(alleles_all, site_depth, args.allele_freq)
+            site_depth = sum(site_counts)
+            major_allele, minor_allele, snp_type = call_alleles(alleles_all, site_depth, args.site_maf)
             major_index = 'ACGT'.index(major_allele)
             minor_index = 'ACGT'.index(minor_allele)
 
@@ -455,7 +459,7 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             sample_mafs = [] # frequency of minor allele frequency
             for sample_index in range(10, len(site_info)):
                 # for <site, sample>
-                rc_ACGT = (int(rc) for rc in site_info[sample_index].split(","))
+                rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
                 sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
                 sample_mafs.append(rc_ACGT[minor_index])
 
@@ -475,31 +479,30 @@ def per_species_worker(arguments):
 
     species_id, species_sample, contig_ids, samples_midas, args, outdir = arguments
 
-    sample_names = species_sample["sample_name"]
+    sample_names = species_sample["sample_names"]
     genome_coverage = species_sample["genome_coverage"]
 
     outdir = f"{outdir}/{species_id}"
     command(f"rm -rf {outdir}")
     command(f"mkdir -p {outdir}")
-    print("start")
-    for sample_index, sample_name  in enumerate(sample_names):
-        print(sample_name)
-    print("end")
-    
-    #print(sample_names)
+
     # Scan over ALL the samples passing the genome filters
     accumulator = dict()
     for sample_index, sample_name  in enumerate(sample_names):
-        tsprint(f"{species_id} - {sample_name}")
         sample_genome_cov = genome_coverage[sample_index]
-        midas_snps_dir = samples_midas[sample_name]
-        total_sample_counts = len(sample_names)
 
-        ps_args = (args, contig_ids, sample_index, midas_snps_dir, total_sample_counts, sample_genome_cov)
+        snps_summary_dir = samples_midas[sample_name]
+        snps_dir = os.path.dirname(snps_summary_dir)
+        snps_pileup_dir = os.path.join(snps_dir, f"{species_id}.snps.lz4")
+        assert os.path.exists(snps_pileup_dir)
+
+        total_sample_counts = len(sample_names)
+        ps_args = (args, contig_ids, sample_index, snps_pileup_dir, total_sample_counts, sample_genome_cov)
+
         accumulate(accumulator, ps_args)
 
-    #flag = pool_and_write(accumulator, sample_names, outdir, args)
-    #assert flag == "done"
+    flag = pool_and_write(accumulator, sample_names, outdir, args)
+    assert flag == "done"
 
 
 def midas_merge_snps(args):
@@ -534,9 +537,8 @@ def midas_merge_snps(args):
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
     #print(species_samples)
-    for species_id in species_samples.keys():
+    for species_id in list(species_samples.keys())[:1]:
         argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
-
     multithreading_map(per_species_worker, argument_list, num_threads=1)#num_physical_cores
 
 
