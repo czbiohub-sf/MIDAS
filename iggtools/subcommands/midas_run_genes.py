@@ -295,7 +295,7 @@ def midas_run_genes(args):
     else:
         species_list_path = args.species
         if args.prebuilt_index:
-            for suffix in ['1.bt2', '2.bt2', '3.bt2', '4.bt2', 'rev.1.bt2', 'rev.2.bt2', 'fa']:  # FIXME: Make sure LARGE index looks like this.
+            for suffix in ['1.bt2l', '2.bt2l', '3.bt2l', '4.bt2l', 'rev.1.bt2l', 'rev.2.bt2l', 'fa']:
                 command(f"ln -rs {args.prebuilt_index}.{suffix} {tempdir}/{bt2_db_name}.{suffix}")
 
     try:
