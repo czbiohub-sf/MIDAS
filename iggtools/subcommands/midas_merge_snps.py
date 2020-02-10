@@ -473,8 +473,9 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             for sample_index in range(9, len(site_info)):
                 # for <site, sample> pair
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
-                sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
-                sample_mafs.append(rc_ACGT[minor_index])
+                sample_depth = rc_ACGT[major_index] + rc_ACGT[minor_index]
+                sample_depths.append(sample_depth)
+                sample_mafs.append(rc_ACGT[minor_index] / sample_depth)
 
             # write
             stream_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
@@ -482,7 +483,7 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             write_mafs = "\t".join((str(format(maf, DECIMALS)) for maf in sample_mafs))
             stream_freq.write(f"{site_id}\t" + write_mafs + "\n")
 
-            write_depths = "\t".join((str(format(depth, DECIMALS)) for depth in sample_depths))
+            write_depths = "\t".join((str(depth) for depth in sample_depths))
             stream_depth.write(f"{site_id}\t" + write_depths + "\n")
 
     return "done"
