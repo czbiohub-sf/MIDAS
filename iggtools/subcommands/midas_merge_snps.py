@@ -265,7 +265,7 @@ def select_species(samples, args, outdir):
     #stream.write("\t".join(["sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
     for species_id, species_list in species_snps_summary.items():
         for i in range(len(species_list)):
-            print("\t".join(species_list[i]))
+            print("\t".join(map(str, species_list[i])))
 
     exit(0)
 
