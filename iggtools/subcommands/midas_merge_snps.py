@@ -475,7 +475,7 @@ def pool_and_write(accumulator, sample_names, outdir, args):
                 sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
                 sample_mafs.append(rc_ACGT[minor_index])
 
-            print(saample_depths)
+            print(sample_depths)
             print(sample_mafs)
             # write
             stream_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
@@ -550,7 +550,6 @@ def midas_merge_snps(args):
     # Accumulate read_counts and sample_counts across ALL the sample passing the genome filters;
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
-    #print(species_samples)
     for species_id in list(species_samples.keys())[:1]:
         argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
 
