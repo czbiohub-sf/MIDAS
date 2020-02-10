@@ -462,22 +462,23 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             major_index = 'ACGT'.index(major_allele)
             minor_index = 'ACGT'.index(minor_allele)
 
-            # TODO: need to handle the 'any' as snp_types input arguments
-            snp_types = ['quad', 'tri', 'bi', 'mono']
-            if ('any' not in snp_types and snp_type not in snp_types):
+            # Keep sites with desired snp_type
+            if ('any' not in args.snp_type and snp_type not in args.snp_type):
                 continue
 
+            # Extract the read counts of pooled major alleles for samples
             sample_depths = [] # only accounts for reads matching either major or minor allele
             sample_mafs = [] # frequency of minor allele frequency
-
             for sample_index in range(9, len(site_info)):
                 # for <site, sample> pair
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
                 sample_depth = rc_ACGT[major_index] + rc_ACGT[minor_index]
                 sample_depths.append(sample_depth)
+                if sample_depth == 0:
+                    sys.exit(f"sample_index:{sample_index}, {site_info}, {outdir}")
                 sample_mafs.append(rc_ACGT[minor_index] / sample_depth)
 
-            # write
+            # Write
             stream_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
 
             write_mafs = "\t".join((str(format(maf, DECIMALS)) for maf in sample_mafs))
