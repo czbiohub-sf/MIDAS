@@ -260,15 +260,11 @@ def select_species(samples, args, outdir):
     pass_species_ids = species_samples_pass.keys()
     snps_summary_dir = f"{outdir}/snps_summary.tsv.lz4"
 
-    #with OutputStream(snps_summary_dir) as stream:
-    print(["species_id", "sample_id"] + list(snps_summary_schema.keys())[1:])
-    #stream.write("\t".join(["sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
-    for species_id, species_list in species_snps_summary.items():
-        for i in range(len(species_list)):
-            print("\t".join(map(str, species_list[i])))
-
-    exit(0)
-
+    with OutputStream(snps_summary_dir) as stream:
+        stream.write("\t".join(["species_id", "sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
+        for species_id, species_list in species_snps_summary.items():
+            for i in range(len(species_list)):
+                stream.write("\t".join(map(str, [species_id] + species_list[i])) + "\n")
 
     return species_samples_pass
 
