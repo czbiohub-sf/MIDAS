@@ -403,14 +403,11 @@ def call_alleles(alleles_all, site_depth, site_maf):
     number_alleles = len(alleles_above_cutoff)
     snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
 
-    if number_alleles > 0:
-        # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
-        # the one that comes later in the "ACGT" lexicographic order.
-        alleles_above_cutoff = sorted(alleles_above_cutoff, reverse=True)[:2]
-        major_allele = alleles_above_cutoff[0][0]
-        minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
-    else:
-        sys.exit("Error: no alleles for pooled site: This should not happen")
+    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
+    # the one that comes later in the "ACGT" lexicographic order.
+    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
+    major_allele = alleles_above_cutoff[0][0]
+    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
 
     return (major_allele, minor_allele, snp_type)
 
@@ -474,8 +471,6 @@ def pool_and_write(accumulator, sample_names, outdir, args):
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
                 sample_depth = rc_ACGT[major_index] + rc_ACGT[minor_index]
                 sample_depths.append(sample_depth)
-                if sample_depth == 0:
-                    sys.exit(f"sample_index:{sample_index}, {site_info}, {outdir}")
                 sample_mafs.append(rc_ACGT[minor_index] / sample_depth)
 
             # Write
