@@ -469,16 +469,15 @@ def pool_and_write(accumulator, sample_names, outdir, args):
 
             sample_depths = [] # only accounts for reads matching either major or minor allele
             sample_mafs = [] # frequency of minor allele frequency
-            print(len(site_info))
+
             for sample_index in range(9, len(site_info)):
-                # for <site, sample>
-                print(site_info[sample_index])
+                print(site_info)
+                # for <site, sample> pair
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
                 sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
                 sample_mafs.append(rc_ACGT[minor_index])
+                exit(0)
 
-            print(sample_depths)
-            print(sample_mafs)
             # write
             stream_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
 
