@@ -17,7 +17,7 @@ DEFAULT_GENOME_COVERAGE = 0.4
 DEFAULT_SITE_DEPTH = 1
 DEFAULT_SITE_RATIO = 2.0
 DEFAULT_SITE_PREV = 0.80
-DEFAULT_SITE_MAF = 0.1
+DEFAULT_SITE_MAF = 0.01
 DEFAULT_ALLELE_FREQ = 0.01
 
 DEFAULT_SNP_MAF = 0
@@ -431,9 +431,9 @@ def pool_and_write(accumulator, sample_names, outdir, args):
     snps_info_fp = f"{outdir}/snps_info.tsv.lz4"
     snps_freq_fp = f"{outdir}/snps_freqs.tsv.lz4"
     snps_depth_fp = f"{outdir}/snps_depth.tsv.lz4"
-    # TODO: snps_summary.tsv ...
 
-    with OutputStream(snps_freq_fp) as stream_freq, OutputStream(snps_depth_fp) as stream_depth, \
+    with OutputStream(snps_freq_fp) as stream_freq, \
+            OutputStream(snps_depth_fp) as stream_depth, \
                 OutputStream(snps_info_fp) as stream_info:
 
         stream_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
@@ -444,8 +444,8 @@ def pool_and_write(accumulator, sample_names, outdir, args):
 
             rcA, rcC, rcG, rcT, count_samples, scA, scC, scG, scT = site_info[:9]
 
-            prevalence = count_samples / len(sample_names)
             # skip site with low prevalence
+            prevalence = count_samples / len(sample_names)
             if prevalence < args.site_prev:
                 continue
 
@@ -469,8 +469,10 @@ def pool_and_write(accumulator, sample_names, outdir, args):
 
             sample_depths = [] # only accounts for reads matching either major or minor allele
             sample_mafs = [] # frequency of minor allele frequency
-            for sample_index in range(10, len(site_info)):
+            print(len(site_info))
+            for sample_index in range(9, len(site_info)):
                 # for <site, sample>
+                print(site_info[sample_index])
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
                 sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
                 sample_mafs.append(rc_ACGT[minor_index])
