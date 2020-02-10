@@ -250,8 +250,8 @@ def select_species(samples, args, outdir):
 
             species_samples[species_id]["sample_names"].append(sample_name)
             species_samples[species_id]["genome_coverage"].append(mean_coverage)
-
             species_snps_summary[species_id].append([sample_name] + list(record.values())[1:])
+
     # Filter out low prevalent species
     sorted_species_ids = sort_species(species_samples, "sample_counts")
     species_samples_pass = {species_id: val for species_id, val in species_samples.items() if species_samples[species_id]["sample_counts"] >= args.sample_counts}
@@ -260,9 +260,15 @@ def select_species(samples, args, outdir):
     pass_species_ids = species_samples_pass.keys()
     snps_summary_dir = f"{outdir}/snps_summary.tsv.lz4"
 
-    with OutputStream(snps_summary_dir) as stream:
-        stream.write("\t".join(["sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
-        
+    #with OutputStream(snps_summary_dir) as stream:
+    print(["species_id", "sample_id"] + list(snps_summary_schema.keys())[1:])
+    #stream.write("\t".join(["sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
+    for species_id, species_list in species_snps_summary.items():
+        for i in range(len(species_list)):
+            print("\t".join(species_list[i]))
+
+    exit(0)
+
 
     return species_samples_pass
 
