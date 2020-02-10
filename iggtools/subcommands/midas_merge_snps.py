@@ -475,6 +475,8 @@ def pool_and_write(accumulator, sample_names, outdir, args):
                 sample_depths.append(rc_ACGT[major_index] + rc_ACGT[minor_index])
                 sample_mafs.append(rc_ACGT[minor_index])
 
+            print(saample_depths)
+            print(sample_mafs)
             # write
             stream_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
 
