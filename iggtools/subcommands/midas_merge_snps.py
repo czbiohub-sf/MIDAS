@@ -551,7 +551,7 @@ def midas_merge_snps(args):
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
     #print(species_samples)
-    for species_id in list(species_samples.keys()):
+    for species_id in list(species_samples.keys())[:1]:
         argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
 
     multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
