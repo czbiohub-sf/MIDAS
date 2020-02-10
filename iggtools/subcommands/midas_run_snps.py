@@ -296,7 +296,7 @@ def midas_run_snps(args):
         command(f"rm -rf {tempdir}")
         command(f"mkdir -p {tempdir}")
 
-    outputdir = f"{args.outdir}/snps/output_sc{args.species_cov}"
+    outputdir = f"{args.outdir}/snps/output"
     if not os.path.exists(outputdir):
         command(f"mkdir -p {outputdir}")
 

@@ -168,9 +168,9 @@ def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
-def read_samples(sample_list, genome_depth):
+def read_samples(sample_list):
     """
-    Input: read in Table-of-Content: sample_name\tpath/to/midas/snps.dir
+    Input: read in Table-of-Content: sample_name\tpath/to/midas/snps_dir
 
     Output: return dict of samples: local file path of midas_snps_summary
     """
@@ -178,16 +178,17 @@ def read_samples(sample_list, genome_depth):
     with InputStream(sample_list) as stream:
         samples = dict(select_from_tsv(stream, selected_columns=["sample_name", "midas_output_path"]))
 
+    samples_midas = defaultdict()
     for sample_name in samples.keys():
         midas_output_path = samples[sample_name]
         assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
 
-        snps_summary = f"{midas_output_path}/snps/output_sc{genome_depth}/summary.txt"
+        snps_summary = f"{midas_output_path}/snps/output/summary.txt"
         assert os.path.exists(snps_summary), f"Missing MIDAS snps profile: {snps_summary}"
 
-        samples[sample_name] = snps_summary
+        samples_midas[sample_name] = snps_summary
 
-    return samples
+    return samples_midas
 
 
 def read_snps_summary(snps_summary_path):
@@ -211,7 +212,7 @@ def sort_species(species_samples, sort_by="sample_counts"):
     return (_[0] for _ in sorted_species)
 
 
-def select_species(samples, args):
+def select_species(samples, args, outdir):
     """
     Select high quality sample-species pairs based on the genome_coverage and
     genome_depth, for a list of samples; further on filter out low prevalent species
@@ -220,11 +221,14 @@ def select_species(samples, args):
     Input:
         - MIDAS run snps summary
 
-    Ouput:
+    Ouput: <species, samples> pair
         - for each species, return a dictionary with two separate list: sample_name, and genome_coverage.
+        - write snps_summary to file
     """
 
     species_samples = defaultdict(lambda: defaultdict(list))
+    species_snps_summary = defaultdict(list)
+
     for sample_name, snps_summary_path in samples.items():
         # Read in the SNPs summary files
         for record in read_snps_summary(snps_summary_path):
@@ -247,12 +251,18 @@ def select_species(samples, args):
             species_samples[species_id]["sample_names"].append(sample_name)
             species_samples[species_id]["genome_coverage"].append(mean_coverage)
 
+            species_snps_summary[species_id].append([sample_name] + list(record.values())[1:])
     # Filter out low prevalent species
-    species_samples_pass = defaultdict()
-    for species_id in sort_species(species_samples, "sample_counts"):
-        if species_samples[species_id]["sample_counts"] < args.sample_counts:
-            continue
-        species_samples_pass[species_id] = species_samples[species_id]
+    sorted_species_ids = sort_species(species_samples, "sample_counts")
+    species_samples_pass = {species_id: val for species_id, val in species_samples.items() if species_samples[species_id]["sample_counts"] >= args.sample_counts}
+
+    # Write merged snps_summary
+    pass_species_ids = species_samples_pass.keys()
+    snps_summary_dir = f"{outdir}/snps_summary.tsv.lz4"
+
+    with OutputStream(snps_summary_dir) as stream:
+        stream.write("\t".join(["sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
+        
 
     return species_samples_pass
 
@@ -525,10 +535,10 @@ def midas_merge_snps(args):
 
 
     # Read in table of content: list of samples
-    samples_midas = read_samples(args.sample_list, args.genome_depth)
+    samples_midas = read_samples(args.sample_list)
 
     # Select species
-    species_samples = select_species(samples_midas, args)
+    species_samples = select_species(samples_midas, args, outdir)
 
     # Collect contig_ids for each species
     species_contigs = collect_contigs(species_samples, outdir)
@@ -537,9 +547,10 @@ def midas_merge_snps(args):
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
     #print(species_samples)
-    for species_id in list(species_samples.keys())[:1]:
+    for species_id in list(species_samples.keys()):
         argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
-    multithreading_map(per_species_worker, argument_list, num_threads=1)#num_physical_cores
+
+    multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
 
 
 @register_args
