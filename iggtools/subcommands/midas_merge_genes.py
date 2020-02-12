@@ -1,25 +1,18 @@
 import json
 import os
 from collections import defaultdict
-import numpy as np
-import Bio.SeqIO
-from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, multithreading_map, num_physical_cores, download_reference
 from iggtools.params import outputs
-from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
 
-CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
+DEFAULT_SAMPLE_DEPTH = 1.0
+DEFAULT_SAMPLE_COUNTS = 2
+DEFAULT_CLUSTER_ID = '95'
+DEFAULT_MIN_COPY = 0.35
 
-DEFAULT_ALN_COV = 0.75
-DEFAULT_SPECIES_COVERAGE = 3.0
-DEFAULT_ALN_MAPID = 94.0
-DEFAULT_ALN_READQ = 20
-DEFAULT_ALN_MAPQ = 0
 
-DECIMALS = ".6f"
+DECIMALS = ".3f"
 
 
 genes_summary_schema = {
@@ -33,80 +26,100 @@ genes_summary_schema = {
 }
 
 
+genes_info_schema = {
+    "presabs": float,
+    "copynum": float,
+    "depth": float,
+    "reads": int,
+}
+
+
+genes_schema = {
+    "gene_id": str,
+    "count_reads": int,
+    "coverage": float,
+    "copy_number": float,
+}
+
+
+snps_summary_schema = {
+    "species_id": str,
+    "genome_length": int,
+    "covered_bases": int,
+    "total_depth": int,
+    "aligned_reads": int,
+    "mapped_reads": int,
+    "fraction_covered": float,
+    "mean_coverage": float,
+}
+
+
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
+    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
+
     subparser.add_argument('outdir',
                            type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('-1',
-                           dest='r1',
+                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
+    subparser.add_argument('--sample_list',
+                           dest='sample_list',
+                           type=str,
                            required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--species_cov',
-                           type=float,
-                           dest='species_cov',
-                           metavar='FLOAT',
-                           default=DEFAULT_SPECIES_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
-    if False:
-        # This is unused.
-        subparser.add_argument('--species_topn',
-                               type=int,
-                               dest='species_topn',
-                               metavar='INT',
-                               help='Include top N most abundant species')
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
 
-    #  Alignment flags (bowtie, or postprocessing)
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
+    # Species and sample filters
+    subparser.add_argument('--species_id',
+                           dest='species_id',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--sample_depth',
+                           dest='sample_depth',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--aln_readq',
-                           dest='aln_readq',
+                           default=DEFAULT_SAMPLE_DEPTH,
+                           help=f"Minimum average read depth per sample ({DEFAULT_SAMPLE_DEPTH})")
+    subparser.add_argument('--sample_counts',
+                           dest='sample_counts', #min_samples
                            type=int,
                            metavar="INT",
-                           default=DEFAULT_ALN_READQ,
-                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
+                           default=DEFAULT_SAMPLE_COUNTS,
+                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+
+    # Presence/Absence
+    subparser.add_argument('--min_copy',
+                           dest='min_copy',
                            type=float,
                            metavar="FLOAT",
-                           default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
-    subparser.add_argument('--aln_mapq',
-                           dest='aln_mapq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_MAPQ,
-                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
-    subparser.add_argument('--aln_speed',
+                           default=DEFAULT_MIN_COPY,
+                           help=f"Genes >= MIN_COPY are classified as present ({DEFAULT_MIN_COPY})")
+
+    subparser.add_argument('--cluster_pid',
+                           dest='cluster_pid',
                            type=str,
-                           dest='aln_speed',
-                           default='very-sensitive',
-                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
-                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
-    subparser.add_argument('--aln_mode',
-                           type=str,
-                           dest='aln_mode',
-                           default='local',
-                           choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local).  Global corresponds to the bowtie2 default --end-to-end.')
-    subparser.add_argument('--aln_interleaved',
-                           action='store_true',
-                           default=False,
-                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+                           default=DEFAULT_CLUSTER_ID,
+                           choices=['75', '80', '85', '90', '95', '99'],
+                           help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
 
     return main_func
+
+
+def check_outdir(args):
+    outdir = f"{args.outdir}/merged/genes"
+    if args.debug and os.path.exists(outdir):
+        tsprint(f"INFO:  Reusing existing output data in {outdir} according to --debug flag.")
+    else:
+        command(f"rm -rf {outdir}")
+        command(f"mkdir -p {outdir}")
+
+    paramstr = f"sd{args.site_depth}"
+    tempdir = f"{outdir}/temp_{paramstr}"
+    if args.debug and os.path.exists(tempdir):
+        tsprint(f"INFO:  Reusing existing temp intermediate data in {tempdir} according to --debug flag.")
+    else:
+        command(f"rm -rf {tempdir}")
+        command(f"mkdir -p {tempdir}")
+
+    return (outdir, tempdir)
 
 
 class Sample:
@@ -127,7 +140,7 @@ class Sample:
 
         if dbtype == "snps":
             schema = snps_summary_schema
-        if dbtype = "genes":
+        if dbtype == "genes":
             schema = genes_summary_schema
 
         info = defaultdict()
@@ -141,15 +154,16 @@ class Species:
     """
     Base class for species
     """
-    def __init__(self, id, species_info, genome_info):
-        self.species_id = id
+    def __init__(self, species_id):
+        self.species_id = species_id
         self.samples = []
+        self.sample_depth = []
 
     def fetch_sample_depth(self):
         self.sample_depth = [sample.info[self.species_id]["mean_coverage"] for sample in self.samples]
 
 
-def read_samples(sample_list, dbtype):
+def init_samples(sample_list, dbtype):
     """
     Input: read in Table-of-Content: sample_name\tpath/to/midas/snps_dir
 
@@ -186,7 +200,7 @@ def init_species(samples, args, dbtype):
             if species_id not in species:
                 species[species_id] = Species(species_id)
 
-            if filter_samples_species(species_info, species_id, args, dbtype):
+            if filter_sample_species(species_info, species_id, args, dbtype):
                 species[species_id].samples.append(sample)
     return list(species.values())
 
@@ -197,7 +211,7 @@ def sort_species(species):
     Output: list of sorted Species objects
     """
 
-    species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse = True)
+    species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
 
     return [sp[0] for sp in species_sorted]
 
@@ -210,16 +224,12 @@ def filter_species(species, args):
     keep = []
     species_genes_summary = []
 
-    for sp in sorted_species(species):
+    for sp in sort_species(species):
         # Pick subset of species to analyze
         sp.sample_counts = len(sp.samples)
 
         if sp.sample_counts < args.min_samples:
             continue # skip low prevalent species
-        if (args.max_samples and sp.sample_counts >= args.max_samples):
-            continue # skip species with too many samples
-        if (args.max_species and len(keep) > args.max_species):
-            continue
 
         sp.fetch_sample_depth()
         keep.append(sp)
@@ -239,7 +249,7 @@ def write_summary(species_genes_summary, outdir):
             stream.write("\t".join(map(str, record)) + "\n")
 
 
-def select_species(args, dbtype):
+def select_species(args, dbtype, outdir):
     # Read in list of samples, return [Sample1, Sample2, .., Samplen]
     samples = init_samples(args.sample_list, dbtype)
     species = init_species(samples, args, dbtype)
@@ -254,49 +264,131 @@ def pangenome_file(species_id, component):
     return f"{outputs.pangenomes}/{species_id}/{component}"
 
 
-def read_cluster_map(sp, pid, tempdir):
-    sp.map = {}
-    header = ['gene_id'] + [f"centroid_{pid}" for pid in CLUSTERING_PERCENTS]
+def read_cluster_map(gene_info_path, pid):
+    genes_map = {}
+    cols = ['gene_id', 'centroid_99', f"centroid_{pid}"]
+    with InputStream(gene_info_path) as stream:
+        for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
+            genes_map[r['centroid_99']] = r[f"centroid_{pid}"]
+    return genes_map
 
-    with InputStream(sp.gene_info) as stream:
-        for row in select_from_tsv(stream, selected_columns=header, result_structure=dict):
-            sp.map[r['centroid_99']] = r[f"centroid_{pid}}"]
+def read_genes(path):
+    with InputStream(path) as stream:
+        for r in select_from_tsv(stream, selected_columns=genes_schema, result_structure=dict):
+            yield r
+
+
+def build_gene_matrices(sp, min_copy):
+    """ Compute gene copy numbers for samples """
+    for sample in sp.samples:
+        sample.genes = {}
+        for field, dtype in genes_info_schema.items():
+            sample.genes[field] = defaultdict(dtype)
+
+        path = f"{sample.dir}/genes/output/{sp.species_id}.genes.lz4"
+        for r in read_genes(path):
+            gene_id = sp.map[r["gene_id"]]
+            sample.genes["copynum"][gene_id] += float(r['copy_number'])
+            sample.genes["depth"][gene_id] += float(r["coverage"])
+            sample.genes["reads"][gene_id] += int(r["count_reads"])
+
+    for sample in sp.samples:
+        for gene_id, copynum in sample.genes["copynum"].items():
+            if copynum >= min_copy:
+                sample.genes["presabs"][gene_id] = 1
+            else:
+                sample.genes["presabs"][gene_id] = 0
+
+
+def write_gene_matrices(sp, outdir):
+    """ Write pangenome matrices to file """
+
+    sample_names = [s.id for s in sp.samples]
+    # This doesn't make sense to me ...
+    genes = sorted(sp.samples[0].genes["depth"])
+
+    for file_type in genes_info_schema.keys():
+        outfile = f"{outdir}/genes_{file_type}.tsv.lz4"
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            record = []
+            for gene_id in genes:
+                for sample in sp.samples:
+                    record.append(sample.genes[file_type][gene_id])
+            stream.write("\t".join(map(str, [gene_id] + record)) + "\n")
+
+
+def collect(accumulator, ps_args):
+
+    genes_map, sample_index, midas_genes_dir, total_sample_counts = ps_args
+
+    table_iterator = read_genes(midas_genes_dir)
+    for r in table_iterator:
+        gene_id = genes_map[r["gene_id"]]
+
+        acc_copynum = accumulator["copynum"].get(gene_id)
+        if not acc_copynum:
+            acc_copynum = [0.0] * total_sample_counts
+        acc_copynum[sample_index] += r["copy_number"]
+
+        acc_depth = accumulator["depth"].get(gene_id)
+        if not acc_depth:
+            acc_depth = [0.0] * total_sample_counts
+        acc_depth[sample_index] += r["coverage"]
+
+        acc_reads = accumulator["reads"].get(gene_id)
+        if not acc_reads:
+            acc_reads = [0.0] * total_sample_counts
+        acc_reads[sample_index] += r["count_reads"]
+
+
+def write(accumulator, sample_names, outdir):
+    for file_type in genes_info_schema.keys():
+        outfile = f"{outdir}/genes_{file_type}.tsv.lz4"
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            for gene_id, gene_vals in accumulator[file_type].items():
+                stream.write(f"{gene_id}\t" + "\t".join((str(format(val, DECIMALS)) for val in gene_vals)) + "\n")
+
+
+def per_species_worker(arguments):
+
+    species_id, genes_info_path, species_samples, args, outdir = arguments
+    sample_names = list(species_samples.keys())
+
+    genes_map = read_cluster_map(genes_info_path, args.cluster_p288id)
+
+    accumulator = defaultdict(dict)
+    for sample_index, sample_name in enumerate(sample_names):
+        midas_genes_path = f"{species_samples[sample_name]}/genes/output/{species_id}.genes.lz4"
+        assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
+
+        ps_args = (genes_map, sample_index, midas_genes_path, len(species_samples))
+        collect(accumulator, ps_args)
+
+    for gene_id, copynum in accumulator["copynum"].items():
+        accumulator["presabs"][gene_id] = [1 if cn > args.min_copy else 0 for cn in copynum]
+
+    write(accumulator, sample_names, outdir)
 
 
 def midas_merge_genes(args):
 
-    outdir = f"{args.outdir}/merged/genes"
-    if args.debug and os.path.exists(outdir):
-        tsprint(f"INFO:  Reusing existing output data in {outdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {outdir}")
-        command(f"mkdir -p {outdir}")
+    outdir, tempdir = check_outdir(args)
 
-    paramstr = f"sd{args.site_depth}"
-    tempdir = f"{outdir}/temp_{paramstr}"
-    if args.debug and os.path.exists(tempdir):
-        tsprint(f"INFO:  Reusing existing temp intermediate data in {tempdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
-
-
-    species_list = select_species(args, dbtype = "genes", outdir)
-
-    def download_genes_info(species_id):
-        return download_reference(pangenome_file(species_id, "gene_info.txt.lz4"), f"{tempdir}/{species_id}")
+    species_list = select_species(args, "genes", outdir)
 
     # Download gene_info for every species in the restricted species profile.
+    def download_genes_info(species_id):
+        return download_reference(pangenome_file(species_id, "gene_info.txt.lz4"), f"{tempdir}/{species_id}")
     genes_info_files = multithreading_hashmap(download_genes_info, [sp.speices_id for sp in species_list], num_threads=20)
-    for sp in species_list:
-        sp.gene_info = genes_info_file[sp.species_id]
 
-
-    # Accumulate read_counts and sample_counts across ALL the sample passing the genome filters;
-    # and at the same time remember <site, sample>'s A, C, G, T read counts.
+    # Collect copy_number, coverage and read counts across ALl the samples
     argument_list = []
-    for species_id in list(species_samples.keys()):
-        argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
+    for sp in species_list:
+        species_id = sp.species_id
+        species_samples = {sample.id: sample.dir for sample in sp.samples}
+        argument_list.append((species_id, genes_info_files[species_id], species_samples, args, outdir))
 
     multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
 
@@ -305,4 +397,4 @@ def midas_merge_genes(args):
 @register_args
 def main(args):
     tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_run_genes(args)
+    midas_merge_genes(args)
