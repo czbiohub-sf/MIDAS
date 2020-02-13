@@ -21,6 +21,7 @@ genes_summary_schema = {
     "covered_genes": int,
     "fraction_covered": float,
     "mean_coverage": float,
+    "marker_coverage": float,
     "aligned_reads": int,
     "mapped_reads": int
 }
