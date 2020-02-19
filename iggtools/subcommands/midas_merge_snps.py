@@ -4,10 +4,13 @@ import sys
 from collections import defaultdict
 from operator import itemgetter
 
+from iggtools.models.pool import Pool, select_species
+
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multithreading_hashmap, multithreading_map, download_reference, select_from_tsv
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
 
 
 DEFAULT_SAMPLE_COUNTS = 2
@@ -22,53 +25,9 @@ DEFAULT_ALLELE_FREQ = 0.01
 
 DEFAULT_SNP_MAF = 0
 DEFAULT_SNP_TYPE = "bi"
-DEFAULT_ALLELE_TYPE = "sample_counts"
+DEFAULT_ALLELE_TYPE = "samples_count"
 
 DEBUG_MAX_LINES = 1000 * 1000
-
-DECIMALS = ".3f"
-
-
-## TODO: how about contigs_stats? shall we add it back to midas?
-snps_summary_schema = {
-    "species_id": str,
-    "genome_length": int,
-    "covered_bases": int,
-    "total_depth": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "fraction_covered": float,
-    "mean_coverage": float,
-}
-
-
-snps_pileup_schema = {
-    "ref_id": str,
-    "ref_pos": int,
-    "ref_allele": str,
-    "depth": int,
-    "count_a": int,
-    "count_c": int,
-    "count_g": int,
-    "count_t": int,
-}
-
-
-snps_info_schema = {
-    "site_id": str,
-    "major_allele": str,
-    "minor_allele": str,
-    "sample_counts": int,
-    "snp_type": str,
-    "rc_A": int,
-    "rc_C": int,
-    "rc_G": int,
-    "rc_T": int,
-    "sc_A": int,
-    "sc_C": int,
-    "sc_G": int,
-    "sc_T": int,
-}
 
 
 def register_args(main_func):
@@ -84,6 +43,11 @@ def register_args(main_func):
                            help=f"TSV file mapping sample name to midas_run_species.py output directories")
 
     # Species and sample filters
+    subparser.add_argument('--species_id',
+                           dest='species_id',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
     subparser.add_argument('--genome_depth',
                            dest='genome_depth',
                            type=float,
@@ -134,7 +98,7 @@ def register_args(main_func):
                            dest='allele_type',
                            type=str,
                            default=DEFAULT_ALLELE_TYPE,
-                           choices=['sample_counts', 'read_counts'],
+                           choices=['samples_count', 'read_counts'],
                            help=f"Methods to call pooled major/minor alleles based on (Default method: {DEFAULT_ALLELE_TYPE}).")
     subparser.add_argument('--allele_freq',
                            dest='allele_freq',
@@ -164,109 +128,28 @@ def register_args(main_func):
     return main_func
 
 
+def check_outdir(args):
+    outdir = f"{args.outdir}/merged/snps"
+    if args.debug and os.path.exists(outdir):
+        tsprint(f"INFO:  Reusing existing output data in {outdir} according to --debug flag.")
+    else:
+        command(f"rm -rf {outdir}")
+        command(f"mkdir -p {outdir}")
+
+
+    paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.site_prev}.sm{args.snp_maf}"
+    tempdir = f"{outdir}/temp_{paramstr}"
+    if args.debug and os.path.exists(tempdir):
+        tsprint(f"INFO:  Reusing existing temp intermediate data in {tempdir} according to --debug flag.")
+    else:
+        command(f"rm -rf {tempdir}")
+        command(f"mkdir -p {tempdir}")
+
+    return (outdir, tempdir)
+
+
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-
-def read_samples(sample_list):
-    """
-    Input: read in Table-of-Content: sample_name\tpath/to/midas/snps_dir
-
-    Output: return dict of samples: local file path of midas_snps_summary
-    """
-
-    with InputStream(sample_list) as stream:
-        samples = dict(select_from_tsv(stream, selected_columns=["sample_name", "midas_output_path"]))
-
-    samples_midas = defaultdict()
-    for sample_name in samples.keys():
-        midas_output_path = samples[sample_name]
-        assert os.path.exists(midas_output_path), f"MIDAS output directory {midas_output_path} for sample {sample_name} not exist."
-
-        snps_summary = f"{midas_output_path}/snps/output/summary.txt"
-        assert os.path.exists(snps_summary), f"Missing MIDAS snps profile: {snps_summary}"
-
-        samples_midas[sample_name] = snps_summary
-
-    return samples_midas
-
-
-def read_snps_summary(snps_summary_path):
-    with InputStream(snps_summary_path) as instream:
-        for record in select_from_tsv(instream, selected_columns=snps_summary_schema, result_structure=dict):
-            yield record
-
-
-def sort_species(species_samples, sort_by="sample_counts"):
-    """
-    Sort species by sample_counts in descending order
-
-    Output: list of sorted species_ids
-    """
-
-    species_ids = tuple(species_samples.keys())
-    species_values = (species_samples[species_id][sort_by] for species_id in species_ids)
-
-    sorted_species = sorted(zip(species_ids, species_values), key=itemgetter(1), reverse=True)
-
-    return (_[0] for _ in sorted_species)
-
-
-def select_species(samples, args, outdir):
-    """
-    Select high quality sample-species pairs based on the genome_coverage and
-    genome_depth, for a list of samples; further on filter out low prevalent species
-    using sample_counts cutoff.
-
-    Input:
-        - MIDAS run snps summary
-
-    Ouput: <species, samples> pair
-        - for each species, return a dictionary with two separate list: sample_name, and genome_coverage.
-        - write snps_summary to file
-    """
-
-    species_samples = defaultdict(lambda: defaultdict(list))
-    species_snps_summary = defaultdict(list)
-
-    for sample_name, snps_summary_path in samples.items():
-        # Read in the SNPs summary files
-        for record in read_snps_summary(snps_summary_path):
-            species_id = record["species_id"]
-            mean_coverage = record["mean_coverage"]
-
-            # For each <sample, species> pairs:
-            # filter out low abundant species
-            if mean_coverage < args.genome_depth:
-                continue
-            if record["fraction_covered"] < args.genome_coverage:
-                continue
-
-            # Update the results
-            if species_id in species_samples.keys():
-                species_samples[species_id]["sample_counts"] += 1
-            else:
-                species_samples[species_id]["sample_counts"] = 1
-
-            species_samples[species_id]["sample_names"].append(sample_name)
-            species_samples[species_id]["genome_coverage"].append(mean_coverage)
-            species_snps_summary[species_id].append([sample_name] + list(record.values())[1:])
-
-    # Filter out low prevalent species
-    sorted_species_ids = sort_species(species_samples, "sample_counts")
-    species_samples_pass = {species_id: val for species_id, val in species_samples.items() if species_samples[species_id]["sample_counts"] >= args.sample_counts}
-
-    # Write merged snps_summary
-    pass_species_ids = species_samples_pass.keys()
-    snps_summary_dir = f"{outdir}/snps_summary.tsv.lz4"
-
-    with OutputStream(snps_summary_dir) as stream:
-        stream.write("\t".join(["species_id", "sample_id"] + list(snps_summary_schema.keys())[1:]) + "\n")
-        for species_id, species_list in species_snps_summary.items():
-            for i in range(len(species_list)):
-                stream.write("\t".join(map(str, [species_id] + species_list[i])) + "\n")
-
-    return species_samples_pass
 
 
 def read_contig_ids(contigs_file):
@@ -321,7 +204,7 @@ def accumulate(accumulator, ps_args):
         sample_index: column index for the acuumulator matrix
         sample_name:
         snps_dir: path to MIDAS's run snps wokflow.
-        total_sample_counts: total number of samples for the given species. (self.total_counts)
+        total_samples_count: total number of samples for the given species. (self.total_counts)
         genome_coverage: the precomputed mean genome coverage for <species_id, samples_list> pair.
 
     Output:
@@ -331,7 +214,7 @@ def accumulate(accumulator, ps_args):
     we need to see ALL samples before any compute.
     """
 
-    args, contig_ids, sample_index, snps_pileup_dir, total_sample_counts, genome_coverage = ps_args
+    args, contig_ids, sample_index, snps_pileup_dir, total_samples_count, genome_coverage = ps_args
 
     table_iterator = read_snps_pileup(snps_pileup_dir, contig_ids)
 
@@ -382,7 +265,7 @@ def accumulate(accumulator, ps_args):
         else:
             # initialize each sample_index column with 0,0,0,0, particularly
             # for <site, sample> pair either absent or fail the site filters
-            acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_sample_counts)
+            acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_samples_count)
             accumulator[site_id] = acc
 
         # This isn't being accumulated across samples;
@@ -506,8 +389,8 @@ def per_species_worker(arguments):
         snps_pileup_dir = os.path.join(snps_dir, f"{species_id}.snps.lz4")
         assert os.path.exists(snps_pileup_dir)
 
-        total_sample_counts = len(sample_names)
-        ps_args = (args, contig_ids, sample_index, snps_pileup_dir, total_sample_counts, sample_genome_cov)
+        total_samples_count = len(sample_names)
+        ps_args = (args, contig_ids, sample_index, snps_pileup_dir, total_samples_count, sample_genome_cov)
 
         accumulate(accumulator, ps_args)
 
@@ -517,33 +400,20 @@ def per_species_worker(arguments):
 
 def midas_merge_snps(args):
 
-    outdir = f"{args.outdir}/merged/snps"
-    if args.debug and os.path.exists(outdir):
-        tsprint(f"INFO:  Reusing existing output data in {outdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {outdir}")
-        command(f"mkdir -p {outdir}")
+    outdir, tempdir = check_outdir(args)
 
+    pool_of_samples = Pool(args.sample_list, "snps")
+    list_of_species = select_species(pool_of_samples, args, "snps")
 
-    paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.site_prev}.sm{args.snp_maf}"
-    tempdir = f"{outdir}/temp_{paramstr}"
-    if args.debug and os.path.exists(tempdir):
-        tsprint(f"INFO:  Reusing existing temp intermediate data in {tempdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
-
-
-    # Read in table of content: list of samples
-    samples_midas = read_samples(args.sample_list)
-
-    # Select species
-    species_samples = select_species(samples_midas, args, outdir)
+    for sp in list_of_species:
+        print([sd.sample_name for sd in sp.samples])
+        print(sp.samples_depth)
+    exit(0)
 
     # Collect contig_ids for each species
     species_contigs = collect_contigs(species_samples, outdir)
 
-    # Accumulate read_counts and sample_counts across ALL the sample passing the genome filters;
+    # Accumulate read_counts and samples_count across ALL the sample passing the genome filters;
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
     argument_list = []
     for species_id in list(species_samples.keys()):

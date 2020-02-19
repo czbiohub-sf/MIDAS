@@ -325,7 +325,7 @@ def midas_run_snps(args):
         samtools_index(args, tempdir, bt2_db_name)
         species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
 
-        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
+        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
 
     except:
         if not args.debug:

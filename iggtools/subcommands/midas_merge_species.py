@@ -3,19 +3,11 @@ import os
 from collections import defaultdict
 import numpy as np
 
+from iggtools.models.pool import Pool, select_species
+
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv
-
-DEFAULT_SAMPLE_DEPTH = 1.0
-
-DECIMALS = ".3f"
-
-species_profile_schema = {
-    "species_id": str,
-    "count_reads": int,
-    "coverage": float,
-    "relative_abundance": float
-}
+from iggtools.params.schemas import species_profile_schema, DEFAULT_SAMPLE_DEPTH, DECIMALS
 
 
 def register_args(main_func):
@@ -155,9 +147,9 @@ def midas_merge_species(args):
     command(f"rm -rf {outdir}")
     command(f"mkdir -p {outdir}")
 
-    # List samples and species
-    samples = read_samples(args.sample_list)
+    pool_of_samples = Pool(args.sample_list)
 
+    exit(0)
     # Slice the across-samples species profile matrix by species_id
     transposed = transpose(samples, list(species_profile_schema.keys())[1:])
 
