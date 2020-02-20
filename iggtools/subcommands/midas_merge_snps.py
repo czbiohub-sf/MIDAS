@@ -202,7 +202,7 @@ def accumulate(accumulator, ps_args):
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
 
     # Alternative wayis to read once to memory
-    awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 < {contig_end}\'"
+    awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 <= {contig_end}\'"
     with InputStream(snps_pileup_path, awk_command) as stream:
         for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
             # Unpack frequently accessed columns
@@ -257,50 +257,6 @@ def accumulate(accumulator, ps_args):
             acc[9 + sample_index] = acgt_str
 
 
-def process_chunk(packed_args):
-
-    species_id, proc_id, contig_id, contig_start, contig_end, samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir = packed_args
-
-    # For each process, scan over all the samples
-    accumulator = dict()
-    for sample_index, sample_name in enumerate(samples_name):
-        genome_coverage = samples_depth[sample_index]
-        snps_pileup_dir = f"{samples_data_dir[sample_index]}/output/{species_id}.snps.lz4"
-        assert os.path.exists(snps_pileup_dir), f"Missing pileup results {snps_pileup_dir} for {sample_name}"
-
-        ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
-        accumulate(accumulator, ps_args)
-    print(accumulator)
-
-    # Write pooled statistics for each chunk
-    #flag = pool_and_write(accumulator, sample_names, species_outdir)
-    tsprint(f"Process ID {proc_id} for species {species_id} for contig {contig_id} from {contig_start} to {contig_end} is done")
-    #assert flag == "done"
-
-
-def per_species_work(species, procid_lookup_table, outdir, tempdir):
-
-    species_id = species.id
-
-    species_outdir = f"{outdir}/{species_id}"
-    command(f"rm -rf {species_outdir}")
-    command(f"mkdir -p {species_outdir}")
-
-    pool_of_samples = list(species.samples)
-    samples_name = [sample.sample_name for sample in pool_of_samples]
-    samples_depth = species.samples_depth
-    samples_data_dir = [sample.data_dir for sample in pool_of_samples]
-    total_samples_count = len(pool_of_samples)
-
-    argument_list = []
-    with open(procid_lookup_table) as stream:
-        for line in stream:
-            proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
-            argument_list.append((species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir))
-
-    multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores) #multithreading_map
-
-
 def call_alleles(alleles_all, site_depth, site_maf):
     """
     After seeing data across ALL the samples, we can compute the pooled allele frequencies and call alleles.
@@ -321,8 +277,7 @@ def call_alleles(alleles_all, site_depth, site_maf):
     return (major_allele, minor_allele, snp_type)
 
 
-
-def pool_and_write(accumulator, sample_names, outdir, args):
+def pool_and_write(accumulator, sample_names, outdir, proc_id):
     """
     Ask Boris: write intermediate accumulator to file, and then re-read in here?
         - I/O bandwidth
@@ -335,9 +290,12 @@ def pool_and_write(accumulator, sample_names, outdir, args):
         - then sample_mafs
     """
 
-    snps_info_fp = f"{outdir}/snps_info.tsv.lz4"
-    snps_freq_fp = f"{outdir}/snps_freqs.tsv.lz4"
-    snps_depth_fp = f"{outdir}/snps_depth.tsv.lz4"
+    global global_args
+    args = global_args
+
+    snps_info_fp = f"{outdir}/proc.{proc_id}_snps_info.tsv.lz4"
+    snps_freq_fp = f"{outdir}/proc.{proc_id}_snps_freqs.tsv.lz4"
+    snps_depth_fp = f"{outdir}/proc.{proc_id}_snps_depth.tsv.lz4"
 
     with OutputStream(snps_freq_fp) as stream_freq, \
             OutputStream(snps_depth_fp) as stream_depth, \
@@ -393,6 +351,49 @@ def pool_and_write(accumulator, sample_names, outdir, args):
             stream_depth.write(f"{site_id}\t" + write_depths + "\n")
 
     return "done"
+
+
+def process_chunk(packed_args):
+
+    species_id, proc_id, contig_id, contig_start, contig_end, samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir = packed_args
+
+    # For each process, scan over all the samples
+    accumulator = dict()
+    for sample_index, sample_name in enumerate(samples_name):
+        genome_coverage = samples_depth[sample_index]
+        snps_pileup_dir = f"{samples_data_dir[sample_index]}/output/{species_id}.snps.lz4"
+        assert os.path.exists(snps_pileup_dir), f"Missing pileup results {snps_pileup_dir} for {sample_name}"
+
+        ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
+        accumulate(accumulator, ps_args)
+
+    # Write pooled statistics for each chunk
+    flag = pool_and_write(accumulator, samples_name, species_outdir, proc_id)
+    tsprint(f"Process ID {proc_id} for species {species_id} for contig {contig_id} from {contig_start} to {contig_end} is done")
+    assert flag == "done"
+
+
+def per_species_work(species, procid_lookup_table, outdir, tempdir):
+
+    species_id = species.id
+
+    species_outdir = f"{outdir}/{species_id}"
+    command(f"rm -rf {species_outdir}")
+    command(f"mkdir -p {species_outdir}")
+
+    pool_of_samples = list(species.samples)
+    samples_name = [sample.sample_name for sample in pool_of_samples]
+    samples_depth = species.samples_depth
+    samples_data_dir = [sample.data_dir for sample in pool_of_samples]
+    total_samples_count = len(pool_of_samples)
+
+    argument_list = []
+    with open(procid_lookup_table) as stream:
+        for line in stream:
+            proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+            argument_list.append((species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir))
+
+    multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores) #multithreading_map
 
 
 def midas_merge_snps(args):
