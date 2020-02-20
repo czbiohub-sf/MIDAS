@@ -25,7 +25,7 @@ class Sample: # pylint: disable=too-few-public-methods
 
         schema = fetch_schema_by_dbtype(dbtype)
         profile = defaultdict()
-        with InputStream(self.profile_path) as stream:
+        with InputStream(summary_path) as stream:
             for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 profile[info["species_id"]] = info
         return profile

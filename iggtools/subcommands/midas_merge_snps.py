@@ -4,11 +4,12 @@ import sys
 from collections import defaultdict
 from operator import itemgetter
 import Bio.SeqIO
+from math import ceil
 
 from iggtools.models.pool import Pool, select_species
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multithreading_hashmap, multithreading_map, download_reference, select_from_tsv
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, retry, multiprocessing_map, multithreading_map, download_reference, select_from_tsv, TimedSection
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
@@ -153,90 +154,151 @@ def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
+# The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
+def create_lookup_table(packed_args):
+    """ Assign or chunk up (large) contigs into chunks for one species"""
+    species_id, genome_id, chunk_size, tempdir = packed_args
+    if not os.path.exists(f"{tempdir}/{species_id}"):
+        command(f"mkdir -p {tempdir}/{species_id}")
+
+    # Stream from S3 to extract the contig_ids
+    contigs_file = download_reference(imported_genome_file(genome_id, species_id, "fna.lz4"), f"{tempdir}/{species_id}")
+    proc_lookup_file = f"{tempdir}/{species_id}/procid_lookup.tsv"
+
+    proc_id = 1
+    with OutputStream(proc_lookup_file) as ostream, InputStream(contigs_file) as stream:
+        for rec in Bio.SeqIO.parse(stream, 'fasta'):
+            contig_id = rec.id
+            contig_len = len(rec.seq)
+
+            if contig_len <= chunk_size:
+                # Pileup is 1-based index
+                ostream.write("\t".join(map(str, (proc_id, contig_id, 1, contig_len))) + "\n")
+                proc_id += 1
+            else:
+                chunk_num = ceil(contig_len/chunk_size) - 1
+                for ni, ci in enumerate(range(0, contig_len, chunk_size)):
+                    if ni == chunk_num:
+                        ostream.write("\t".join(map(str, (proc_id, contig_id, ci+1, contig_len))) + "\n")
+                    else:
+                        ostream.write("\t".join(map(str, (proc_id, contig_id, ci+1, ci + chunk_size))) + "\n")
+                    proc_id += 1
+    return proc_lookup_file
+
+
 def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
 
 
 def accumulate(accumulator, ps_args):
-    """
-    Input:
-        species_id: compute for ALL non-zero depth sites
-        contig_ids: the list of contigs belonging to the given species
-        sample_index: column index for the acuumulator matrix
-        sample_name:
-        snps_dir: path to MIDAS's run snps wokflow.
-        total_samples_count: total number of samples for the given species. (self.total_counts)
-        genome_coverage: the precomputed mean genome coverage for <species_id, samples_list> pair.
+    """ Accumulate read_counts and sample_counts for a chunk of sites for one sample"""
 
-    Output:
-        compuate site_counts (rc_A, rc_C, rc_G, rc_T)
-
-    Bascially, we want to slice by samples, instead of species_id. And for the pooled statistics,
-    we need to see ALL samples before any compute.
-    """
+    contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = ps_args
 
     global global_args
     args = global_args
 
-    contig_ids, sample_index, snps_pileup_dir, total_samples_count, genome_coverage = ps_args
-
     # Output column indices
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
 
-    # Alternative way (which might be better) is to read once for all
-    with InputStream(snps_pileup_path) as stream:
-        for row in select_from_tsv(stream, selected_columns=snps_pileup_schema, result_structure=dict):
-            if row["ref_id"] not in contig_ids:
-                continue
-
+    # Alternative wayis to read once to memory
+    awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 < {contig_end}\'"
+    with InputStream(snps_pileup_path, awk_command) as stream:
+        for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
             # Unpack frequently accessed columns
-            contig_id = row["ref_id"]
-            ref_pos = row["ref_pos"]
-            ref_allele = row["ref_allele"]
-            depth = row["depth"]
+            ref_id, ref_pos, ref_allele = row["ref_id"], row["ref_pos"], row["ref_allele"]
             A, C, G, T = row["count_a"], row["count_c"], row["count_g"], row["count_t"]
+            depth = row["depth"]
 
-            # Per sample site filters:
-            # if the given <site.i, sample.j> fails the within-sample site filter,
-            # then sample.j should not be used for the calculation of site.i pooled statistics.
-            site_ratio = depth / genome_coverage
-            if depth < args.site_depth:
-                continue
-            if site_ratio > args.site_ratio:
-                continue
+            # Only process current chunk of sites
+            if ref_id == contig_id and ref_pos >= contig_start and ref_pos < contig_end:
 
-            # Computae derived columns
-            site_id = f"{contig_id}|{ref_pos}|{ref_allele}"
+                # Per sample site filters:
+                # if the given <site.i, sample.j> fails the within-sample site filter,
+                # then sample.j should not be used for the calculation of site.i pooled statistics.
+                site_ratio = depth / genome_coverage
+                if depth < args.site_depth:
+                    continue
+                if site_ratio > args.site_ratio:
+                    continue
 
-            # sample counts for A, C, G, T
-            sc_ACGT = [0, 0, 0, 0]
-            for i, nt_count in enumerate((A, C, G, T)):
-                if nt_count > 0: # presence or absence
-                    sc_ACGT[i] = 1
+                # Computae derived columns
+                site_id = f"{ref_id}|{ref_pos}|{ref_allele}"
 
-            # Aggragate
-            acc = accumulator.get(site_id)
-            if acc:
-                acc[c_A] += A
-                acc[c_C] += C
-                acc[c_G] += G
-                acc[c_T] += T
-                acc[c_count_samples] += 1
-                acc[c_scA] += sc_ACGT[0]
-                acc[c_scC] += sc_ACGT[1]
-                acc[c_scG] += sc_ACGT[2]
-                acc[c_scT] += sc_ACGT[3]
-            else:
-                # initialize each sample_index column with 0,0,0,0, particularly
-                # for <site, sample> pair either absent or fail the site filters
-                acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_samples_count)
-                accumulator[site_id] = acc
+                # sample counts for A, C, G, T
+                sc_ACGT = [0, 0, 0, 0]
+                for i, nt_count in enumerate((A, C, G, T)):
+                    if nt_count > 0: # presence or absence
+                        sc_ACGT[i] = 1
+
+                # Aggragate
+                acc = accumulator.get(site_id)
+                if acc:
+                    acc[c_A] += A
+                    acc[c_C] += C
+                    acc[c_G] += G
+                    acc[c_T] += T
+                    acc[c_count_samples] += 1
+                    acc[c_scA] += sc_ACGT[0]
+                    acc[c_scC] += sc_ACGT[1]
+                    acc[c_scG] += sc_ACGT[2]
+                    acc[c_scT] += sc_ACGT[3]
+                else:
+                    # initialize each sample_index column with 0,0,0,0, particularly
+                    # for <site, sample> pair either absent or fail the site filters
+                    acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_samples_count)
+                    accumulator[site_id] = acc
+                stream.ignore_errors()
 
             # This isn't being accumulated across samples;
             # we are just remembering the value from each sample.
             acgt_str = acgt_string(A, C, G, T)
             assert acc[9 + sample_index] == '0,0,0,0' and acgt_str != '0,0,0,0'
             acc[9 + sample_index] = acgt_str
+
+
+def process_chunk(packed_args):
+
+    species_id, proc_id, contig_id, contig_start, contig_end, samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir = packed_args
+
+    # For each process, scan over all the samples
+    accumulator = dict()
+    for sample_index, sample_name in enumerate(samples_name):
+        genome_coverage = samples_depth[sample_index]
+        snps_pileup_dir = f"{samples_data_dir[sample_index]}/output/{species_id}.snps.lz4"
+        assert os.path.exists(snps_pileup_dir), f"Missing pileup results {snps_pileup_dir} for {sample_name}"
+
+        ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
+        accumulate(accumulator, ps_args)
+    print(accumulator)
+
+    # Write pooled statistics for each chunk
+    #flag = pool_and_write(accumulator, sample_names, species_outdir)
+    tsprint(f"Process ID {proc_id} for species {species_id} for contig {contig_id} from {contig_start} to {contig_end} is done")
+    #assert flag == "done"
+
+
+def per_species_work(species, procid_lookup_table, outdir, tempdir):
+
+    species_id = species.id
+
+    species_outdir = f"{outdir}/{species_id}"
+    command(f"rm -rf {species_outdir}")
+    command(f"mkdir -p {species_outdir}")
+
+    pool_of_samples = list(species.samples)
+    samples_name = [sample.sample_name for sample in pool_of_samples]
+    samples_depth = species.samples_depth
+    samples_data_dir = [sample.data_dir for sample in pool_of_samples]
+    total_samples_count = len(pool_of_samples)
+
+    argument_list = []
+    with open(procid_lookup_table) as stream:
+        for line in stream:
+            proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+            argument_list.append((species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir))
+
+    multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores) #multithreading_map
 
 
 def call_alleles(alleles_all, site_depth, site_maf):
@@ -257,6 +319,7 @@ def call_alleles(alleles_all, site_depth, site_maf):
     minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
 
     return (major_allele, minor_allele, snp_type)
+
 
 
 def pool_and_write(accumulator, sample_names, outdir, args):
@@ -332,80 +395,40 @@ def pool_and_write(accumulator, sample_names, outdir, args):
     return "done"
 
 
-def per_species_worker(species, outdir, tempdir):
-
-    global global_args
-    global representative
-    args = global_args
-
-    # Generate the mapping between contigs_id - [genome_name] - species_id
-    species_id = species.id
-    genome_id = representative[species_id]
-
-    # Stream from S3 to extract the contig_ids
-    contigs_file = imported_genome_file(genome_id, species_id, "fna.lz4")
-    with InputStream(contigs_file, "grep '^>'") as stream:
-        contig_ids = [line.rstrip("\n")[1:] for line in stream]
-
-    pool_of_samples = list(species.samples)
-    genome_coverage = species.samples_depth
-
-    outdir = f"{outdir}/{species_id}"
-    command(f"rm -rf {outdir}")
-    command(f"mkdir -p {outdir}")
-
-    # Scan over ALL the samples passing the genome filters
-    accumulator = dict()
-    for sample_index, sample  in enumerate(pool_of_samples):
-        sample.sample_name
-        sample.midas_outdir
-        pileup_dir = f"{sample.data_dir}/{species_id}.snps.lz4"
-        assert os.path.exists(snps_pileup_dir), f"Missing pileup results {pileup_dir} for {sample.sample_name}"
-
-        sample_genome_cov = species.samples_depth[sample_index]
-
-        total_samples_count = len(sample_names)
-        ps_args = (args, contig_ids, sample_index, snps_pileup_dir, total_samples_count, sample_genome_cov)
-        # Don't pass on too many variables
-        accumulate(accumulator, ps_args)
-
-    flag = pool_and_write(accumulator, sample_names, outdir, args)
-    assert flag == "done"
-
-
 def midas_merge_snps(args):
 
     outdir, tempdir = check_outdir(args)
     pool_of_samples = Pool(args.sample_list, "snps")
     list_of_species = select_species(pool_of_samples, args, "snps")
 
+    with TimedSection("Create lookup table for each species"):
+        # Generate the mapping between contigs_id - [genome_name] - species_id
+        chunk_size = 10000
+        local_toc = download_reference(outputs.genomes)
+        db = UHGG(local_toc)
+        representative = db.representatives
+
+        # Write the process_id to chunks of contigs for each species
+        lookups = multiprocessing_map(create_lookup_table, ((species.id, representative[species.id], chunk_size, tempdir) for species in list_of_species), num_procs=num_physical_cores)
+
+
     # Under "sparse" mode, different samples' pileup files
-    # Collect contig_ids for each species
-    #species_contigs = collect_contigs(species_samples, outdir)
 
     global global_args
     global_args = args
-    global representative
 
-    local_toc = download_reference(outputs.genomes)
-    db = UHGG(local_toc)
-    representative = db.representatives
-
-    for species in list_of_species:
+    for si, species in enumerate(list_of_species[:1]):
         tsprint(f"midas_merge_snps now processing {species.id}")
-        for sample_index, sample in enumerate(species.samples):
-            print(sample_index, sample.sample_name)
-            #per_species_worker(species, outdir, tempdir)
-    exit(0)
-
+        per_species_work(species, lookups[si], outdir, tempdir)
+        # We can pass on the lookups[si]
+        #for sample_index, sample in enumerate(species.samples):
+        #    print(sample_index, sample.sample_name)
+        exit(0)
 
     # Accumulate read_counts and samples_count across ALL the sample passing the genome filters;
     # and at the same time remember <site, sample>'s A, C, G, T read counts.
-    argument_list = []
-    for species_id in list(species_samples.keys()):
-        argument_list.append((species_id, species_samples[species_id], species_contigs[species_id], samples_midas, args, outdir))
 
-    multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
+    #multithreading_map(per_species_work, argument_list, num_threads=num_physical_cores)
 
 
 @register_args
