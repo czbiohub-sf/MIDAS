@@ -26,25 +26,6 @@ def register_args(main_func):
                            metavar="FLOAT",
                            default=DEFAULT_SAMPLE_DEPTH,
                            help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_SAMPLE_DEPTH})")
-    if False:
-        # This is not currently in use.
-        subparser.add_argument('-input',
-                               dest='input',
-                               type=str,
-                               required=True,
-                               help=f"Input to sample directories output by run_midas.py; see '-t' for details")
-        subparser.add_argument('-input_type',
-                               dest='intype',
-                               type=str,
-                               required=True,
-                               metavar="INPUT_TYPE",
-                               choices=['list', 'file', 'dir'],
-                               help=f"Specify one of the following: (list, dir, file) \n list: -i is a comma-separated list (eg: /samples/sample_1,/samples/sample_2) \n dir: -i is a directory containing all samples (eg: /samples) \n file: -i is a file of paths to samples (eg: /sample_paths.txt)")
-        subparser.add_argument('--max_samples',
-                               dest='max_samples',
-                               type=int,
-                               metavar="INT",
-                               help=f"Maximum number of samples to process.Useful for testing (use all)")
     return main_func
 
 
@@ -61,6 +42,8 @@ def read_samples(sample_list):
     return samples
 
 
+## Remove this function -- unnecessary
+## select_from_tsv is already a generator
 def read_species_profile(species_profile):
     with InputStream(species_profile) as instream:
         for record in select_from_tsv(instream, selected_columns=species_profile_schema, result_structure=dict):
