@@ -173,15 +173,15 @@ def create_lookup_table(packed_args):
 
             if contig_len <= chunk_size:
                 # Pileup is 1-based index
-                ostream.write("\t".join(map(str, (proc_id, contig_id, 1, contig_len))) + "\n")
+                ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, 1, contig_len))) + "\n")
                 proc_id += 1
             else:
                 chunk_num = ceil(contig_len/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_len, chunk_size)):
                     if ni == chunk_num:
-                        ostream.write("\t".join(map(str, (proc_id, contig_id, ci+1, contig_len))) + "\n")
+                        ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, ci+1, contig_len))) + "\n")
                     else:
-                        ostream.write("\t".join(map(str, (proc_id, contig_id, ci+1, ci + chunk_size))) + "\n")
+                        ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, ci+1, ci + chunk_size))) + "\n")
                     proc_id += 1
     return proc_lookup_file
 
@@ -190,8 +190,29 @@ def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
 
 
+def call_alleles(alleles_all, site_depth, site_maf):
+    """
+    After seeing data across ALL the samples, we can compute the pooled allele frequencies and call alleles.
+    """
+    # keep alleles passing the min allele frequency
+    alleles_above_cutoff = tuple(al for al in alleles_all if al[1] / site_depth >= site_maf)
+
+    # classify SNPs type
+    number_alleles = len(alleles_above_cutoff)
+    snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
+
+    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
+    # the one that comes later in the "ACGT" lexicographic order.
+    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
+    major_allele = alleles_above_cutoff[0][0]
+    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
+
+    return (major_allele, minor_allele, snp_type)
+
+
 def accumulate(accumulator, ps_args):
-    """ Accumulate read_counts and sample_counts for a chunk of sites for one sample"""
+    """ Accumulate read_counts and sample_counts for a chunk of sites for one sample,
+    at the same time remember <site, sample>'s A, C, G, T read counts."""
 
     contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = ps_args
 
@@ -211,7 +232,7 @@ def accumulate(accumulator, ps_args):
             depth = row["depth"]
 
             # Only process current chunk of sites
-            if ref_id == contig_id and ref_pos >= contig_start and ref_pos < contig_end:
+            if ref_id == contig_id and ref_pos >= contig_start and ref_pos <= contig_end:
 
                 # Per sample site filters:
                 # if the given <site.i, sample.j> fails the within-sample site filter,
@@ -248,54 +269,33 @@ def accumulate(accumulator, ps_args):
                     # for <site, sample> pair either absent or fail the site filters
                     acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_samples_count)
                     accumulator[site_id] = acc
-                stream.ignore_errors()
 
-            # This isn't being accumulated across samples;
-            # we are just remembering the value from each sample.
-            acgt_str = acgt_string(A, C, G, T)
-            assert acc[9 + sample_index] == '0,0,0,0' and acgt_str != '0,0,0,0'
-            acc[9 + sample_index] = acgt_str
+                # This isn't being accumulated across samples;
+                # we are just remembering the value from each sample.
+                acgt_str = acgt_string(A, C, G, T)
+                assert acc[9 + sample_index] == '0,0,0,0' and acgt_str != '0,0,0,0', f"{site_id}:{acc}:{sample_index}"
+                acc[9 + sample_index] = acgt_str
+
+            else:
+                print("awk error")
+                exit(0)
 
 
-def call_alleles(alleles_all, site_depth, site_maf):
+def pool_and_write(accumulator, sample_names, tempdir, proc_id):
     """
-    After seeing data across ALL the samples, we can compute the pooled allele frequencies and call alleles.
-    """
-    # keep alleles passing the min allele frequency
-    alleles_above_cutoff = tuple(al for al in alleles_all if al[1] / site_depth >= site_maf)
-
-    # classify SNPs type
-    number_alleles = len(alleles_above_cutoff)
-    snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
-
-    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
-    # the one that comes later in the "ACGT" lexicographic order.
-    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
-    major_allele = alleles_above_cutoff[0][0]
-    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
-
-    return (major_allele, minor_allele, snp_type)
-
-
-def pool_and_write(accumulator, sample_names, outdir, proc_id):
-    """
-    Ask Boris: write intermediate accumulator to file, and then re-read in here?
-        - I/O bandwidth
-        + no need to re-accumulate with potentially downstream bugs
-
-    Output: after seeing ALL samples' pileup data, we compute the pooled statistics for each site
-        - start with pooled_major_alleles and pooled_minor_alleles
-        - then easily site_counts and site_depth
-        - then calcualte the per sample list for sample_depths
-        - then sample_mafs
+    For each site, compute the pooled-statistics across ALL samples.
+        - pooled_major_alleles and pooled_minor_alleles
+        - site_counts and site_depth
+        - calcualte the per sample list for sample_depths
+        - calculate sample_minor-allele-freq
     """
 
     global global_args
     args = global_args
 
-    snps_info_fp = f"{outdir}/proc.{proc_id}_snps_info.tsv.lz4"
-    snps_freq_fp = f"{outdir}/proc.{proc_id}_snps_freqs.tsv.lz4"
-    snps_depth_fp = f"{outdir}/proc.{proc_id}_snps_depth.tsv.lz4"
+    snps_info_fp = f"{tempdir}/proc.{proc_id}_snps_info.tsv.lz4"
+    snps_freq_fp = f"{tempdir}/proc.{proc_id}_snps_freqs.tsv.lz4"
+    snps_depth_fp = f"{tempdir}/proc.{proc_id}_snps_depth.tsv.lz4"
 
     with OutputStream(snps_freq_fp) as stream_freq, \
             OutputStream(snps_depth_fp) as stream_depth, \
@@ -355,7 +355,7 @@ def pool_and_write(accumulator, sample_names, outdir, proc_id):
 
 def process_chunk(packed_args):
 
-    species_id, proc_id, contig_id, contig_start, contig_end, samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir = packed_args
+    species_id, proc_id, contig_id, contig_start, contig_end, samples_name, samples_depth, samples_data_dir, total_samples_count, species_tempdir = packed_args
 
     # For each process, scan over all the samples
     accumulator = dict()
@@ -367,40 +367,22 @@ def process_chunk(packed_args):
         ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
         accumulate(accumulator, ps_args)
 
-    # Write pooled statistics for each chunk
-    flag = pool_and_write(accumulator, samples_name, species_outdir, proc_id)
+    # Compute and write pooled statistics for each chunk
+    flag = pool_and_write(accumulator, samples_name, species_tempdir, proc_id)
+
+
     tsprint(f"Process ID {proc_id} for species {species_id} for contig {contig_id} from {contig_start} to {contig_end} is done")
     assert flag == "done"
-
-
-def per_species_work(species, procid_lookup_table, outdir, tempdir):
-
-    species_id = species.id
-
-    species_outdir = f"{outdir}/{species_id}"
-    command(f"rm -rf {species_outdir}")
-    command(f"mkdir -p {species_outdir}")
-
-    pool_of_samples = list(species.samples)
-    samples_name = [sample.sample_name for sample in pool_of_samples]
-    samples_depth = species.samples_depth
-    samples_data_dir = [sample.data_dir for sample in pool_of_samples]
-    total_samples_count = len(pool_of_samples)
-
-    argument_list = []
-    with open(procid_lookup_table) as stream:
-        for line in stream:
-            proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
-            argument_list.append((species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_name, samples_depth, samples_data_dir, total_samples_count, species_outdir))
-
-    multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores) #multithreading_map
 
 
 def midas_merge_snps(args):
 
     outdir, tempdir = check_outdir(args)
     pool_of_samples = Pool(args.sample_list, "snps")
-    list_of_species = select_species(pool_of_samples, args, "snps")
+    list_of_species = select_species(pool_of_samples, args, "snps")[:1]
+
+    global global_args
+    global_args = args
 
     with TimedSection("Create lookup table for each species"):
         # Generate the mapping between contigs_id - [genome_name] - species_id
@@ -409,28 +391,33 @@ def midas_merge_snps(args):
         db = UHGG(local_toc)
         representative = db.representatives
 
-        # Write the process_id to chunks of contigs for each species
         lookups = multiprocessing_map(create_lookup_table, ((species.id, representative[species.id], chunk_size, tempdir) for species in list_of_species), num_procs=num_physical_cores)
 
 
-    # Under "sparse" mode, different samples' pileup files
+    argument_list = []
+    for si, species in enumerate(list_of_species):
+        species_id = species.id
 
-    global global_args
-    global_args = args
+        species_tempdir = f"{tempdir}/{species_id}"
+        assert os.path.exists(species_tempdir), f"Creat_lookup_table should have created the {species_tempdir} directory"
 
-    for si, species in enumerate(list_of_species[:1]):
-        tsprint(f"midas_merge_snps now processing {species.id}")
-        per_species_work(species, lookups[si], outdir, tempdir)
-        # We can pass on the lookups[si]
-        #for sample_index, sample in enumerate(species.samples):
-        #    print(sample_index, sample.sample_name)
-        exit(0)
+        pool_of_samples = list(species.samples)
+        samples_name = [sample.sample_name for sample in pool_of_samples]
+        samples_depth = species.samples_depth
+        samples_data_dir = [sample.data_dir for sample in pool_of_samples]
+        total_samples_count = len(pool_of_samples)
 
-    # Accumulate read_counts and samples_count across ALL the sample passing the genome filters;
-    # and at the same time remember <site, sample>'s A, C, G, T read counts.
+        with open(lookups[si]) as stream:
+            for line in stream:
+                species_id, proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+                argument_list.append((species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_name, samples_depth, samples_data_dir, total_samples_count, species_tempdir))
 
-    #multithreading_map(per_species_work, argument_list, num_threads=num_physical_cores)
+    multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores) #multithreading_map
 
+    # Merge
+    #species_outdir = f"{outdir}/{species_id}"
+    #command(f"rm -rf {species_outdir}")
+    #command(f"mkdir -p {species_outdir}")
 
 @register_args
 def main(args):

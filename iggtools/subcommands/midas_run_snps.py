@@ -13,7 +13,7 @@ from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.samples import parse_species_profile, select_species
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
-
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
 
 DEFAULT_ALN_COV = 0.75
 DEFAULT_SPECIES_COVERAGE = 3.0
@@ -22,20 +22,6 @@ DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
-
-DECIMALS = ".3f"
-
-
-snps_summary_schema = {
-    "species_id": str,
-    "genome_length": int,
-    "covered_bases": int,
-    "total_depth": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "fraction_covered": float,
-    "mean_coverage": float
-}
 
 
 def register_args(main_func):
@@ -200,7 +186,7 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
     def keep_read(x):
         return keep_read_worker(x, args, aln_stats)
 
-    header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
+    header = list(snps_pileup_schema.keys())
     path = f"{outputdir}/{species_id}.snps.lz4"
 
     with OutputStream(path) as file:
@@ -278,7 +264,7 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
 
 def write_snps_summary(species_pileup_stats, outfile):
     """ Get summary of mapping statistics """
-    header = snps_summary_schema.keys()
+    header = snps_profile_schema.keys()
     with OutputStream(outfile) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_aln in species_pileup_stats.items():
