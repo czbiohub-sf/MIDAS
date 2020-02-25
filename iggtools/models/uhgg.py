@@ -2,6 +2,7 @@
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
 from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream
+from iggtools.params import inputs, outputs
 
 
 class UHGG:  # pylint: disable=too-few-public-methods
@@ -28,3 +29,11 @@ def _UHGG_load(toc_tsv, deep_sort=False):
             species[sid] = sorted_dict(species[sid])
         species = sorted_dict(species)
     return species, representatives, genomes
+
+
+def imported_genome_file(genome_id, species_id, component):
+    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
+
+
+def raw_genome_file(genome_id, representative_id):
+    return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"

@@ -29,3 +29,8 @@ class Sample: # pylint: disable=too-few-public-methods
             for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 profile[info["species_id"]] = info
         return profile
+
+    def fetch_snps_pileup(self, species_id):
+        snps_pileup_dir = f"{self.data_dir}/output/{species_id}.snps.lz4"
+        assert os.path.exists(snps_pileup_dir), f"fetch_snps_pileup::missing pileup results {snps_pileup_dir} for {self.sample_name}"
+        return snps_pileup_dir

@@ -1,13 +1,17 @@
+import os
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv
+from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
 
 
 class Pool: # pylint: disable=too-few-public-methods
 
-    def __init__(self, sample_list, dbtype=None):
+    def __init__(self, sample_list, outdir, paramstr, dbtype=None):
         self.pool_tsv = sample_list
         self.samples = self.init_samples(dbtype)
+
+        self.create_outdir(outdir, dbtype)
+        self.create_tempdir(paramstr)
 
     def init_samples(self, dbtype):
         """ read in table-of-content: sample_name\tpath/to/midas_output """
@@ -17,6 +21,54 @@ class Pool: # pylint: disable=too-few-public-methods
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
                 samples.append(sample)
         return samples
+
+    def create_outdir(self, outdir, dbtype):
+        # only created once in the beginning
+        outdir = f"{outdir}/merged/{dbtype}"
+        command(f"rm -rf {outdir}")
+        command(f"mkdir -p {outdir}")
+        self.outdir = outdir
+
+    def create_tempdir(self, paramstr):
+        # only created once in the beginning
+        tempdir = f"{self.outdir}/temp_{paramstr}"
+        command(f"rm -rf {tempdir}")
+        command(f"mkdir -p {tempdir}")
+        self.tempdir = tempdir
+
+    def create_species_tempdir(self, species_id):
+        # first created when creating lookup tables
+        species_tempdir = f"{self.tempdir}/{species_id}"
+        if not os.path.exists(species_tempdir):
+            command(f"mkdir -p {species_tempdir}")
+        return species_tempdir
+
+    def create_species_lookup_table(self, species_id):
+        species_tempdir = self.create_species_tempdir(species_id)
+        proc_lookup_file = f"{species_tempdir}/procid_lookup.tsv"
+        return proc_lookup_file
+
+    def create_species_pool_snps_chunk(self, species_id, process_id):
+        # chunk file for one pair of species_id-process_id
+        species_tempdir = self.create_species_tempdir(species_id)
+        snps_info_fp = f"{species_tempdir}/proc.{process_id}_snps_info.tsv"
+        snps_freq_fp = f"{species_tempdir}/proc.{process_id}_snps_freqs.tsv"
+        snps_depth_fp = f"{species_tempdir}/proc.{process_id}_snps_depth.tsv"
+        return (snps_info_fp, snps_freq_fp, snps_depth_fp)
+
+    def create_species_outdir(self, species_id):
+        # first created when merge_chunks_by_species
+        species_outdir = f"{self.outdir}/{species_id}"
+        if not os.path.exists(species_outdir):
+            command(f"mkdir -p {species_outdir}")
+        return species_outdir
+
+    def create_species_pol_snps_results(self, species_id):
+        species_outdir = self.create_species_outdir(species_id)
+        snps_info_fp = f"{species_outdir}/{species_id}_snps_info.tsv"
+        snps_freq_fp = f"{species_outdir}/{species_id}_freqs.tsv"
+        snps_depth_fp = f"{species_outdir}/{species_id}_snps_depth.tsv"
+        return (snps_info_fp, snps_freq_fp, snps_depth_fp)
 
 
 class Species:
@@ -38,6 +90,11 @@ class Species:
             for sample in self.samples:
                 record = [self.id, sample.sample_name] + list(sample.profile[self.id].values())[1:]
                 stream.write("\t".join(map(str, record)) + "\n")
+
+    def fetch_samples_name(self):
+        list_of_sample_objects = list(self.samples)
+        samples_names = [sample.sample_name for sample in list_of_sample_objects]
+        return samples_names
 
 
 def _filter_sample_species(info, args, dbtype):
@@ -81,8 +138,13 @@ def filter_species(species, args):
     return species_keep
 
 
-def select_species(pool_of_samples, args, dbtype):
+def select_species(pool_of_samples, dbtype, args):
     species = init_species(pool_of_samples, dbtype, args)
     species = sort_species(species)
     species = filter_species(species, args)
     return species
+
+def search_species(list_of_species, species_id):
+    curr_species = [species for species in list_of_species if species.id == species_id]
+    assert len(curr_species) == 1, f"pool::search_species duplicated Species in list_of_species"
+    return curr_species[0]
