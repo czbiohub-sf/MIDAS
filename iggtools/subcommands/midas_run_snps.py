@@ -291,48 +291,42 @@ def midas_run_snps(args):
     if not os.path.exists(outputdir):
         command(f"mkdir -p {outputdir}")
 
-    #try:
+    try:
+        # The full species profile must exist -- it is output by run_midas_species.
+        # Restrict to species above requested coverage.
+        # Select species
+        #species_with_coverage
+        full_species_profile = parse_species_profile(args.outdir)
+        species_profile = select_species(full_species_profile, args.genome_coverage)
 
-    local_toc = download_reference(outputs.genomes, f"{tempdir}")
-    db = UHGG(local_toc)
-    print("local_toc", local_toc)
+        local_toc = download_reference(outputs.genomes, f"{tempdir}")
+        db = UHGG(local_toc)
 
-    exit(0)
+        def download_contigs(species_id):
+            return download_reference(imported_genome_file(db.fetch_representative_genome_id(species_id), species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
-    # The full species profile must exist -- it is output by run_midas_species.
-    # Restrict to species above requested coverage.
-    # Select species
-    #species_with_coverage
-    full_species_profile = parse_species_profile(args.outdir)
-    species_profile = select_species(full_species_profile, args.genome_coverage)
+        # Download repgenome_id.fna for every species in the restricted species profile
+        # where to downalod this to? also if provided by the pool_species? then I need to
+        # make sure this is only downloaded once, should probably do it in midas_merge_species??
+        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+        # do we really need hashmap??
 
-    def download_contigs(species_id):
-        return download_reference(imported_genome_file(db.fetch_representative_genome_id(species_id), species_id, "fna.lz4"), f"{tempdir}/{species_id}")
-
-    # Download repgenome_id.fna for every species in the restricted species profile
-    # where to downalod this to? also if provided by the pool_species? then I need to
-    # make sure this is only downloaded once, should probably do it in midas_merge_species??
-    contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
-    # do we really need hashmap??
-
-    # Use Bowtie2 to map reads to a representative genomes
-    bt2_db_name = "repgenomes"
-    build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
-    bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
+        # Use Bowtie2 to map reads to a representative genomes
+        bt2_db_name = "repgenomes"
+        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
+        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
 
 
-    # Use mpileup to identify SNPs
-    samtools_index(args, tempdir, bt2_db_name)
-    species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+        # Use mpileup to identify SNPs
+        samtools_index(args, tempdir, bt2_db_name)
+        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
 
-    write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
-    """
+        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
             command(f"rm -rf {tempdir}", check=False)
             command(f"rm -rf {outputdir}", check=False)
-    """
 
 
 @register_args
