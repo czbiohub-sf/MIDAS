@@ -13,6 +13,9 @@ class UHGG:  # pylint: disable=too-few-public-methods
         self.toc_tsv = table_of_contents_tsv
         self.species, self.representatives, self.genomes = _UHGG_load(table_of_contents_tsv)
 
+    def fetch_representative_genome_id(self, species_id):
+        return self.representatives[species_id]
+
 
 def _UHGG_load(toc_tsv, deep_sort=False):
     species = defaultdict(dict)

@@ -249,7 +249,7 @@ def normalize_counts(species_alns, total_gene_length):
 
 def write_abundance(outdir, species_abundance):
     """ Write species results to specified output file """
-    outpath = f"{outdir}/species/species_profile.txt"  # TODO:  Share this across midas_run_ steps
+    outpath = f"{outdir}/species/summary.txt"  # TODO:  Share this across midas_run_ steps
     with OutputStream(outpath) as outfile:
         fields = ['species_id', 'count_reads', 'coverage', 'relative_abundance']
         outfile.write('\t'.join(fields) + '\n')

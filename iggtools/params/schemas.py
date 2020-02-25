@@ -1,8 +1,18 @@
 # These are the schames for the outputs of MIDAS
 
 ## midas_merge_species
-DEFAULT_SAMPLE_DEPTH = 1.0
 DECIMALS = ".3f"
+
+def fetch_default_genome_depth(dbtype):
+    if dbtype == "species":
+        DEFAULT_GENOME_DEPTH = 1.0
+    if dbtype == "genes":
+        DEFAULT_GENOME_DEPTH = 1.0
+        DEFAULT_SAMPLE_DEPTH = 1.0
+    if dbtype == "snps":
+        DEFAULT_GENOME_DEPTH = 5.0
+    return DEFAULT_GENOME_DEPTH
+
 
 species_profile_schema = {
     "species_id": str,
@@ -12,22 +22,30 @@ species_profile_schema = {
 }
 
 
+species_prevalence_schema = {
+    "species_id": str,
+    "median_abundance": float,
+    "mean_abundance": float,
+    "median_coverage": float,
+    "mean_coverage": float,
+    "sample_counts": float,
+}
+
 ## midas_merge_snps
 DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
+DEFAULT_CHUNK_SIZE = 10000
 
 DEFAULT_SITE_DEPTH = 1
 DEFAULT_SITE_RATIO = 2.0
+
 DEFAULT_SITE_PREV = 0.80
-DEFAULT_SITE_MAF = 0.01
-DEFAULT_ALLELE_FREQ = 0.01
+DEFAULT_SITE_TYPE = "common"
 
-DEFAULT_SNP_MAF = 0
-DEFAULT_SNP_TYPE = "bi"
-DEFAULT_ALLELE_TYPE = "sample_counts"
-
-DEBUG_MAX_LINES = 1000 * 1000
+DEFAULT_SNP_POOLED_METHOD = "prevalence"
+DEFAULT_SNP_MAF = 0.05
+DEFAULT_SNP_TYPE = "mono, bi"
 
 DECIMALS = ".3f"
 
@@ -112,6 +130,7 @@ samples_pool_schema = {
     "sample_name": str,
     "midas_outdir": str,
 }
+
 
 def fetch_schema_by_dbtype(dbtype):
     if dbtype == "species":

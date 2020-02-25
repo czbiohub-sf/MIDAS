@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from collections import defaultdict
 from operator import itemgetter
 from math import ceil
@@ -35,13 +35,13 @@ def register_args(main_func):
     subparser.add_argument('outdir',
                            type=str,
                            help="""Path to directory to store results.  Subdirectory will be created for each species.""")
-    subparser.add_argument('--sample_list',
-                           dest='sample_list',
+    subparser.add_argument('--samples_list',
+                           dest='samples_list',
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to midas_run_species.py output directories")
-    subparser.add_argument('--species_id',
-                           dest='species_id',
+    subparser.add_argument('--species_list',
+                           dest='species_list',
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
@@ -353,7 +353,7 @@ def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
     snps_freq_files = [fi[1] for fi in local_files]
     snps_depth_files = [fi[2] for fi in local_files]
 
-    snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samles.create_species_pol_snps_results(species_id)
+    snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samles.create_species_pool_snps_results(species_id)
     # Add header for the merged-chunks
     with OutputStream(snps_info_fp) as out_info:
         out_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
@@ -372,7 +372,7 @@ def midas_merge_snps(args):
 
     # tempdir indicates the input arguments
     paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.site_prev}.sm{args.snp_maf}"
-    pool_of_samples = Pool(args.sample_list, args.outdir, paramstr, "snps")
+    pool_of_samples = Pool(args.samples_list, args.outdir, paramstr, "snps")
     list_of_species = select_species(pool_of_samples, "snps", args,)
 
     global global_pool_of_samples

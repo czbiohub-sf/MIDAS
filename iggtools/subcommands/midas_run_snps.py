@@ -16,7 +16,7 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_in
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
 
 DEFAULT_ALN_COV = 0.75
-DEFAULT_SPECIES_COVERAGE = 3.0
+DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
@@ -29,6 +29,10 @@ def register_args(main_func):
     subparser.add_argument('outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
     subparser.add_argument('-1',
                            dest='r1',
                            required=True,
@@ -36,24 +40,27 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--species_cov',
+
+    subparser.add_argument('--genome_coverage',
                            type=float,
-                           dest='species_cov',
+                           dest='genome_coverage',
                            metavar='FLOAT',
-                           default=DEFAULT_SPECIES_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
-    if False:
-        # This is unused.
-        subparser.add_argument('--species_topn',
-                               type=int,
-                               dest='species_topn',
-                               metavar='INT',
-                               help='Include top N most abundant species')
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    # first add species_list
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+
+    # then think about midas_merge_species to get on repgenomes database
+    subparser.add_argument('--pool_species',
+                           dest='pool_species',
+                           default=False,
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Pool species present in all samples in the given sample_list.")
 
     # Alignment flags
     subparser.add_argument('--aln_speed',
@@ -124,10 +131,6 @@ def register_args(main_func):
                                dest='aln_adjust_mq',
                                default=False,
                                help='Adjust MAPQ (False)')
-    subparser.add_argument('--sparse',
-                           dest='sparse',
-                           default=False,
-                           help=f"Omit zero rows from output.")
     return main_func
 
 
@@ -274,8 +277,10 @@ def write_snps_summary(species_pileup_stats, outfile):
 
 
 def midas_run_snps(args):
+    # Ask Boris: the midas_outdir is a property of Sample, just like the midas_merged_dir is
+    # a property of Pool_of_samples
 
-    tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}"
+    tempdir = f"{args.outdir}/snps/temp_sc{args.genome_coverage}"
     if args.debug and os.path.exists(tempdir):
         tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
     else:
@@ -286,38 +291,48 @@ def midas_run_snps(args):
     if not os.path.exists(outputdir):
         command(f"mkdir -p {outputdir}")
 
-    try:
-        # The full species profile must exist -- it is output by run_midas_species.
-        # Restrict to species above requested coverage.
-        full_species_profile = parse_species_profile(args.outdir)
-        species_profile = select_species(full_species_profile, args.species_cov)
+    #try:
 
-        local_toc = download_reference(outputs.genomes)
-        db = UHGG(local_toc)
-        representatives = db.representatives
+    local_toc = download_reference(outputs.genomes, f"{tempdir}")
+    db = UHGG(local_toc)
+    print("local_toc", local_toc)
 
-        def download_contigs(species_id):
-            return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
+    exit(0)
 
-        # Download repgenome_id.fna for every species in the restricted species profile.
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+    # The full species profile must exist -- it is output by run_midas_species.
+    # Restrict to species above requested coverage.
+    # Select species
+    #species_with_coverage
+    full_species_profile = parse_species_profile(args.outdir)
+    species_profile = select_species(full_species_profile, args.genome_coverage)
 
-        # Use Bowtie2 to map reads to a representative genomes
-        bt2_db_name = "repgenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
+    def download_contigs(species_id):
+        return download_reference(imported_genome_file(db.fetch_representative_genome_id(species_id), species_id, "fna.lz4"), f"{tempdir}/{species_id}")
 
-        # Use mpileup to identify SNPs
-        samtools_index(args, tempdir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+    # Download repgenome_id.fna for every species in the restricted species profile
+    # where to downalod this to? also if provided by the pool_species? then I need to
+    # make sure this is only downloaded once, should probably do it in midas_merge_species??
+    contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+    # do we really need hashmap??
 
-        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
+    # Use Bowtie2 to map reads to a representative genomes
+    bt2_db_name = "repgenomes"
+    build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
+    bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
 
+
+    # Use mpileup to identify SNPs
+    samtools_index(args, tempdir, bt2_db_name)
+    species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+
+    write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
+    """
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
             command(f"rm -rf {tempdir}", check=False)
             command(f"rm -rf {outputdir}", check=False)
+    """
 
 
 @register_args

@@ -1,13 +1,44 @@
 import os
-from iggtools.models.sample import Sample
-from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema
+from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
+
+
+class Sample: # pylint: disable=too-few-public-methods
+
+    def __init__(self, sample_name, midas_outdir, dbtype=None):
+        self.sample_name = sample_name
+
+        self.midas_outdir = midas_outdir
+        assert os.path.exists(midas_outdir), f"Provided MIDAS output {midas_outdir} for {sample_name} in sample_list is invalid"
+
+        self.data_dir = os.path.join(self.midas_outdir, dbtype)
+        assert os.path.exists(self.data_dir), f"Missing MIDAS {dbtype} directiory for {self.data_dir} for {sample_name}"
+
+        self.profile = {}
+        if dbtype is not None:
+            self.profile = self.fetch_profile(dbtype)
+
+    def fetch_profile(self, dbtype):
+        midas_profile_summary = f"{self.data_dir}/summary.txt"
+        assert os.path.exists(midas_profile_summary), f"Missing MIDAS {midas_profile_summary} for {self.sample_name}"
+
+        schema = fetch_schema_by_dbtype(dbtype)
+        profile = defaultdict()
+        with InputStream(midas_profile_summary) as stream:
+            for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+                profile[info["species_id"]] = info
+        return profile
+
+    def fetch_snps_pileup(self, species_id):
+        snps_pileup_dir = f"{self.data_dir}/output/{species_id}.snps.lz4"
+        assert os.path.exists(snps_pileup_dir), f"fetch_snps_pileup::missing pileup results {snps_pileup_dir} for {self.sample_name}"
+        return snps_pileup_dir
 
 
 class Pool: # pylint: disable=too-few-public-methods
 
-    def __init__(self, sample_list, outdir, paramstr, dbtype=None):
-        self.pool_tsv = sample_list
+    def __init__(self, samples_list, outdir, paramstr, dbtype=None):
+        self.pool_tsv = samples_list
         self.samples = self.init_samples(dbtype)
 
         self.create_outdir(outdir, dbtype)
@@ -63,12 +94,23 @@ class Pool: # pylint: disable=too-few-public-methods
             command(f"mkdir -p {species_outdir}")
         return species_outdir
 
-    def create_species_pol_snps_results(self, species_id):
+    def create_species_pool_snps_results(self, species_id):
         species_outdir = self.create_species_outdir(species_id)
         snps_info_fp = f"{species_outdir}/{species_id}_snps_info.tsv"
         snps_freq_fp = f"{species_outdir}/{species_id}_freqs.tsv"
         snps_depth_fp = f"{species_outdir}/{species_id}_snps_depth.tsv"
         return (snps_info_fp, snps_freq_fp, snps_depth_fp)
+
+    def fetch_sample_names(self):
+        sample_names = [sample.sample_name for sample in self.samples]
+        return sample_names
+
+    def fetch_merged_species_output_files(self):
+        cols_to_write = list(species_profile_schema.keys())[1:]
+        return {col: f"{self.outdir}/{col}.tsv" for col in cols_to_write}
+
+    def fetch_species_prevalence_path(self):
+        return f"{self.outdir}/species_prevalence.tsv"
 
 
 class Species:
@@ -101,8 +143,6 @@ def _filter_sample_species(info, args, dbtype):
     """ select high quality sample-species pairs"""
     if info['mean_coverage'] < args.genome_depth:
         return False # skip low-coverage <species, sample>
-    if (args.species_id and info["species_id"] not in args.species_id.split(",")):
-        return False # skip unspeficied species
     if (dbtype == "snps" and info['fraction_covered'] < args.genome_coverage):
         return False # skip low prevalent <species, sample>
     return True
@@ -111,12 +151,16 @@ def _filter_sample_species(info, args, dbtype):
 def init_species(pool_of_samples, dbtype, args):
     species = {}
     for sample in pool_of_samples.samples:
-        for info in sample.profile.values():
-            species_id = info["species_id"]
+        for species_id, info in sample.profile.items():
+            if (args.species_list and species_id not in args.species_list.split(",")):
+                continue # skip unspeficied species
+
             if species_id not in species:
                 species[species_id] = Species(species_id)
+
             if _filter_sample_species(info, args, dbtype):
                 species[species_id].samples.append(sample)
+
     return list(species.values())
 
 
@@ -143,6 +187,7 @@ def select_species(pool_of_samples, dbtype, args):
     species = sort_species(species)
     species = filter_species(species, args)
     return species
+
 
 def search_species(list_of_species, species_id):
     curr_species = [species for species in list_of_species if species.id == species_id]
