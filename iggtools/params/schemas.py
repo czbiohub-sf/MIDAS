@@ -3,6 +3,30 @@
 ## midas_merge_species
 DECIMALS = ".3f"
 
+MARKER_INFO_SCHEMA = {
+    "species_id": str,
+    "genome_id": str,
+    "gene_id": str,
+    "gene_length": int,
+    "marker_id": str
+}
+
+BLAST_M8_SCHEMA = {
+    'query': str,
+    'target': str,
+    'pid': float,
+    'aln': int,
+    'mis': float,
+    'gaps': float,
+    'qstart': float,
+    'qend': float,
+    'tstart': float,
+    'tend': float,
+    'evalue': float,
+    'score': float,
+}
+
+
 def fetch_default_genome_depth(dbtype):
     if dbtype == "species":
         DEFAULT_GENOME_DEPTH = 1.0

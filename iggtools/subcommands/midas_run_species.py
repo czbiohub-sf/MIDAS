@@ -5,9 +5,11 @@ from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, TimedSection
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference
 from iggtools.models.uhgg import UHGG
 from iggtools import params
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA
+from iggtools.models.sample import Sample
 
 
 DEFAULT_WORD_SIZE = 28
@@ -17,8 +19,8 @@ DEFAULT_ALN_MAPID = 94.0
 DECIMALS = ".6f"
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='compute species abundance profile for given sample(s)')
-    subparser.add_argument('outdir',
+    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
     subparser.add_argument('-1',
@@ -28,6 +30,11 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+
     subparser.add_argument('--word_size',
                            dest='word_size',
                            default=DEFAULT_WORD_SIZE,
@@ -113,29 +120,11 @@ def parse_reads(filename, max_reads=None):
     tsprint(f"Parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads):
-    m8_file = f"{tempdir}/alignments.m8"
+def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
-    return m8_file
-
-
-BLAST_M8_SCHEMA = {
-    'query': str,
-    'target': str,
-    'pid': float,
-    'aln': int,
-    'mis': float,
-    'gaps': float,
-    'qstart': float,
-    'qend': float,
-    'tstart': float,
-    'tend': float,
-    'evalue': float,
-    'score': float,
-}
 
 
 def deconstruct_queryid(rid):
@@ -190,7 +179,7 @@ def assign_unique(alns, species_info, marker_info):
             unique_alns[species_id].append(aln[0])
         else:
             non_unique += 1
-    tsprint(f"  uniquely mapped reads: {unique}")
+    tsprint(f" uniquely mapped reads: {unique}")
     tsprint(f"  ambiguously mapped reads: {non_unique}")
     return unique_alns
 
@@ -212,9 +201,8 @@ def assign_non_unique(alns, unique_alns, marker_info):
 
 
 def read_marker_info_repgenomes(map_file):
-    columns = ["species_id", "genome_id", "gene_id", "gene_length", "marker_id"]
     with InputStream(map_file) as map_file_stream:
-        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=columns, result_structure=dict)}
+        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict)}
 
 
 def sum_marker_gene_lengths(marker_info):
@@ -247,10 +235,9 @@ def normalize_counts(species_alns, total_gene_length):
     return species_abundance
 
 
-def write_abundance(outdir, species_abundance):
+def write_abundance(species_profile_path, species_abundance):
     """ Write species results to specified output file """
-    outpath = f"{outdir}/species/summary.txt"  # TODO:  Share this across midas_run_ steps
-    with OutputStream(outpath) as outfile:
+    with OutputStream(species_profile_path) as outfile:
         fields = ['species_id', 'count_reads', 'coverage', 'relative_abundance']
         outfile.write('\t'.join(fields) + '\n')
         output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['count'], reverse=True)
@@ -263,34 +250,32 @@ def write_abundance(outdir, species_abundance):
 
 def midas_run_species(args):
 
-    tempdir = f"{args.outdir}/species/temp/"
+    my_sample = Sample(args.sample_name, args.midas_outdir)
+    my_sample.layout()
 
-    command(f"rm -rf {tempdir}")
-    command(f"mkdir -p {tempdir}")
+    species_info = UHGG().species
 
-    markers_db_files = multithreading_map(download_reference, [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"])
-
-    db = UHGG()
-    species_info = db.species
-
+    target_markers_db_files = [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"]
+    markers_db_files = multithreading_map(download_reference, target_markers_db_files)
     marker_info = read_marker_info_repgenomes(markers_db_files[-1])
 
-    with TimedSection("aligning reads to marker-genes database"):
-        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+    m8_file = my_sample.layout()["species_alignments_m8_file"]
+    # Align reads to marker-genes database
+    map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
     with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
-    with TimedSection("classifying reads"):
-        best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
-        unique_alns = assign_unique(best_hits, species_info, marker_info)
-        species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
+    # Classify reads
+    best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
+    unique_alns = assign_unique(best_hits, species_info, marker_info)
+    species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
 
-    with TimedSection("estimating species abundance"):
-        total_gene_length = sum_marker_gene_lengths(marker_info)
-        species_abundance = normalize_counts(species_alns, total_gene_length)
+    # Estimate species abundance
+    total_gene_length = sum_marker_gene_lengths(marker_info)
+    species_abundance = normalize_counts(species_alns, total_gene_length)
 
-    write_abundance(args.outdir, species_abundance)
+    write_abundance(my_sample.layout()["species_profile"], species_abundance)
 
 
 @register_args

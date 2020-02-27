@@ -100,7 +100,8 @@ def write_results(pool_of_samples, transposed, stats, sort_by="median_coverage")
 
 
 def midas_merge_species(args):
-
+    # I think merge_species don't need tempdir ...
+    
     paramstr = f"gd{args.genome_depth}"
     pool_of_samples = Pool(args.samples_list, args.outdir, paramstr, "species")
 
