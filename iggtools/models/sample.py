@@ -1,6 +1,6 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
+from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 
 
 # Executable Documentation
@@ -46,19 +46,22 @@ class Sample: # pylint: disable=too-few-public-methods
         self.dbtype = dbtype
         self.midas_outdir = midas_outdir
         self.outdir = f"{self.midas_outdir}/{sample_name}/{dbtype}/output"
-        self.tempdir = f"{self.outdir}/temp"
+        self.tempdir = f"{self.midas_outdir}/{sample_name}/{dbtype}/temp"
         self.dbsdir = f"{self.outdir}/dbs"
         self.layout = get_single_layout(sample_name)
 
     def create_output_dir(self, debug=False):
+        tsprint(f"Create output directory for sample {self.sample_name}.")
         command(f"rm -rf {self.outdir}")
         command(f"mkdir -p {self.outdir}")
 
         if debug and os.path.exists(self.tempdir):
             tsprint(f"Reusing existing temp data in {self.tempdir} according to --debug flag.")
         else:
+            tsprint(f"Create temp directory for sample {self.sample_name}.")
             command(f"rm -rf {self.tempdir}")
             command(f"mkdir -p {self.tempdir}")
+            tsprint(f"Create database directory for sample {self.sample_name}.")
             command(f"rm -rf {self.dbsdir}")
             command(f"mkdir -p {self.dbsdir}")
 
