@@ -18,7 +18,9 @@ def get_single_layout(sample_name):
             "species_alignments_m8":  f"{sample_name}/species/temp/alignments.m8",
             "snps_repgenomes_bam": f"{sample_name}/snps/temp/repgenomes.bam",
             "genes_pangenomes_bam": f"{sample_name}/genes/temp/pangenomes.bam",
-            "dbs_dir": f"{sample_name}/dbs"
+            #"outdir": f"{sample_name}/{dbtype}/output"
+            #"tempdir": f"{sample_name}/{dbtype}/output/temp"
+            "dbdir": f"{sample_name}/dbs"
         }
     return per_species
 
@@ -42,10 +44,11 @@ class Sample: # pylint: disable=too-few-public-methods
     def __init__(self, sample_name, midas_outdir, dbtype=None):
         self.sample_name = sample_name
         self.dbtype = dbtype
-        self.outdir = f"{midas_outdir}/{sample_name}/{dbtype}/output"
+        self.midas_outdir = midas_outdir
+        self.outdir = f"{self.midas_outdir}/{sample_name}/{dbtype}/output"
         self.tempdir = f"{self.outdir}/temp"
-        self.layout = get_single_layout(sample_name)
         self.dbsdir = f"{self.outdir}/dbs"
+        self.layout = get_single_layout(sample_name)
 
     def create_output_dir(self, debug=False):
         command(f"rm -rf {self.outdir}")
@@ -66,6 +69,9 @@ class Sample: # pylint: disable=too-few-public-methods
         ## how about provide the index, then we don't those species_id subdirectories .... good question
         #sample.bt2_db_dir = f"{sample.tempdir}/dbs"
         # We should add the dbs/species_id
+
+    def get_target_layout(self, filename, species_id=""):
+        return f"{self.midas_outdir}/{self.layout(species_id)[filename]}"
 
     def load_species_profile(self, dbtype):
         species_profile_path = self.layout()["species_profile"]

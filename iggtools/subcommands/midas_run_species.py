@@ -9,8 +9,9 @@ from iggtools.common.utils import tsprint, num_physical_cores, InputStream, Outp
 from iggtools.models.uhgg import UHGG
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_prevalence_schema, format_data
-from iggtools,params.inputs import marker_genes_hmm_cutoffs
+from iggtools.params.inputs import marker_genes_hmm_cutoffs
 from iggtools.params.outputs import marker_genes
+from iggtools.params import outputs
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
@@ -244,16 +245,16 @@ def midas_run_species(args):
 
     sample = Sample(args.sample_name, args.midas_outdir, "species")
     sample.create_output_dir(args.debug)
-    print(sample.dbsdir)
-    exit(0)
-    species_info = UHGG().species
-    markers_db_files = UHGG().fetch_marker_genes(sample.dbsdir)
-    print(species_info)
-    print("markers_db_files")
-    print(markers_db_files)
-    exit(0)
+
+    local_toc = download_reference(outputs.genomes, sample.dbsdir)
+    db = UHGG(local_toc)
+    species_info = db.species
+    markers_db_files = db.fetch_marker_genes(sample.dbsdir)
+
     # Align reads to marker-genes database
     m8_file = sample.layout()["species_alignments_m8"]
+    print("m8_file:", m8_file)
+    exit(0)
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
     with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
