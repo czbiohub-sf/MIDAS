@@ -7,11 +7,10 @@ import numpy as np
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference
 from iggtools.models.uhgg import UHGG
-from iggtools import params
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, format_data
-
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_prevalence_schema, format_data
+from iggtools,params.inputs import marker_genes_hmm_cutoffs
+from iggtools.params.outputs import marker_genes
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
@@ -46,7 +45,7 @@ def register_args(main_func):
                            dest='aln_mapid',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {params.inputs.marker_genes_hmm_cutoffs}")
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
     subparser.add_argument('--aln_cov',
                            dest='aln_cov',
                            default=DEFAULT_ALN_COV,
@@ -245,22 +244,23 @@ def midas_run_species(args):
 
     sample = Sample(args.sample_name, args.midas_outdir, "species")
     sample.create_output_dir(args.debug)
-
+    print(sample.dbsdir)
+    exit(0)
     species_info = UHGG().species
-
-    
-    target_markers_db_files = [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"]
-    markers_db_files = multithreading_map(download_reference, target_markers_db_files)
-    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
-
-    m8_file = sample.layout()["species_alignments_m8"]
+    markers_db_files = UHGG().fetch_marker_genes(sample.dbsdir)
+    print(species_info)
+    print("markers_db_files")
+    print(markers_db_files)
+    exit(0)
     # Align reads to marker-genes database
+    m8_file = sample.layout()["species_alignments_m8"]
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
-    with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
+    with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
     # Classify reads
+    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
     best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
     unique_alns = assign_unique(best_hits, species_info, marker_info)
     species_alns = assign_non_unique(best_hits, unique_alns, marker_info)

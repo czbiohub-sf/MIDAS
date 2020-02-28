@@ -18,7 +18,7 @@ def get_single_layout(sample_name):
             "species_alignments_m8":  f"{sample_name}/species/temp/alignments.m8",
             "snps_repgenomes_bam": f"{sample_name}/snps/temp/repgenomes.bam",
             "genes_pangenomes_bam": f"{sample_name}/genes/temp/pangenomes.bam",
-            
+            "dbs_dir": f"{sample_name}/dbs"
         }
     return per_species
 
@@ -45,6 +45,7 @@ class Sample: # pylint: disable=too-few-public-methods
         self.outdir = f"{midas_outdir}/{sample_name}/{dbtype}/output"
         self.tempdir = f"{self.outdir}/temp"
         self.layout = get_single_layout(sample_name)
+        self.dbsdir = f"{self.outdir}/dbs"
 
     def create_output_dir(self, debug=False):
         command(f"rm -rf {self.outdir}")
@@ -55,6 +56,9 @@ class Sample: # pylint: disable=too-few-public-methods
         else:
             command(f"rm -rf {self.tempdir}")
             command(f"mkdir -p {self.tempdir}")
+            command(f"rm -rf {self.dbsdir}")
+            command(f"mkdir -p {self.dbsdir}")
+
         ## I think from the midas_run_genes
         # Add bt2_db_dir to the Sample
         # When we mkdir tempdir, it is okay to add the species subdirectories ...

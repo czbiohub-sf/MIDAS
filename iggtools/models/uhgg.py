@@ -30,6 +30,16 @@ class UHGG:  # pylint: disable=too-few-public-methods
         centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return centroids_files
 
+    def fetch_marker_genes(self, dbs_dir):
+        target_markers_db_files = [
+            f"{outputs.marker_genes}/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + \
+            [f"{outputs.marker_genes}/phyeco.map.lz4"
+            ]
+        argument_list = ((mfile, dbs_dir) for mfile in target_markers_db_files)
+        markers_db_files = multithreading_map(fetch_file_from_s3, argument_list)
+        return markers_db_files
+
+
 
 def _UHGG_load(toc_tsv, deep_sort=False):
     species = defaultdict(dict)

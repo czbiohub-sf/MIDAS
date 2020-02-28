@@ -315,7 +315,7 @@ def midas_run_genes(args):
         bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False)
 
         # Compute coverage of pangenome for each present species and write results to disk
-        marker_genes_map = f"{outputs.marker_genes}/phyeco.map.lz4"
+        marker_genes_map = f"{marker_genes}/phyeco.map.lz4"
         species, genes = scan_centroids(centroids_files)
         num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
         markers = scan_markers(genes, marker_genes_map)
