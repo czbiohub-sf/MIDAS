@@ -1,5 +1,4 @@
 import json
-import os
 from collections import defaultdict
 import multiprocessing
 
@@ -8,12 +7,12 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multithreading_hashmap, download_reference
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multithreading_hashmap, download_reference
 from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG
-from iggtools.common.samples import parse_species_profile, select_species
+from iggtools.models.uhgg import UHGG, imported_genome_file
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
+from iggtools.models.sample import Sample
 
 DEFAULT_ALN_COV = 0.75
 DEFAULT_GENOME_COVERAGE = 3.0
@@ -26,7 +25,7 @@ DEFAULT_ALN_TRIM = 0
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
-    subparser.add_argument('outdir',
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
     subparser.add_argument('--sample_name',
@@ -41,6 +40,11 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
+    subparser.add_argument('--sparse',
+                           action='store_true',
+                           default=False,
+                           help=f"Omit zero rows from output.")
+
     subparser.add_argument('--genome_coverage',
                            type=float,
                            dest='genome_coverage',
@@ -53,6 +57,13 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
+    subparser.add_argument('--bt2_db_indexes',
+                           dest='bt2_db_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    # The question is: where should I put the built database ?
+    # I think it's should be put at the midas_outdir <=
 
     # then think about midas_merge_species to get on repgenomes database
     subparser.add_argument('--pool_species',
@@ -134,10 +145,6 @@ def register_args(main_func):
     return main_func
 
 
-def imported_genome_file(genome_id, species_id, component):
-    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-
 def keep_read_worker(aln, args, aln_stats):
     aln_stats['aligned_reads'] += 1
 
@@ -161,8 +168,11 @@ def keep_read_worker(aln, args, aln_stats):
     return True
 
 
-def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db_stats):
-    # Read in contigs information for current species_id
+def species_pileup(species_id, repgenomes_bam_path, snps_pileup_path, contig_file, contigs_db_stats):
+    """ Read in contigs information for one species_id """
+
+    global global_args
+    args = global_args
 
     contigs = {}
     contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
@@ -190,15 +200,13 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
         return keep_read_worker(x, args, aln_stats)
 
     header = list(snps_pileup_schema.keys())
-    path = f"{outputdir}/{species_id}.snps.lz4"
-
-    with OutputStream(path) as file:
+    with OutputStream(snps_pileup_path) as file:
 
         file.write('\t'.join(header) + '\n')
         zero_rows_allowed = not args.sparse
 
         # Loop over alignment for current species's contigs
-        with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
+        with AlignmentFile(repgenomes_bam_path) as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why need to sort?
                 contig = contigs[contig_id]
                 counts = bamfile.count_coverage(
@@ -229,18 +237,23 @@ def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db
     return (species_id, {k: str(v) for k, v in aln_stats.items()})
 
 
-def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
-    "Counting alleles and run pileups per species in parallel"
+def pysam_pileup(species_ids, contigs_files):
+    """ Counting alleles and run pileups per species in parallel """
+    global global_sample
+    sample = global_sample
 
     # Update alignment stats for species
     species_pileup_stats = defaultdict()
     contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
 
-    mp = multiprocessing.Pool(num_physical_cores)
-    argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats) for sp_id in species_ids]
+    argument_list = []
+    for species_id in species_ids:
+        my_args = (species_id, sample.layout()["snps_repgenomes_bam"], sample.layout(species_id)["snps_summary"], contigs_files[species_id], contigs_db_stats)
+        argument_list.append(my_args)
 
+    mp = multiprocessing.Pool(num_physical_cores)
     for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
-        sp_stats = {
+        species_stats = {
             "genome_length": int(aln_stats['genome_length']),
             "covered_bases": int(aln_stats['covered_bases']),
             "total_depth": int(aln_stats['total_depth']),
@@ -250,13 +263,12 @@ def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
             "mean_coverage": 0.0,
         }
 
-        if sp_stats["genome_length"] > 0:
-            sp_stats["fraction_covered"] = format(sp_stats["covered_bases"] / sp_stats["genome_length"], DECIMALS)
+        if species_stats["genome_length"] > 0:
+            species_stats["fraction_covered"] = format(species_stats["covered_bases"] / species_stats["genome_length"], DECIMALS)
+        if species_stats["covered_bases"] > 0:
+            species_stats["mean_coverage"] = format(species_stats["total_depth"] / species_stats["covered_bases"], DECIMALS)
 
-        if sp_stats["covered_bases"] > 0:
-            sp_stats["mean_coverage"] = format(sp_stats["total_depth"] / sp_stats["covered_bases"], DECIMALS)
-
-        species_pileup_stats[species_id] = sp_stats
+        species_pileup_stats[species_id] = species_stats
 
     tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
     tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
@@ -277,56 +289,58 @@ def write_snps_summary(species_pileup_stats, outfile):
 
 
 def midas_run_snps(args):
-    # Ask Boris: the midas_outdir is a property of Sample, just like the midas_merged_dir is
-    # a property of Pool_of_samples
 
-    tempdir = f"{args.outdir}/snps/temp_sc{args.genome_coverage}"
-    if args.debug and os.path.exists(tempdir):
-        tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
+    sample = Sample(args.sample_name, args.midas_outdir, "snps")
+    sample.create_output_dir(args.debug)
 
-    outputdir = f"{args.outdir}/snps/output"
-    if not os.path.exists(outputdir):
-        command(f"mkdir -p {outputdir}")
+    global global_sample
+    global_sample = sample
+    global global_args
+    global_args = args
 
     try:
-        # The full species profile must exist -- it is output by run_midas_species.
-        # Restrict to species above requested coverage.
-        # Select species
-        #species_with_coverage
-        full_species_profile = parse_species_profile(args.outdir)
-        species_profile = select_species(full_species_profile, args.genome_coverage)
+        if args.bt2_db_indexes:
+            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+                print("good the pre built bt2 index exist")
+                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+                bt2_db_name = os.path.basename(bt2_db_indexes)
+            else:
+                print("Error: good the pre built repgrenomes bt2 index exist")
+                exit(0)
+        else:
+            # add this to the mapping layout
+            sample.bt2_db_dir = f"{sample.tempdir}/dbs"
+            command(f"mkdir -p {sample.bt2_db_dir}")
 
-        local_toc = download_reference(outputs.genomes, f"{tempdir}")
-        db = UHGG(local_toc)
+            bt2_db_dir = sample.bt2_db_dir
+            bt2_db_name = "repgenomes"
 
-        def download_contigs(species_id):
-            return download_reference(imported_genome_file(db.fetch_representative_genome_id(species_id), species_id, "fna.lz4"), f"{tempdir}/{species_id}")
+            if args.species_list:
+                species_profile = sample.select_species(args.genome_coverage, args.species_list)
+            else:
+                species_profile = sample.select_species(args.genome_coverage)
 
-        # Download repgenome_id.fna for every species in the restricted species profile
-        # where to downalod this to? also if provided by the pool_species? then I need to
-        # make sure this is only downloaded once, should probably do it in midas_merge_species??
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
-        # do we really need hashmap??
+            local_toc = download_reference(outputs.genomes, bt2_db_dir)
+            db = UHGG(local_toc)
+
+            # Download repgenome_id.fna for every species in the restricted species profile
+            contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_dir)
+
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
         # Use Bowtie2 to map reads to a representative genomes
-        bt2_db_name = "repgenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
-
+        bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=True)
 
         # Use mpileup to identify SNPs
-        samtools_index(args, tempdir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+        samtools_index(args, bt2_db_dir, bt2_db_name)
+        species_pileup_stats = pysam_pileup(list(species_profile.keys()), contigs_files)
 
-        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/summary.txt")
+        write_snps_summary(species_pileup_stats, sample.layout()["snps_summary"])
+
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            command(f"rm -rf {tempdir}", check=False)
-            command(f"rm -rf {outputdir}", check=False)
+            sample.remove_output_dir()
 
 
 @register_args

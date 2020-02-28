@@ -164,3 +164,6 @@ def fetch_schema_by_dbtype(dbtype):
     if dbtype == "genes":
         schema = genes_profile_schema
     return schema
+
+def format_data(x):
+    return format(x, DECIMALS) if isinstance(x, float) else str(x)

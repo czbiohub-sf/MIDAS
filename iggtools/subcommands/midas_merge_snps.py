@@ -318,22 +318,36 @@ def pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id):
 
 
 def process_chunk(packed_args):
-
+    # proc_id == -1: merge
     species_id, proc_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
 
-    # For each process, scan over all the samples
-    accumulator = dict()
-    for sample_index in range(total_samples_count):
-        genome_coverage = samples_depth[sample_index]
-        snps_pileup_dir = samples_snps_pileup[sample_index]
-        ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
-        accumulate(accumulator, ps_args)
+    global semaphore_for_species_id
 
-    # Compute and write pooled SNPs for each chunk of genomic sites
-    snps_info_fp, snps_freq_fp, snps_depth_fp = pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id)
+    if proc_id == -1:
+        # return a status flag
+        # the path should be computable somewhere else
 
-    tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {proc_id} for contig {contig_id}.")
-    return {f"{species_id}_{proc_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
+        for _ in chunk_count[species_id]:
+            semaphore_for_species_id.acquire() # no deadlock
+        return merge_chunks_for_species(current_species_chunks, species_id, samples_name)
+
+    try:
+
+        # For each process, scan over all the samples
+        accumulator = dict()
+        for sample_index in range(total_samples_count):
+            genome_coverage = samples_depth[sample_index]
+            snps_pileup_dir = samples_snps_pileup[sample_index]
+            ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
+            accumulate(accumulator, ps_args)
+
+        # Compute and write pooled SNPs for each chunk of genomic sites
+        snps_info_fp, snps_freq_fp, snps_depth_fp = pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id)
+
+        tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {proc_id} for contig {contig_id}.")
+        return {f"{species_id}_{proc_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
+    finally:
+        semaphore_for_species_id.release() # no deadlock
 
 
 def merge_files(local_files, merged_file, chunk_num):
@@ -388,23 +402,37 @@ def midas_merge_snps(args):
     db = UHGG(local_toc)
     representative = db.representatives # for the mapping between contigs_id-to-species_id
 
+    # dict of semaphore and acquire before
     lookups = multiprocessing_map(create_lookup_table, ((species.id, representative[species.id], chunk_size) for species in list_of_species), num_procs=num_physical_cores)
 
 
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
     argument_list = []
+    global semaphore_for_species_id
+    global chunk_count
+    chunk_count = dict()
+    semaphore_for_species_id = dict()
+
     for si, species in enumerate(list_of_species):
         species_id = species.id
         total_samples_count = len(species.samples)
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.fetch_snps_pileup(species_id) for sample in list(species.samples)]
 
-
+        chunk_counter = 0
         with open(lookups[si]) as stream:
             for line in stream:
                 species_id, proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
                 my_args = (species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
                 argument_list.append(my_args)
+                chunk_counter += 1
+            # submit the merge jobs
+            argument_list.append(species_id, -1)
+        semaphore_for_species_id[species_id] = multiprocessing.Semaphore(chunk_counter)
+        chunk_count[species_id] = chunk_counter
+
+        for _ in range(chunk_counter):
+            semaphore_for_species_id[species_id].acquire()
 
         chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
 

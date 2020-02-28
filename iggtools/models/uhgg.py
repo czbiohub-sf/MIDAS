@@ -1,7 +1,7 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference
 from iggtools.params import inputs, outputs
 
 
@@ -15,6 +15,20 @@ class UHGG:  # pylint: disable=too-few-public-methods
 
     def fetch_representative_genome_id(self, species_id):
         return self.representatives[species_id]
+
+    def fetch_contigs(species_ids, bt2_db_dir):
+        argument_list = []
+        for species_id in species_ids:
+            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), bt2_db_dir))
+        contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return contigs_files
+
+    def fetch_centroids(species_ids, bt2_db_dir):
+        argument_list = []
+        for species_id in species_ids:
+            argument_list.append((pangenome_file(species_id, "centroids.ffn.lz4"), f"{bt2_db_dir}/{species_id}"))
+        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return centroids_files
 
 
 def _UHGG_load(toc_tsv, deep_sort=False):
@@ -37,6 +51,13 @@ def _UHGG_load(toc_tsv, deep_sort=False):
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
 
-
 def raw_genome_file(genome_id, representative_id):
     return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
+
+def pangenome_file(species_id, component):
+    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
+    return f"{outputs.pangenomes}/{species_id}/{component}"
+
+def fetch_file_from_s3(packed_args):
+    s3_path, local_path = packed_args
+    return download_reference(s3_path, local_path)

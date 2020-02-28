@@ -8,12 +8,14 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, download_reference
 from iggtools.params import outputs
-from iggtools.common.samples import parse_species_profile, select_species
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
+from iggtools.models.uhgg import UHGG, pangenome_file
+from iggtools.params.outputs import marker_genes
+from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, MARKER_INFO_SCHEMA
 
 
 DEFAULT_ALN_COV = 0.75
-DEFAULT_SPECIES_COVERAGE = 3.0
+DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
@@ -22,7 +24,7 @@ DECIMALS = ".6f"
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
-    subparser.add_argument('outdir',
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
     subparser.add_argument('-1',
@@ -32,24 +34,23 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--species_cov',
+
+    subparser.add_argument('--genome_coverage',
                            type=float,
-                           dest='species_cov',
+                           dest='genome_coverage',
                            metavar='FLOAT',
-                           default=DEFAULT_SPECIES_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
-    if False:
-        # This is unused.
-        subparser.add_argument('--species_topn',
-                               type=int,
-                               dest='species_topn',
-                               metavar='INT',
-                               help='Include top N most abundant species')
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--bt2_db_indexes',
+                           dest='bt2_db_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
 
     #  Alignment flags (bowtie, or postprocessing)
     subparser.add_argument('--aln_cov',
@@ -93,12 +94,16 @@ def register_args(main_func):
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
 
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
     return main_func
 
 
-def pangenome_file(species_id, component):
-    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
-    return f"{outputs.pangenomes}/{species_id}/{component}"
+def format_data(x):
+    return format(x, DECIMALS) if isinstance(x, float) else str(x)
 
 
 def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
@@ -119,14 +124,18 @@ def keep_read(aln, min_pid, min_readq, min_mapq, min_aln_cov):
     return True
 
 
-def count_mapped_bp(args, tempdir, genes):
+def count_mapped_bp(pangenome_bamfile, genes):
     """ Count number of bp mapped to each gene across pangenomes.
     Return number covered genes and average gene depth per species.
     Result contains only covered species, but being a defaultdict,
     would yield 0 for any uncovered species, which is appropriate.
     """
-    bam_path = f"{tempdir}/pangenomes.bam"
-    bamfile = AlignmentFile(bam_path, "rb")
+
+    global global_args
+    args = global_args
+
+    #pangenome_bamfile = f"{tempdir}/pangenomes.bam" #<- pass this as an input
+    bamfile = AlignmentFile(pangenome_bamfile, "rb")
     covered_genes = {}
 
     # loop over alignments, sum values per gene
@@ -184,12 +193,15 @@ def normalize(genes, covered_genes, markers):
 
 
 def write_results(outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage):
-    if not os.path.exists(f"{outdir}/genes/output"):
-        command(f"mkdir -p {outdir}/genes/output")
+    # We should not handle this here
+    #if not os.path.exists(f"{outdir}/genes/output"):
+    #    command(f"mkdir -p {outdir}/genes/output")
+
     # open outfiles for each species_id
-    header = ['gene_id', 'count_reads', 'coverage', 'copy_number']
+    header = list(genes_schema.keys())
     for species_id, species_genes in species.items():
-        path = f"{outdir}/genes/output/{species_id}.genes.lz4"
+        path = sample.layout(species_id)["genes_coverage"]
+        #path = f"{outdir}/genes/output/{species_id}.genes.lz4"
         with OutputStream(path) as sp_out:
             sp_out.write('\t'.join(header) + '\n')
             for gene_id, gene in species_genes.items():
@@ -199,8 +211,10 @@ def write_results(outdir, species, num_covered_genes, species_markers_coverage, 
                 values = [gene_id, str(gene["mapped_reads"]), format(gene["depth"], DECIMALS), format(gene["copies"], DECIMALS)]
                 sp_out.write('\t'.join(values) + '\n')
     # summary stats
-    header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
-    path = f"{outdir}/genes/summary.txt"
+    header = list(genes_profile_schema.keys())
+    #header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
+    #path = f"{outdir}/genes/summary.txt"
+    path = sample.layout()["genes_summary"]
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_genes in species.items():
@@ -208,17 +222,20 @@ def write_results(outdir, species, num_covered_genes, species_markers_coverage, 
             aligned_reads = sum(g["aligned_reads"] for g in species_genes.values())
             mapped_reads = sum(g["mapped_reads"] for g in species_genes.values())
             pangenome_size = len(species_genes)
+
             values = [
                 species_id,
-                str(pangenome_size),
-                str(num_covered_genes[species_id]),
-                format(num_covered_genes[species_id] / pangenome_size, DECIMALS),
-                format(species_mean_coverage[species_id], DECIMALS),
-                format(species_markers_coverage[species_id], DECIMALS),
-                str(aligned_reads),
-                str(mapped_reads)
+                pangenome_size,
+                num_covered_genes[species_id],
+                num_covered_genes[species_id] / pangenome_size,
+                species_mean_coverage[species_id],
+                species_markers_coverage[species_id],
+                aligned_reads,
+                mapped_reads
             ]
-            file.write('\t'.join(values) + '\n')
+
+            file.write("\t".join(map(format_data, values)) + "\n")
+
 
 
 def scan_centroids(centroids_files):
@@ -246,7 +263,7 @@ def scan_centroids(centroids_files):
 def scan_markers(genes, marker_genes_map_file):
     markers = []
     with InputStream(marker_genes_map_file) as mg_map:
-        for gene_id, marker_id in select_from_tsv(mg_map, ["gene_id", "marker_id"], {"species_id": str, "genome_id": str, "gene_id": str, "gene_len": int, "marker_id": str}):
+        for gene_id, marker_id in select_from_tsv(mg_map, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
             if gene_id in genes:
                 markers.append((gene_id, marker_id))
     return markers
@@ -254,40 +271,57 @@ def scan_markers(genes, marker_genes_map_file):
 
 def midas_run_genes(args):
 
-    tempdir = f"{args.outdir}/genes/temp_sc{args.species_cov}"
+    sample = Sample(args.sample_name, args.midas_outdir, "snps")
+    sample.create_output_dir(args.debug)
 
-    if args.debug and os.path.exists(tempdir):
-        tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
+    global global_sample
+    global_sample = sample
+    global global_args
+    global_args = args
 
     try:
-        # The full species profile must exist -- it is output by run_midas_species.
-        # Restrict to species above requested coverage.
-        full_species_profile = parse_species_profile(args.outdir)
-        species_profile = select_species(full_species_profile, args.species_cov)
+        if args.bt2_db_indexes:
+            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+                print("good the pre built bt2 index exist")
+                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+                bt2_db_name = os.path.basename(bt2_db_indexes)
+            else:
+                print("Error: good the pangenome pre built bt2 index exist")
+                exit(0)
+        else:
+            # add this to the mapping layout
+            sample.bt2_db_dir = f"{sample.tempdir}/dbs"
+            command(f"mkdir -p {sample.bt2_db_dir}")
 
-        def download_centroid(species_id):
-            return download_reference(pangenome_file(species_id, "centroids.ffn.lz4"), f"{tempdir}/{species_id}")  # TODO colocate samples to overlap reference downloads
+            bt2_db_dir = sample.bt2_db_dir
+            bt2_db_name = "pangenomes"
 
-        # Download centroids.ffn for every species in the restricted species profile.
-        centroids_files = multithreading_hashmap(download_centroid, species_profile.keys(), num_threads=20)
+            if args.species_list:
+                species_profile = sample.select_species(args.genome_coverage, args.species_list)
+            else:
+                species_profile = sample.select_species(args.genome_coverage)
 
+            local_toc = download_reference(outputs.genomes, bt2_db_dir)
+            db = UHGG(local_toc)
+
+            # Because the pan genes are all named the same, so we NEED the species
+            # subdirectories
+            centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
+            # Download centroids.ffn for every species in the restricted species profile.
+            build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-        # Also colocate/cache/download in master for multiple slave subcommand invocations.
-        bt2_db_name = "pangenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=False)
+        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
+
+        bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False)
 
         # Compute coverage of pangenome for each present species and write results to disk
-        marker_genes_map = "s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"
+        marker_genes_map = f"{outputs.marker_genes}/phyeco.map.lz4"
         species, genes = scan_centroids(centroids_files)
         num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
         markers = scan_markers(genes, marker_genes_map)
         species_markers_coverage = normalize(genes, covered_genes, markers)
 
-        write_results(args.outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+        write_results(args.midas_outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")

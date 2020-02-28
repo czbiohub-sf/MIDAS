@@ -6,8 +6,9 @@ import numpy as np
 from iggtools.models.pool import Pool, select_species
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, command
 from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, DECIMALS, fetch_default_genome_depth
+from iggtools.params import outputs
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
@@ -28,6 +29,10 @@ def register_args(main_func):
                            metavar="FLOAT",
                            default=DEFAULT_GENOME_DEPTH,
                            help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_GENOME_DEPTH})")
+    subparser.add_argument('--build_bowtie2_db',
+                           action='store_true',
+                           default=False,
+                           help=f"Omit zero rows from output.")
     return main_func
 
 
@@ -84,7 +89,10 @@ def write_results(pool_of_samples, transposed, stats, sort_by="median_coverage")
         with OutputStream(path) as outfile:
             outfile.write("\t".join(["species_id"] + sample_names) + "\n")
             for values in data.values():
-                outfile.write("\t".join(map(format_data, values)) + "\n")
+                # double check me
+                print("I want to double check values[-1] is the count_samples")
+                if values[-1] > 0:
+                    outfile.write("\t".join(map(format_data, values)) + "\n")
 
     # Sort species in stats by descending relative abundance
     with OutputStream(pool_of_samples.fetch_species_prevalence_path()) as ostream:
@@ -101,7 +109,8 @@ def write_results(pool_of_samples, transposed, stats, sort_by="median_coverage")
 
 def midas_merge_species(args):
     # I think merge_species don't need tempdir ...
-    
+    # where should I put this in the layout map
+
     paramstr = f"gd{args.genome_depth}"
     pool_of_samples = Pool(args.samples_list, args.outdir, paramstr, "species")
 
@@ -112,6 +121,22 @@ def midas_merge_species(args):
     stats = compute_stats(transposed["relative_abundance"], transposed["coverage"], args)
     write_results(pool_of_samples, transposed, stats, "median_coverage")
 
+    if args.build_bowtie2_db:
+        species_ids = list(stats.keys())
+
+        # For the merged script, it makes sense to to have a midas_outdir/dbs directory
+        pool_of_samples.db = f"{outdir}/dbs/temp"
+        command(f"mkdir -p {pool_of_samples.db}")
+
+        bt2_db_dir = pool_of_samples.db
+        bt2_db_name = "repgenomes"
+
+        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        db = UHGG(local_toc)
+
+        contigs_files = db.fetch_contigs(species_ids, bt2_db_dir)
+
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
 
 @register_args

@@ -10,6 +10,7 @@ from iggtools.models.uhgg import UHGG
 from iggtools import params
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA
 from iggtools.models.sample import Sample
+from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, format_data
 
 
 DEFAULT_WORD_SIZE = 28
@@ -23,6 +24,10 @@ def register_args(main_func):
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
     subparser.add_argument('-1',
                            dest='r1',
                            required=True,
@@ -30,10 +35,6 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
 
     subparser.add_argument('--word_size',
                            dest='word_size',
@@ -57,13 +58,6 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
-    if False:
-        # This is not currently in use.
-        subparser.add_argument('--read_length',
-                               dest='read_length',
-                               type=int,
-                               metavar="INT",
-                               help=f"Trim reads to READ_LENGTH and discard reads with length < READ_LENGTH.  By default, reads are not trimmed or filtered")
     return main_func
 
 
@@ -117,7 +111,7 @@ def parse_reads(filename, max_reads=None):
             yield (new_name, seq)
         if read_count_filter:
             fp.ignore_errors()
-    tsprint(f"Parsed {read_count} reads from {filename}")
+    tsprint(f"parse_reads:: parsed {read_count} reads from {filename}")
 
 
 def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
@@ -238,28 +232,28 @@ def normalize_counts(species_alns, total_gene_length):
 def write_abundance(species_profile_path, species_abundance):
     """ Write species results to specified output file """
     with OutputStream(species_profile_path) as outfile:
-        fields = ['species_id', 'count_reads', 'coverage', 'relative_abundance']
-        outfile.write('\t'.join(fields) + '\n')
+        outfile.write('\t'.join(species_profile_schema.keys()) + '\n')
         output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['count'], reverse=True)
         for species_id in output_order:
             values = species_abundance[species_id]
             if values['count'] > 0:
-                record = [species_id, values['count'], format(values['cov'], DECIMALS), format(values['rel_abun'], DECIMALS)]
-                outfile.write('\t'.join(str(x) for x in record) + '\n')
+                record = [species_id, values['count'], values['cov'], values['rel_abun']]
+                outfile.write("\t".join(map(format_data, record)) + "\n")
 
 
 def midas_run_species(args):
 
-    my_sample = Sample(args.sample_name, args.midas_outdir)
-    my_sample.layout()
+    sample = Sample(args.sample_name, args.midas_outdir, "species")
+    sample.create_output_dir(args.debug)
 
     species_info = UHGG().species
 
+    
     target_markers_db_files = [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"]
     markers_db_files = multithreading_map(download_reference, target_markers_db_files)
     marker_info = read_marker_info_repgenomes(markers_db_files[-1])
 
-    m8_file = my_sample.layout()["species_alignments_m8_file"]
+    m8_file = sample.layout()["species_alignments_m8"]
     # Align reads to marker-genes database
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
@@ -275,7 +269,7 @@ def midas_run_species(args):
     total_gene_length = sum_marker_gene_lengths(marker_info)
     species_abundance = normalize_counts(species_alns, total_gene_length)
 
-    write_abundance(my_sample.layout()["species_profile"], species_abundance)
+    write_abundance(sample.layout()["species_profile"], species_abundance)
 
 
 @register_args

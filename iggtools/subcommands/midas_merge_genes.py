@@ -223,6 +223,7 @@ def midas_merge_genes(args):
     def download_genes_info(species_id):
         return download_reference(pangenome_file(species_id, "gene_info.txt.lz4"), f"{tempdir}/{species_id}")
     genes_info_files = multithreading_hashmap(download_genes_info, [sp.id for sp in list_of_species], num_threads=20)
+    # Do we really need the hashmap ?? I don't think so
 
     # Collect copy_number, coverage and read counts across ALl the samples
     argument_list = []
