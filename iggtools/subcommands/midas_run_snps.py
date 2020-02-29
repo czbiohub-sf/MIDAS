@@ -9,7 +9,7 @@ import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multithreading_hashmap, download_reference
 from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG, imported_genome_file
+from iggtools.models.uhgg import UHGG
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
 from iggtools.models.sample import Sample
@@ -128,6 +128,11 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
     if False:
         # This is unused.
         subparser.add_argument('--aln_discard',
@@ -298,49 +303,46 @@ def midas_run_snps(args):
     global global_args
     global_args = args
 
-    try:
-        if args.bt2_db_indexes:
-            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
-                print("good the pre built bt2 index exist")
-                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-                bt2_db_name = os.path.basename(bt2_db_indexes)
-            else:
-                print("Error: good the pre built repgrenomes bt2 index exist")
-                exit(0)
+    #try:
+    if args.bt2_db_indexes:
+        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+            print("good the pre built bt2 index exist")
+            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+            bt2_db_name = os.path.basename(bt2_db_indexes)
         else:
-            # add this to the mapping layout
-            sample.bt2_db_dir = f"{sample.tempdir}/dbs"
-            command(f"mkdir -p {sample.bt2_db_dir}")
+            print("Error: good the pre built repgrenomes bt2 index exist")
+            exit(0)
+    else:
+        bt2_db_dir = sample.get_target_layout("dbs_tempdir")
+        bt2_db_name = "repgenomes"
 
-            bt2_db_dir = sample.bt2_db_dir
-            bt2_db_name = "repgenomes"
+        if args.species_list:
+            species_profile = sample.select_species(args.genome_coverage, args.species_list)
+        else:
+            species_profile = sample.select_species(args.genome_coverage)
 
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
+        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        db = UHGG(local_toc)
 
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
+        # Download repgenome_id.fna for every species in the restricted species profile
+        contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_dir)
 
-            # Download repgenome_id.fna for every species in the restricted species profile
-            contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_dir)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+    # Use Bowtie2 to map reads to a representative genomes
+    bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=True)
 
-        # Use Bowtie2 to map reads to a representative genomes
-        bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=True)
+    # Use mpileup to identify SNPs
+    samtools_index(args, bt2_db_dir, bt2_db_name)
+    species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)
+    # STOP HERE
 
-        # Use mpileup to identify SNPs
-        samtools_index(args, bt2_db_dir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(list(species_profile.keys()), contigs_files)
+    write_snps_summary(species_pileup_stats, sample.layout()["snps_summary"])
 
-        write_snps_summary(species_pileup_stats, sample.layout()["snps_summary"])
-
-    except:
-        if not args.debug:
-            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_output_dir()
+    #except:
+    #    if not args.debug:
+    #   tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+    #        sample.remove_output_dir()
 
 
 @register_args

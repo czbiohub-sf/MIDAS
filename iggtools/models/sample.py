@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 
@@ -6,21 +7,23 @@ from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, co
 # Executable Documentation
 
 # Low level functions: the Target Files
-def get_single_layout(sample_name):
+def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id=""):
         return {
-            "species_profile":  f"{sample_name}/species/species_profile.tsv",
-            "snps_pileup":      f"{sample_name}/snps/output/{species_id}.snps.tsv.lz4",
-            "snps_summary":     f"{sample_name}/snps/output/summary.tsv",
-            "genes_coverage":   f"{sample_name}/genes/output/{species_id}.genes.tsv.lz4",
-            "genes_summary":    f"{sample_name}/genes/output/summary.tsv",
+            "species_profile":        f"{sample_name}/species/species_profile.tsv",
+            "snps_pileup":            f"{sample_name}/snps/output/{species_id}.snps.tsv.lz4",
+            "snps_summary":           f"{sample_name}/snps/output/summary.tsv",
+            "genes_coverage":         f"{sample_name}/genes/output/{species_id}.genes.tsv.lz4",
+            "genes_summary":          f"{sample_name}/genes/output/summary.tsv",
+
+            "outdir":                 f"{sample_name}/{dbtype}/output",
+            "tempdir":                f"{sample_name}/{dbtype}/temp",
+            "dbsdir":                 f"{sample_name}/dbs",
+            "dbs_tempdir":            f"{sample_name}/dbs/temp",
 
             "species_alignments_m8":  f"{sample_name}/species/temp/alignments.m8",
-            "snps_repgenomes_bam": f"{sample_name}/snps/temp/repgenomes.bam",
-            "genes_pangenomes_bam": f"{sample_name}/genes/temp/pangenomes.bam",
-            #"outdir": f"{sample_name}/{dbtype}/output"
-            #"tempdir": f"{sample_name}/{dbtype}/output/temp"
-            "dbdir": f"{sample_name}/dbs"
+            "snps_repgenomes_bam":    f"{sample_name}/snps/temp/repgenomes.bam",
+            "genes_pangenomes_bam":   f"{sample_name}/genes/temp/pangenomes.bam",
         }
     return per_species
 
@@ -43,12 +46,15 @@ if False:
 class Sample: # pylint: disable=too-few-public-methods
     def __init__(self, sample_name, midas_outdir, dbtype=None):
         self.sample_name = sample_name
-        self.dbtype = dbtype
         self.midas_outdir = midas_outdir
-        self.outdir = f"{self.midas_outdir}/{sample_name}/{dbtype}/output"
-        self.tempdir = f"{self.midas_outdir}/{sample_name}/{dbtype}/temp"
-        self.dbsdir = f"{self.outdir}/dbs"
-        self.layout = get_single_layout(sample_name)
+
+        self.layout = get_single_layout(sample_name, dbtype=dbtype)
+        self.outdir = self.get_target_layout("outdir")
+        self.tempdir = self.get_target_layout("tempdir")
+        self.dbsdir = self.get_target_layout("dbsdir")
+
+    def get_target_layout(self, filename, species_id=""):
+        return f"{self.midas_outdir}/{self.layout(species_id)[filename]}"
 
     def create_output_dir(self, debug=False):
         tsprint(f"Create output directory for sample {self.sample_name}.")
@@ -73,25 +79,24 @@ class Sample: # pylint: disable=too-few-public-methods
         #sample.bt2_db_dir = f"{sample.tempdir}/dbs"
         # We should add the dbs/species_id
 
-    def get_target_layout(self, filename, species_id=""):
-        return f"{self.midas_outdir}/{self.layout(species_id)[filename]}"
 
     def load_species_profile(self, dbtype):
         species_profile_path = self.layout()["species_profile"]
         assert os.path.exists(species_profile_path), f"Sample::load_species_profile:: missing species profile {species_profile_path} for {self.sample_name}"
 
-    def select_species(dbtype, genome_coverage, species_list=""):
+    def select_species(self, genome_coverage, species_list=""):
         "Return map of species_id to coverage for the species present in the sample."
-        schema = fetch_schema_by_dbtype(dbtype)
+
+        schema = fetch_schema_by_dbtype("species")
         profile = defaultdict()
-        with InputStream(self.layout()["species_profile"]) as stream:
+        with InputStream(self.get_target_layout("species_profile")) as stream:
             for aln in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if species_list and aln["species_id"] not in args.species_list.split(","):
                     continue
-                if aln["species_coverage"] >= genome_coverage:
-                    profile[aln["species_id"]] = aln["species_coverage"]
+                if aln["coverage"] >= genome_coverage:
+                    profile[aln["species_id"]] = aln["coverage"]
         return profile
 
     def remove_output_dir(self):
         command(f"rm -rf {self.tempdir}", check=False)
-        command(f"rm -rf {self.outputdir}", check=False)
+        command(f"rm -rf {self.outdir}", check=False)

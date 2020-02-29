@@ -16,14 +16,14 @@ class UHGG:  # pylint: disable=too-few-public-methods
     def fetch_representative_genome_id(self, species_id):
         return self.representatives[species_id]
 
-    def fetch_contigs(species_ids, bt2_db_dir):
+    def fetch_contigs(self, species_ids, bt2_db_dir):
         argument_list = []
         for species_id in species_ids:
             argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), bt2_db_dir))
         contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return contigs_files
 
-    def fetch_centroids(species_ids, bt2_db_dir):
+    def fetch_centroids(self, species_ids, bt2_db_dir):
         argument_list = []
         for species_id in species_ids:
             argument_list.append((pangenome_file(species_id, "centroids.ffn.lz4"), f"{bt2_db_dir}/{species_id}"))
