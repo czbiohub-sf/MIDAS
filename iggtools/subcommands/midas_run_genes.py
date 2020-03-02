@@ -327,7 +327,8 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     print(len(covered_genes))
     # Filter to genes with non-zero depth, then group by species
     for gd in covered_genes.values():
-        print(gd)
+        if dg["depth"] > 0:
+            print(gd)
     nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
@@ -337,6 +338,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
+            print(gene_id, marker_id)
             if gene_id in centroids.keys():
                 markers[gene_id] = marker_id
     print(markers)
