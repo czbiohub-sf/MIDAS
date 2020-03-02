@@ -317,7 +317,8 @@ def midas_run_snps(args):
             print("Error: good the pre built repgrenomes bt2 index exist")
             exit(0)
     else:
-        bt2_db_dir = sample.get_target_layout("dbs_tempdir")
+        bt2_db_dir = sample.get_target_layout("dbsdir")
+        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
         bt2_db_name = "repgenomes"
 
         if args.species_list:
@@ -330,7 +331,7 @@ def midas_run_snps(args):
 
         # Download repgenome_id.fna for every species in the restricted species profile
         sample.create_species_subdir(species_profile.keys())
-        contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_dir)
+        contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_temp_dir)
 
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
