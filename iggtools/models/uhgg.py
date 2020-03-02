@@ -19,13 +19,15 @@ class UHGG:  # pylint: disable=too-few-public-methods
     def fetch_contigs(self, species_ids, bt2_db_dir):
         argument_list = []
         for species_id in species_ids:
-            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), bt2_db_dir))
+            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
+            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}))
         contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return contigs_files
 
     def fetch_centroids(self, species_ids, bt2_db_dir):
         argument_list = []
         for species_id in species_ids:
+            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
             argument_list.append((pangenome_file(species_id, "centroids.ffn.lz4"), f"{bt2_db_dir}/{species_id}"))
         centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return centroids_files

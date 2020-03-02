@@ -22,8 +22,8 @@ def get_single_layout(sample_name, dbtype=""):
             "dbs_tempdir":            f"{sample_name}/dbs/temp",
 
             "species_alignments_m8":  f"{sample_name}/species/temp/alignments.m8",
-            "snps_repgenomes_bam":    f"{sample_name}/snps/temp/repgenomes.bam",
-            "genes_pangenomes_bam":   f"{sample_name}/genes/temp/pangenomes.bam",
+            "snps_repgenomes_bam":    f"{sample_name}/dbs/temp/repgenomes.bam",
+            "genes_pangenomes_bam":   f"{sample_name}/dbs/temp/pangenomes.bam",
         }
     return per_species
 
@@ -54,7 +54,7 @@ class Sample: # pylint: disable=too-few-public-methods
         self.dbsdir = self.get_target_layout("dbsdir")
 
     def get_target_layout(self, filename, species_id=""):
-        return f"{self.midas_outdir}/{self.layout(species_id)[filename]}"
+        return os.path.join(self.midas_outdir, self.layout(species_id)[filename])
 
     def create_output_dir(self, debug=False):
         tsprint(f"Create output directory for sample {self.sample_name}.")
@@ -71,13 +71,15 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"rm -rf {self.dbsdir}")
             command(f"mkdir -p {self.dbsdir}")
 
-        ## I think from the midas_run_genes
-        # Add bt2_db_dir to the Sample
-        # When we mkdir tempdir, it is okay to add the species subdirectories ...
+    def create_species_subdir(self, species_ids):
+        for species_id in species_ids:
+            print(self.get_target_layout("dbs_tempdir"))
+            command(f"rm -rf {self.get_target_layout("dbs_tempdir")}/{species_id}")
+            command(f"mkdir -p {self.get_target_layout("dbs_tempdir")}/{species_id}")
+
         ## maybe we should created the outdir and tempdir when know what species will we process
         ## how about provide the index, then we don't those species_id subdirectories .... good question
-        #sample.bt2_db_dir = f"{sample.tempdir}/dbs"
-        # We should add the dbs/species_id
+
 
 
     def load_species_profile(self, dbtype):

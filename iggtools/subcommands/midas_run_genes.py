@@ -200,8 +200,7 @@ def write_results(outdir, species, num_covered_genes, species_markers_coverage, 
     # open outfiles for each species_id
     header = list(genes_schema.keys())
     for species_id, species_genes in species.items():
-        path = sample.layout(species_id)["genes_coverage"]
-        path = sample.get_target_layout("genes_coverage", species_id="")
+        path = sample.get_target_layout("genes_coverage", species_id)
         #path = f"{outdir}/genes/output/{species_id}.genes.lz4"
         with OutputStream(path) as sp_out:
             sp_out.write('\t'.join(header) + '\n')
@@ -214,8 +213,7 @@ def write_results(outdir, species, num_covered_genes, species_markers_coverage, 
     # summary stats
     header = list(genes_profile_schema.keys())
     #header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
-    #path = f"{outdir}/genes/summary.txt"
-    path = sample.layout()["genes_summary"]
+    path = sample.get_target_layout("genes_summary")
     with OutputStream(path) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_genes in species.items():
@@ -280,53 +278,49 @@ def midas_run_genes(args):
     global global_args
     global_args = args
 
-    try:
-        if args.bt2_db_indexes:
-            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
-                print("good the pre built bt2 index exist")
-                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-                bt2_db_name = os.path.basename(bt2_db_indexes)
-            else:
-                print("Error: good the pangenome pre built bt2 index exist")
-                exit(0)
+    #try:
+    if args.bt2_db_indexes:
+        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+            print("good the pre built bt2 index exist")
+            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+            bt2_db_name = os.path.basename(bt2_db_indexes)
         else:
-            # add this to the mapping layout
-            sample.bt2_db_dir = f"{sample.tempdir}/dbs"
-            command(f"mkdir -p {sample.bt2_db_dir}")
+            print("Error: good the pangenome pre built bt2 index exist")
+            exit(0)
+    else:
+        bt2_db_dir = sample.get_target_layout("dbs_tempdir")
+        bt2_db_name = "pangenomes"
 
-            bt2_db_dir = sample.bt2_db_dir
-            bt2_db_name = "pangenomes"
+        if args.species_list:
+            species_profile = sample.select_species(args.genome_coverage, args.species_list)
+        else:
+            species_profile = sample.select_species(args.genome_coverage)
 
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
+        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        db = UHGG(local_toc)
 
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
+        sample.create_species_subdir()
+        centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
 
-            # Because the pan genes are all named the same, so we NEED the species
-            # subdirectories
-            centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
-            # Download centroids.ffn for every species in the restricted species profile.
-            build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
-        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
+        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
+        exit(1)
+    # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+    # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-        bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False)
+    bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False)
 
-        # Compute coverage of pangenome for each present species and write results to disk
-        marker_genes_map = f"{marker_genes}/phyeco.map.lz4"
-        species, genes = scan_centroids(centroids_files)
-        num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
-        markers = scan_markers(genes, marker_genes_map)
-        species_markers_coverage = normalize(genes, covered_genes, markers)
+    # Compute coverage of pangenome for each present species and write results to disk
+    marker_genes_map = f"{marker_genes}/phyeco.map.lz4"
+    species, genes = scan_centroids(centroids_files)
+    num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
+    markers = scan_markers(genes, marker_genes_map)
+    species_markers_coverage = normalize(genes, covered_genes, markers)
 
-        write_results(args.midas_outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
-    except:
-        if not args.debug:
-            tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            command(f"rm -rf {tempdir}", check=False)
+    write_results(args.midas_outdir, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+    #except:
+    #    if not args.debug:
+    #        tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
+    #        command(f"rm -rf {tempdir}", check=False)
 
 
 @register_args
