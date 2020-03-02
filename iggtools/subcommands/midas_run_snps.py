@@ -337,7 +337,7 @@ def midas_run_snps(args):
     species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)
     # STOP HERE
 
-    write_snps_summary(species_pileup_stats, sample.get_target_layout("snps_summary")
+    write_snps_summary(species_pileup_stats, sample.get_target_layout("snps_summary"))
 
     #except:
     #    if not args.debug:
