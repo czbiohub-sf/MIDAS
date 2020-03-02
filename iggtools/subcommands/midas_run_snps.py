@@ -325,7 +325,7 @@ def midas_run_snps(args):
         db = UHGG(local_toc)
 
         # Download repgenome_id.fna for every species in the restricted species profile
-        sample.create_species_subdir()
+        sample.create_species_subdir(species_profile.keys())
         contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_dir)
 
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
