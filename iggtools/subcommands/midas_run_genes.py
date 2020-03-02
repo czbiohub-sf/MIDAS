@@ -315,7 +315,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     i = 0
     with AlignmentFile(pangenome_bamfile) as bamfile:
         for gene_id in centroids.keys():
-            if i >5:
+            if i >20:
                 break
             i = i + 1
             gene = centroids[gene_id]
@@ -326,7 +326,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     print(covered_genes)
     print(len(covered_genes))
     # Filter to genes with non-zero depth, then group by species
-    nz_gene_depth = [gd["depth"] for gd in covered_genes if gd["depth"] > 0]
+    nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage)
