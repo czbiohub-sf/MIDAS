@@ -1,4 +1,5 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
+import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
 from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map
