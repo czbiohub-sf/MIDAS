@@ -43,7 +43,6 @@ class UHGG:  # pylint: disable=too-few-public-methods
         return markers_db_files
 
 
-
 def _UHGG_load(toc_tsv, deep_sort=False):
     species = defaultdict(dict)
     representatives = {}

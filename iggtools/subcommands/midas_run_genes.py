@@ -10,7 +10,6 @@ from iggtools.common.utils import tsprint, command, InputStream, OutputStream, s
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
 from iggtools.models.uhgg import UHGG, pangenome_file
-from iggtools.params.outputs import marker_genes
 from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, MARKER_INFO_SCHEMA
 from iggtools.models.sample import Sample
 
@@ -279,7 +278,7 @@ def scan_markers(genes, marker_genes_map_file):
 
 def midas_run_genes(args):
 
-    sample = Sample(args.sample_name, args.midas_outdir, "snps")
+    sample = Sample(args.sample_name, args.midas_outdir, "genes")
     sample.create_output_dir(args.debug)
 
     global global_sample
@@ -319,7 +318,8 @@ def midas_run_genes(args):
     bowtie2_align(bt2_db_dir, bt2_db_name, args)
 
     # Compute coverage of pangenome for each present species and write results to disk
-    marker_genes_map = f"{marker_genes}/phyeco.map.lz4"
+
+    marker_genes_map = f"{outputs.marker_genes}/phyeco.map.lz4"
     species, genes = scan_centroids(centroids_files)
     num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(args, tempdir, genes)
     markers = scan_markers(genes, marker_genes_map)
