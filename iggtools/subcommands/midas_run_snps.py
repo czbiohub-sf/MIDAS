@@ -257,7 +257,7 @@ def pysam_pileup(species_ids, contigs_files):
 
     argument_list = []
     for species_index, species_id in enumerate(species_ids):
-        my_args = (species_id, sample.get_target_layout("snps_repgenomes_bam"), sample.get_target_layout("snps_summary", species_id), contigs_files[species_index], contigs_db_stats)
+        my_args = (species_id, sample.get_target_layout("snps_repgenomes_bam"), sample.get_target_layout("snps_pileup", species_id), contigs_files[species_index], contigs_db_stats)
         argument_list.append(my_args)
 
     mp = multiprocessing.Pool(num_physical_cores)

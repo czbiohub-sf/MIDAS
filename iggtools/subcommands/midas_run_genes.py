@@ -241,12 +241,10 @@ def write_genes_coverage(my_args):
             sp_out.write("\t".join(map(format_data, values)) + "\n")
 
 
-def write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage):
+def write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, outfile):
     # summary stats
     header = list(genes_profile_schema.keys())
-    #header = ['species_id', 'pangenome_size', 'covered_genes', 'fraction_covered', 'mean_coverage', 'marker_coverage', 'aligned_reads', 'mapped_reads']
-    path = sample.get_target_layout("genes_summary")
-    with OutputStream(path) as file:
+    with OutputStream(outfile) as file:
         file.write('\t'.join(header) + '\n')
         for species_id, species_genes in species.items():
             # No sparsity here -- should be extremely rare for a species row to be all 0.
@@ -325,8 +323,7 @@ def midas_run_genes(args):
         argument_list.append(species_genes, path)
     contigs_files = multithreading_map(write_genes_coverage, argument_list, num_physical_cores)
 
-
-    write_results(sample, species, num_covered_genes, species_markers_coverage, species_mean_coverage)
+    write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, sample.get_target_layout("genes_summary"))
     #except:
     #    if not args.debug:
     #        tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
