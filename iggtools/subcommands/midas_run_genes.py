@@ -201,6 +201,7 @@ def write_results(outdir, species, num_covered_genes, species_markers_coverage, 
     header = list(genes_schema.keys())
     for species_id, species_genes in species.items():
         path = sample.layout(species_id)["genes_coverage"]
+        path = sample.get_target_layout("genes_coverage", species_id="")
         #path = f"{outdir}/genes/output/{species_id}.genes.lz4"
         with OutputStream(path) as sp_out:
             sp_out.write('\t'.join(header) + '\n')
