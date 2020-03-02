@@ -154,7 +154,10 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read_worker(aln, args, aln_stats):
+def keep_read_worker(aln, aln_stats):
+    global global_args
+    args = global_args
+
     aln_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
@@ -177,15 +180,14 @@ def keep_read_worker(aln, args, aln_stats):
     return True
 
 
-def species_pileup(species_id, repgenomes_bam_path, snps_pileup_path, contig_file, contigs_db_stats):
+def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
     """ Read in contigs information for one species_id """
 
     global global_args
     args = global_args
 
-    contigs = {}
     contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
-
+    contigs = {}
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             contigs[rec.id] = {
@@ -206,17 +208,16 @@ def species_pileup(species_id, repgenomes_bam_path, snps_pileup_path, contig_fil
         }
 
     def keep_read(x):
-        return keep_read_worker(x, args, aln_stats)
+        return keep_read_worker(x, aln_stats)
 
-    header = list(snps_pileup_schema.keys())
     with OutputStream(snps_pileup_path) as file:
-
-        file.write('\t'.join(header) + '\n')
+        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
         zero_rows_allowed = not args.sparse
 
         # Loop over alignment for current species's contigs
-        with AlignmentFile(repgenomes_bam_path) as bamfile:
+        with AlignmentFile(repgenome_bamfile) as bamfile:
             for contig_id in sorted(list(contigs.keys())): # why need to sort?
+
                 contig = contigs[contig_id]
                 counts = bamfile.count_coverage(
                     contig_id,
@@ -287,9 +288,8 @@ def pysam_pileup(species_ids, contigs_files):
 
 def write_snps_summary(species_pileup_stats, outfile):
     """ Get summary of mapping statistics """
-    header = snps_profile_schema.keys()
     with OutputStream(outfile) as file:
-        file.write('\t'.join(header) + '\n')
+        file.write('\t'.join(snps_profile_schema.keys()) + '\n')
         for species_id, species_aln in species_pileup_stats.items():
             values = list(species_aln.values())
             values.insert(0, species_id)
@@ -306,48 +306,49 @@ def midas_run_snps(args):
     global global_args
     global_args = args
 
-    #try:
-    if args.bt2_db_indexes:
-        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
-            print("good the pre built bt2 index exist")
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(bt2_db_indexes)
+    try:
+        if args.bt2_db_indexes:
+            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+                print("good the pre built bt2 index exist")
+                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+                bt2_db_name = os.path.basename(bt2_db_indexes)
+            else:
+                print("Error: good the pre built repgrenomes bt2 index exist")
+                exit(0)
         else:
-            print("Error: good the pre built repgrenomes bt2 index exist")
-            exit(0)
-    else:
-        bt2_db_dir = sample.get_target_layout("dbsdir")
-        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
-        bt2_db_name = "repgenomes"
+            bt2_db_dir = sample.get_target_layout("dbsdir")
+            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+            bt2_db_name = "repgenomes"
 
-        if args.species_list:
-            species_profile = sample.select_species(args.genome_coverage, args.species_list)
-        else:
-            species_profile = sample.select_species(args.genome_coverage)
+            if args.species_list:
+                species_profile = sample.select_species(args.genome_coverage, args.species_list)
+            else:
+                species_profile = sample.select_species(args.genome_coverage)
 
-        local_toc = download_reference(outputs.genomes, bt2_db_dir)
-        db = UHGG(local_toc)
+            local_toc = download_reference(outputs.genomes, bt2_db_dir)
+            db = UHGG(local_toc)
 
-        # Download repgenome_id.fna for every species in the restricted species profile
-        sample.create_species_subdir(species_profile.keys())
-        contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_temp_dir)
+            # Download repgenome_id.fna for every species in the restricted species profile
+            sample.create_species_subdir(species_profile.keys())
+            contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_temp_dir)
 
-        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
-    # Use Bowtie2 to map reads to a representative genomes
-    bowtie2_align(bt2_db_dir, bt2_db_name, args)
+        # Use Bowtie2 to map reads to a representative genomes
+        bowtie2_align(bt2_db_dir, bt2_db_name, args)
 
-    # Use mpileup to identify SNPs
-    samtools_index(args, bt2_db_dir, bt2_db_name)
-    species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)
-    # STOP HERE: for the provided bowtie2 database index, we don't have the contigs files
+        # Use mpileup to identify SNPs
+        samtools_index(args, bt2_db_dir, bt2_db_name)
+        species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)
+        # TODO: for the provided bowtie2 database index, we don't have the contigs files
+        # One way is to move the scan_contigs_file_stats into build database and when provicded with bowtie2 index,
+        # also need to provide something like genome_stats
+        write_snps_summary(species_pileup_stats, sample.get_target_layout("snps_summary"))
 
-    write_snps_summary(species_pileup_stats, sample.get_target_layout("snps_summary"))
-
-    #except:
-    #    if not args.debug:
-    #   tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-    #        sample.remove_output_dir()
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            sample.remove_output_dir()
 
 
 @register_args

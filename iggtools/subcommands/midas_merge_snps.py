@@ -198,7 +198,7 @@ def accumulate(accumulator, ps_args):
             if site_ratio > args.site_ratio:
                 continue
 
-            # Computae derived columns
+            # Compute derived columns
             site_id = f"{ref_id}|{ref_pos}|{ref_allele}"
 
             # sample counts for A, C, G, T
