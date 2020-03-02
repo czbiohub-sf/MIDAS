@@ -27,6 +27,10 @@ def register_args(main_func):
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
     subparser.add_argument('-1',
                            dest='r1',
                            required=True,
