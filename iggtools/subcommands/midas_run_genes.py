@@ -420,11 +420,16 @@ def midas_run_genes(args):
     # Compute coverage of pangenome for each present species and write results to disk
     marker_genes_map = marker_genes_mapfile()
 
-    species, genes = scan_centroids(species_profile.keys(), centroids_files)
+    species_ids = species_profile.keys()[:1]
+    print("scan_centroids")
+    species, genes = scan_centroids(species_ids, centroids_files)
+    print("count_mapped_bp")
     num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(sample.get_target_layout("genes_pangenomes_bam"), genes)
     markers = scan_markers(genes, marker_genes_map)
+    print("normalize")
     species_markers_coverage = normalize(genes, covered_genes, markers)
     # Write results
+    print("write results")
     argument_list = []
     for species_id, species_genes in species.items():
         path = sample.get_target_layout("genes_coverage", species_id)
