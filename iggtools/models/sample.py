@@ -72,10 +72,10 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"mkdir -p {self.dbsdir}")
 
     def create_species_subdir(self, species_ids):
+        dbs_tempdir = self.get_target_layout("dbs_tempdir")
         for species_id in species_ids:
-            print(self.get_target_layout("dbs_tempdir"))
-            command(f"rm -rf {self.get_target_layout("dbs_tempdir")}/{species_id}")
-            command(f"mkdir -p {self.get_target_layout("dbs_tempdir")}/{species_id}")
+            command(f"rm -rf {dbs_tempdir}/{species_id}")
+            command(f"mkdir -p {dbs_tempdir}/{species_id}")
 
         ## maybe we should created the outdir and tempdir when know what species will we process
         ## how about provide the index, then we don't those species_id subdirectories .... good question
