@@ -294,6 +294,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     # Read in the per-species centroid fasta file
     # This piece of information should already be processed during the database build
+    print("centroids")
     centroids = {}
     with InputStream(centroids_file) as file:
         for centroid in Bio.SeqIO.parse(file, 'fasta'):
@@ -308,7 +309,8 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 "copies": 0.0,
             }
             centroids[centroid_gene_id] = centroid_gene
-
+    print(len(centroids))
+    print("covered_genes")
     # multiple_iterator would cause overhead
     covered_genes = {}
     with AlignmentFile(pangenome_bamfile) as bamfile:
@@ -318,12 +320,12 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
             gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
             covered_genes[gene_id] = gene
-
+    print(len(covered_genes))
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in covered_genes if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
-
+    print(mean_coverage)
     # Read phyeco.map to identify which centroid gene is a marker gene
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
@@ -331,7 +333,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
             if gene_id in centroids:
                 markers[gene_id] = marker_id
-
+    print(markers)
     # Normalize gene_depth by median_marker_depth, to infer gene_copy_count
     # compute marker depth: marker_id as the unique identifier
     markers_depth = defaultdict(int)
