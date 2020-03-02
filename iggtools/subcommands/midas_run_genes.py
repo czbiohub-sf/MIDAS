@@ -337,9 +337,10 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
-            if gene_id in centroids:
+            if gene_id in centroids.keys():
                 markers[gene_id] = marker_id
     print(markers)
+    #for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
     # Normalize gene_depth by median_marker_depth, to infer gene_copy_count
     # compute marker depth: marker_id as the unique identifier
     markers_depth = defaultdict(int)
