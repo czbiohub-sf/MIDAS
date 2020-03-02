@@ -12,6 +12,7 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align
 from iggtools.models.uhgg import UHGG, pangenome_file
 from iggtools.params.outputs import marker_genes
 from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, MARKER_INFO_SCHEMA
+from iggtools.models.sample import Sample
 
 
 DEFAULT_ALN_COV = 0.75
