@@ -299,7 +299,7 @@ def midas_run_genes(args):
         local_toc = download_reference(outputs.genomes, bt2_db_dir)
         db = UHGG(local_toc)
 
-        sample.create_species_subdir()
+        sample.create_species_subdir(species_profile.keys())
         centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
 
         build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
