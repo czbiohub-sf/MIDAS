@@ -22,8 +22,8 @@ def get_single_layout(sample_name, dbtype=""):
             "dbs_tempdir":            f"{sample_name}/dbs/temp",
 
             "species_alignments_m8":  f"{sample_name}/species/temp/alignments.m8",
-            "snps_repgenomes_bam":    f"{sample_name}/dbs/temp/repgenomes.bam",
-            "genes_pangenomes_bam":   f"{sample_name}/dbs/temp/pangenomes.bam",
+            "snps_repgenomes_bam":    f"{sample_name}/dbs/repgenomes.bam",
+            "genes_pangenomes_bam":   f"{sample_name}/dbs/pangenomes.bam",
         }
     return per_species
 
