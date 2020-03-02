@@ -35,9 +35,9 @@ class UHGG:  # pylint: disable=too-few-public-methods
 
     def fetch_marker_genes(self, dbs_dir):
         target_markers_db_files = [
-            f"{outputs.marker_genes}/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + \
-            [f"{outputs.marker_genes}/phyeco.map.lz4"
-            ]
+            f"{outputs.marker_genes}/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]
+            ] + \
+            [f"{outputs.marker_genes}/phyeco.map.lz4"]
         argument_list = ((mfile, dbs_dir) for mfile in target_markers_db_files)
         markers_db_files = multithreading_map(fetch_file_from_s3, argument_list)
         return markers_db_files
@@ -69,6 +69,9 @@ def raw_genome_file(genome_id, representative_id):
 def pangenome_file(species_id, component):
     # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
     return f"{outputs.pangenomes}/{species_id}/{component}"
+
+def marker_genes_mapfile():
+    return f"{outputs.marker_genes}/phyeco.map.lz4"
 
 def fetch_file_from_s3(packed_args):
     s3_path, local_path = packed_args

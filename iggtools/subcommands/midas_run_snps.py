@@ -11,7 +11,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, InputStream, Outp
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
 from iggtools.models.sample import Sample
 
 DEFAULT_ALN_COV = 0.75
@@ -271,14 +271,13 @@ def pysam_pileup(species_ids, contigs_files):
             "fraction_covered": 0.0,
             "mean_coverage": 0.0,
         }
-
         if species_stats["genome_length"] > 0:
-            species_stats["fraction_covered"] = format(species_stats["covered_bases"] / species_stats["genome_length"], DECIMALS)
+            species_stats["fraction_covered"] = species_stats["covered_bases"] / species_stats["genome_length"]
         if species_stats["covered_bases"] > 0:
-            species_stats["mean_coverage"] = format(species_stats["total_depth"] / species_stats["covered_bases"], DECIMALS)
+            species_stats["mean_coverage"] = species_stats["total_depth"] / species_stats["covered_bases"]
 
         species_pileup_stats[species_id] = species_stats
-    print(contigs_db_stats)
+
     tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
     tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
     tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")
