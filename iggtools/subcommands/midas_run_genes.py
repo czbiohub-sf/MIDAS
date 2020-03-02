@@ -307,7 +307,7 @@ def midas_run_genes(args):
         sample.create_species_subdir(species_profile.keys())
         centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
 
-        build_bowtie2_db(tempdir, bt2_db_name, centroids_files)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
         exit(1)
     # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
     # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
