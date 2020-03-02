@@ -71,9 +71,11 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"rm -rf {self.dbsdir}")
             command(f"mkdir -p {self.dbsdir}")
 
-    def create_species_subdir(self, species_ids):
+    def create_species_subdir(self, species_ids, debug=False):
         dbs_tempdir = self.get_target_layout("dbs_tempdir")
         for species_id in species_ids:
+            if debug and os.path.exists(f"{dbs_tempdir}/{species_id}"):
+                continue
             command(f"rm -rf {dbs_tempdir}/{species_id}")
             command(f"mkdir -p {dbs_tempdir}/{species_id}")
 
