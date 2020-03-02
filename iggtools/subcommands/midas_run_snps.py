@@ -90,6 +90,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
 
     #  Pileup flags (samtools, or postprocessing)
     subparser.add_argument('--aln_mapid',
@@ -331,7 +335,7 @@ def midas_run_snps(args):
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
     # Use Bowtie2 to map reads to a representative genomes
-    bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=True)
+    bowtie2_align(bt2_db_dir, bt2_db_name, args)
 
     # Use mpileup to identify SNPs
     samtools_index(args, bt2_db_dir, bt2_db_name)

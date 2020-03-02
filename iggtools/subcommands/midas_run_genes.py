@@ -98,6 +98,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
 
     subparser.add_argument('--max_reads',
                            dest='max_reads',
@@ -293,7 +297,8 @@ def midas_run_genes(args):
             print("Error: good the pangenome pre built bt2 index exist")
             exit(0)
     else:
-        bt2_db_dir = sample.get_target_layout("dbs_tempdir")
+        bt2_db_dir = sample.get_target_layout("dbsdir")
+        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
         bt2_db_name = "pangenomes"
 
         if args.species_list:
@@ -305,14 +310,14 @@ def midas_run_genes(args):
         db = UHGG(local_toc)
 
         sample.create_species_subdir(species_profile.keys())
-        centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_dir)
+        centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
 
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
         exit(1)
-    # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-    # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
+        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-    bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False)
+    bowtie2_align(bt2_db_dir, bt2_db_name, args)
 
     # Compute coverage of pangenome for each present species and write results to disk
     marker_genes_map = f"{marker_genes}/phyeco.map.lz4"
