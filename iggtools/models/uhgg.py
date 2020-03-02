@@ -20,7 +20,7 @@ class UHGG:  # pylint: disable=too-few-public-methods
         argument_list = []
         for species_id in species_ids:
             assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
-            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}))
+            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}"))
         contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return contigs_files
 
