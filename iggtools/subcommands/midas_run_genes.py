@@ -294,7 +294,6 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     # Read in the per-species centroid fasta file
     # This piece of information should already be processed during the database build
-    print("centroids")
     centroids = {}
     with InputStream(centroids_file) as file:
         for centroid in Bio.SeqIO.parse(file, 'fasta'):
@@ -309,17 +308,22 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 "copies": 0.0,
             }
             centroids[centroid_gene_id] = centroid_gene
-    print(len(centroids))
+
     print("covered_genes")
     # multiple_iterator would cause overhead
     covered_genes = {}
+    i = 0
     with AlignmentFile(pangenome_bamfile) as bamfile:
         for gene_id in centroids.keys():
+            if i >5:
+                break
+            i = i + 1
             gene = centroids[gene_id]
             gene["aligned_reads"] = bamfile.count(gene_id)
             gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
             gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
             covered_genes[gene_id] = gene
+    print(covered_genes)
     print(len(covered_genes))
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in covered_genes if gd["depth"] > 0]
