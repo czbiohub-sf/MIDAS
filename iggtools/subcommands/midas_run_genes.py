@@ -299,12 +299,6 @@ def gene_counts(packed_args):
         return (aligned_reads, mapped_reads, gene_depth)
 
 
-from itertools import islice
-
-def take(n, iterable):
-    "Return first n items of the iterable as a list"
-    return list(islice(iterable, n))
-
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     global global_args
@@ -327,7 +321,9 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             }
             centroids[centroid_gene_id] = centroid_gene
 
-    centroids = take(1000, centroids.items())
+    old = centroids
+    centroids = {k: old[k] for k in list(old)[:1000]}
+
     print(len(centroids))
     print("covered_genes")
     # multiple_iterator would cause overhead
