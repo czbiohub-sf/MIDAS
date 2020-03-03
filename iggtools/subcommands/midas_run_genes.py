@@ -339,21 +339,25 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage, num_covered_genes)
 
-    # Extract the depth of the marker_genes:
+
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    markers = {}
+    markers = defaultdict(dict)
+    # Get the marker_id to gene_id map
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
-        marker = dict(select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA))
-        for gene_id, marker_id in :
+        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA)):
+            assert marker_id not in markers, f"marker_id {marker_id} for species {species_id} corresponds to multiple gene_ids."
+            markers[marker_id]["gene_id"] = gene_id
             #if gene_id in centroids.keys(): #<--- add this later
-            markers[gene_id] = marker_id
     print(markers)
-
-    with InputStream(pangenome_file("101329", "gene_info.txt.lz4")) as stream:
-
-        gene_id centroid_99     centroid_95     centroid_90     centroid_85     centroid_80     centroid_75
-
     exit(1)
+    # Get the gene_id to centroid_gene_id map
+    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
+        for row in select_from_tsv(stream, ["gene_id", "centroid_99"]):
+            #if row[0] in markers.keys():
+            #    markers
+
+
+
     #for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
     # Normalize gene_depth by median_marker_depth, to infer gene_copy_count
     # compute marker depth: marker_id as the unique identifier
