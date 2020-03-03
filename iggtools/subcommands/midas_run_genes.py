@@ -1,5 +1,7 @@
 import json
 import os
+import multiprocessing
+
 from collections import defaultdict
 import numpy as np
 import Bio.SeqIO
@@ -8,7 +10,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, num_physical_cores
 from iggtools.params import outputs
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
 from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
@@ -222,7 +224,7 @@ def scan_centroids(species_ids, centroids_files):
 def scan_markers(genes, marker_genes_map_file):
     markers = []
     with InputStream(marker_genes_map_file) as mg_map:
-        for gene_id, marker_id in select_from_tsv(mg_map, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
+        for gene_id, marker_id in select_from_tsv(mg_map, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             if gene_id in genes:
                 markers.append((gene_id, marker_id))
     return markers
@@ -292,8 +294,9 @@ def gene_counts(packed_args):
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
-        gene_depth = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
-        return (aligned_reads, mapped_reads, gene_depth)
+        #gene_depth = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
+        gene_alnlen = (len(aln.query_alignment_sequence) for aln in  bamfile.fetch(gene_id))
+        return (aligned_reads, mapped_reads, gene_alnlen)
 
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
@@ -323,14 +326,15 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     covered_genes = {}
     if False:
         with AlignmentFile(pangenome_bamfile) as bamfile:
-            gene = centroids[gene_id]
-            gene["aligned_reads"] = bamfile.count(gene_id)
-            gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
-            gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
-            covered_genes[gene_id] = gene
+            for gene_id in centroids.keys():
+                gene = centroids[gene_id]
+                gene["aligned_reads"] = bamfile.count(gene_id)
+                gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
+                gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
+                covered_genes[gene_id] = gene
 
         print(len(covered_genes))
-        x = convered_genes
+        x = covered_genes
         y = centroids
         shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
         print(len(shared_items))
@@ -354,7 +358,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
+        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             if gene_id in centroids.keys():
                 markers[gene_id] = marker_id
     print(markers)
@@ -365,11 +369,11 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     for gene_id, marker_id in markers.items():
         markers_depth[marker_id] += centroids[gene_id]["depth"]
     # compute median marker depth for current species_id
-    markers_coverage  = np.median(list(markers_depth.values()))
+    markers_coverage = np.median(list(markers_depth.values()))
     # infer copy count for each covered gene
     if markers_coverage > 0:
         for gene in covered_genes.values():
-            gene["copies"] = gene["depth"] / marker_coverage
+            gene["copies"] = gene["depth"] / markers_coverage
     else:
         print("what's going on here {species_id}")
         exit(0)
@@ -404,10 +408,10 @@ def midas_run_genes(args):
 
     #try:
     if args.bt2_db_indexes:
-        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(bt2_db_indexes)):
+        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(args.bt2_db_indexes)):
             print("good the pre built bt2 index exist")
             bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(bt2_db_indexes)
+            bt2_db_name = os.path.basename(args.bt2_db_indexes)
         else:
             print("Error: good the pangenome pre built bt2 index exist")
             exit(0)

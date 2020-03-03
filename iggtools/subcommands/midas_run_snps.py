@@ -10,7 +10,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multithreading_hashmap, download_reference
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
 from iggtools.models.sample import Sample
 
