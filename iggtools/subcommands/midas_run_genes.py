@@ -289,8 +289,7 @@ def keep_read_worker(aln):
     return True
 
 
-def gene_counts(packed_args):
-    gene_id, pangenome_bamfile = packed_args
+def gene_counts(gene_id, pangenome_bamfile):
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
