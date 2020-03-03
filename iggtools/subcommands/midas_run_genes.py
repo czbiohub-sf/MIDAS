@@ -301,8 +301,8 @@ def gene_counts_one_gene(packed_args):
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
-    global global_args
-    args = global_args
+    #global global_args
+    #args = global_args
 
     # Read in the per-species centroid fasta file
     # This piece of information should already be processed during the database build
