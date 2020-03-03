@@ -333,7 +333,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         x = convered_genes
         y = centroids
         shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
-        print len(shared_items)
+        print(len(shared_items))
 
     args_list = []
     for gene_id in centroids.keys():
