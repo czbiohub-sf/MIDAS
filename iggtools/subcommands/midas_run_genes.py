@@ -325,24 +325,15 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     centroids = {k: old[k] for k in list(old)[:10000]}
 
     print(len(centroids))
-    print("covered_genes")
-    # multiple_iterator would cause overhead
-    covered_genes = {}
+
     if True:
         with AlignmentFile(pangenome_bamfile) as bamfile:
             for gene_id in centroids.keys():
                 gene = centroids[gene_id]
                 gene["aligned_reads"] = bamfile.count(gene_id)
                 gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
-                #gene["query_alnlen"] = [len(aln.query_alignment_sequence) for aln in bamfile.fetch(gene_id)]
                 gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
-                covered_genes[gene_id] = gene
 
-        print(len(covered_genes))
-        x = covered_genes
-        y = centroids
-        shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
-        print("the number of shared items = ", len(shared_items))
 
     if False:
         args_list = []
@@ -351,14 +342,9 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         print(len(args_list))
 
         results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
-        #mp = multiprocessing.Pool(num_physical_cores)
         print(results)
-        #for gene_id, value in mp.starmap(gene_counts, args_list):
-        #    print(gene_id, value)
 
-
-    # Basically, if the covered_genes are the same with the centroids, we only need to update the centroids. after each multiprocessing
-
+    # we only need to update the centroids. after each multiprocessing
 
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
@@ -380,6 +366,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     markers_depth = defaultdict(int)
     for gene_id, marker_id in markers.items():
         markers_depth[marker_id] += centroids[gene_id]["depth"]
+    print(markers_depth)
     # compute median marker depth for current species_id
     markers_coverage = np.median(list(markers_depth.values()))
     # infer copy count for each covered gene
@@ -387,7 +374,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         for gene in covered_genes.values():
             gene["copies"] = gene["depth"] / markers_coverage
     else:
-        print("what's going on here {species_id}")
+        print(f"what's going on here {species_id}")
         exit(0)
 
     # write to file
