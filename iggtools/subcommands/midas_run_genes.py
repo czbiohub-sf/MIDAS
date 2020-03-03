@@ -6,7 +6,7 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
 from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
@@ -287,6 +287,15 @@ def keep_read_worker(aln):
     return True
 
 
+def gene_counts(packed_args):
+    gene_id, pangenome_bamfile = packed_args
+    with AlignmentFile(pangenome_bamfile) as bamfile:
+        aligned_reads = bamfile.count(gene_id)
+        mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
+        gene_depth = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
+        return (aligned_reads, mapped_reads, gene_depth)
+
+
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     global global_args
@@ -312,17 +321,28 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     print("covered_genes")
     # multiple_iterator would cause overhead
     covered_genes = {}
-    with AlignmentFile(pangenome_bamfile) as bamfile:
-        for gene_id in centroids.keys():
+    if False:
+        with AlignmentFile(pangenome_bamfile) as bamfile:
             gene = centroids[gene_id]
             gene["aligned_reads"] = bamfile.count(gene_id)
             gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
             gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
             covered_genes[gene_id] = gene
-    print(len(covered_genes))
-    print(convered_genes[gene_id])
-    print(centroids[gene_id])
-    print("are they the same ??")
+
+        print(len(covered_genes))
+        x = convered_genes
+        y = centroids
+        shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
+        print len(shared_items)
+
+    args_list = []
+    for gene_id in centroids.keys():
+        args_list.append((gene_id, pangenome_bamfile))
+    mp = multiprocessing.Pool(num_physical_cores)
+    for gene_id, value in mp.starmap(gene_counts, args_list):
+        print(gene_id, value)
+
+    exit(1)
 
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
