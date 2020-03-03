@@ -347,7 +347,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     # we only need to update the centroids. after each multiprocessing
 
     # Filter to genes with non-zero depth, then group by species
-    nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
+    nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage, num_covered_genes)
