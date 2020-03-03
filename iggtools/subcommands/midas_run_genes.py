@@ -344,7 +344,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     markers = defaultdict(dict)
     # Get the marker_id to gene_id map
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA)):
+        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             assert marker_id not in markers, f"marker_id {marker_id} for species {species_id} corresponds to multiple gene_ids."
             markers[marker_id]["gene_id"] = gene_id
             #if gene_id in centroids.keys(): #<--- add this later
