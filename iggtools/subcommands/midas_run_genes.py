@@ -323,10 +323,12 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
 
     # Identify the centroid genes with marker genes or not
-    awk_command = f"awk \'$1 == {species_id}\'"
+    awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
+    print(marker_genes_mapfile()
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
+            print(gene_id)
             if gene_id in centroids.keys():
                 markers[gene_id] = marker_id
     print(markers)
