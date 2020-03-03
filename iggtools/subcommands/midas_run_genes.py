@@ -353,9 +353,9 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             markers[marker_id] = gene_id
             #if gene_id in centroids.keys(): #<--- add this later
     print(markers)
-
+    exit(1)
     # Get the gene_id to centroid_gene_id map
-    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
+    #with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
         #for row in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             #if row[0] in markers.keys():
             #    markers
