@@ -320,11 +320,12 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 "copies": 0.0,
             }
             centroids[centroid_gene_id] = centroid_gene
+    centroids = centroids[:1000]
     print(len(centroids))
     print("covered_genes")
     # multiple_iterator would cause overhead
     covered_genes = {}
-    if False:
+    if True:
         with AlignmentFile(pangenome_bamfile) as bamfile:
             for gene_id in centroids.keys():
                 gene = centroids[gene_id]
@@ -340,16 +341,17 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
         print(len(shared_items))
 
-    args_list = []
-    for gene_id in centroids.keys():
-        args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-    print(len(args_list))
+    if False:
+        args_list = []
+        for gene_id in centroids.keys():
+            args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
+        print(len(args_list))
 
-    results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
-    #mp = multiprocessing.Pool(num_physical_cores)
-    print(results)
-    #for gene_id, value in mp.starmap(gene_counts, args_list):
-    #    print(gene_id, value)
+        results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
+        #mp = multiprocessing.Pool(num_physical_cores)
+        print(results)
+        #for gene_id, value in mp.starmap(gene_counts, args_list):
+        #    print(gene_id, value)
 
     exit(1)
 
