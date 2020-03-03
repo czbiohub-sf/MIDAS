@@ -321,6 +321,16 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             }
             centroids[centroid_gene_id] = centroid_gene
 
+
+    # Identify the centroid genes with marker genes or not
+    awk_command = f"awk \'$1 == \"{species_id}\"\'"
+    markers = {}
+    with InputStream(marker_genes_mapfile(), awk_command) as stream:
+        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
+            if gene_id in centroids.keys():
+                markers[gene_id] = marker_id
+    print(markers)
+    exit(0)
     #old = centroids
     #centroids = {k: old[k] for k in list(old)[:10000]}
 
@@ -339,6 +349,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
         print(len(args_list))
 
+
         results = multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
         print(results[:10])
         # we only need to update the centroids. after each multiprocessing
@@ -353,7 +364,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage, num_covered_genes)
 
-    # Read phyeco.map to identify which centroid gene is a marker gene
+    # Identify the centroid genes with marker genes or not
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:

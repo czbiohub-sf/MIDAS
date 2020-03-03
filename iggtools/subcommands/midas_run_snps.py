@@ -154,11 +154,11 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read_worker(aln, aln_stats):
+def keep_read_worker(aln, pileup_stats):
     global global_args
     args = global_args
 
-    aln_stats['aligned_reads'] += 1
+    pileup_stats['aligned_reads'] += 1
 
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
@@ -176,11 +176,11 @@ def keep_read_worker(aln, aln_stats):
     if align_len / float(query_len) < args.aln_cov:
         return False
 
-    aln_stats['mapped_reads'] += 1
+    pileup_stats['mapped_reads'] += 1
     return True
 
 
-def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
+def species_pileup_old(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
     """ Read in contigs information for one species_id """
 
     global global_args
@@ -199,7 +199,7 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
             contigs_db_stats['total_seqs'] += 1
 
     # Summary statistics
-    aln_stats = {
+    pileup_stats = {
         "genome_length": 0,
         "total_depth": 0,
         "covered_bases": 0,
@@ -208,7 +208,7 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
         }
 
     def keep_read(x):
-        return keep_read_worker(x, aln_stats)
+        return keep_read_worker(x, pileup_stats)
 
     with OutputStream(snps_pileup_path) as file:
         file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
@@ -238,16 +238,101 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
                     if depth > 0 or zero_rows_allowed:
                         file.write('\t'.join(str(val) for val in values) + '\n')
 
-                    aln_stats['genome_length'] += 1
-                    aln_stats['total_depth'] += depth
+                    pileup_stats['genome_length'] += 1
+                    pileup_stats['total_depth'] += depth
                     if depth > 0:
-                        aln_stats['covered_bases'] += 1
+                        pileup_stats['covered_bases'] += 1
 
-    tsprint(json.dumps({species_id: aln_stats}, indent=4))
-    return (species_id, {k: str(v) for k, v in aln_stats.items()})
+    tsprint(json.dumps({species_id: pileup_stats}, indent=4))
+    return (species_id, {k: str(v) for k, v in pileup_stats.items()})
 
 
-def pysam_pileup(species_ids, contigs_files):
+def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
+    """ Read in contigs information for one species_id """
+
+    global global_args
+    args = global_args
+
+    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
+    # CONTIGS_DB_STATS didn't work as expected, so I remove codes related to that for now. Add me back later on after figuring out the parallel.
+
+    contigs = {}
+    with InputStream(contig_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            contigs[rec.id] = {
+                "species_id": species_id,
+                "contig_len": int(len(rec.seq)),
+                "contig_seq": str(rec.seq),
+            }
+
+
+    # Summary statistics
+    pileup_stats = {
+        "genome_length": 0, # we already know this number, isn't it?
+        "total_depth": 0,
+        "covered_bases": 0,
+        "aligned_reads":0,
+        "mapped_reads":0,
+        }
+
+    def keep_read(x):
+        return keep_read_worker(x, pileup_stats)
+
+    with OutputStream(snps_pileup_path) as file:
+        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
+        zero_rows_allowed = not args.sparse
+
+        # at least we need to paralize of the unit of contigs
+        # Loop over alignment for current species's contigs
+        #with AlignmentFile(repgenome_bamfile) as bamfile:
+        for contig_id in sorted(list(contigs.keys())): # why need to sort?
+
+            contig = contigs[contig_id]
+
+            repgenome_bamfile, contig_id, contigs, =  packged_args
+
+            contig_pileup = defaultdict()
+
+            # through this value we can easily know the ref_allele without need to loop over the BAM file
+            #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
+
+            global global_args
+            args = global_args
+
+            with AlignmentFile(repgenome_bamfile) as bamfile:
+                counts = bamfile.count_coverage(
+                        contig_id,
+                        start=0,
+                        end=contig["contig_len"],
+                        quality_threshold=args.aln_baseq,
+                        read_callback=keep_read)
+
+                for ref_pos in range(0, contig["contig_len"]):
+                    ref_allele = contig["contig_seq"][ref_pos]
+                    depth = sum([counts[nt][ref_pos] for nt in range(4)])
+                    count_a = counts[0][ref_pos]
+                    count_c = counts[1][ref_pos]
+                    count_g = counts[2][ref_pos]
+                    count_t = counts[3][ref_pos]
+                    record = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
+
+                    # Do I write separately or do I write to the same file by multiprocessingself
+                    # Write to the same file while compute by different processes seems definitely a bad idea.
+                    if depth > 0 or zero_rows_allowed:
+                        file.write("\t".join(map(format_data, record)) + "\n")
+
+                    #pileup_stats['genome_length'] += 1 # why do we do this here??
+
+                    pileup_stats['total_depth'] += depth
+                    if depth > 0:
+                        pileup_stats['covered_bases'] += 1
+
+    tsprint(json.dumps({species_id: pileup_stats}, indent=4))
+    return (species_id, {k: str(v) for k, v in pileup_stats.items()})
+
+
+
+def pysam_pileup_old(species_ids, contigs_files):
     """ Counting alleles and run pileups per species in parallel """
     global global_sample
     sample = global_sample
@@ -262,13 +347,13 @@ def pysam_pileup(species_ids, contigs_files):
         argument_list.append(my_args)
 
     mp = multiprocessing.Pool(num_physical_cores)
-    for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
+    for species_id, pileup_stats in mp.starmap(species_pileup, argument_list):
         species_stats = {
-            "genome_length": int(aln_stats['genome_length']),
-            "covered_bases": int(aln_stats['covered_bases']),
-            "total_depth": int(aln_stats['total_depth']),
-            "aligned_reads": int(aln_stats['aligned_reads']),
-            "mapped_reads": int(aln_stats['mapped_reads']),
+            "genome_length": int(pileup_stats['genome_length']),
+            "covered_bases": int(pileup_stats['covered_bases']),
+            "total_depth": int(pileup_stats['total_depth']),
+            "aligned_reads": int(pileup_stats['aligned_reads']),
+            "mapped_reads": int(pileup_stats['mapped_reads']),
             "fraction_covered": 0.0,
             "mean_coverage": 0.0,
         }
@@ -284,6 +369,8 @@ def pysam_pileup(species_ids, contigs_files):
     tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")
 
     return species_pileup_stats
+
+
 
 
 def write_snps_summary(species_pileup_stats, outfile):
