@@ -322,7 +322,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             centroids[centroid_gene_id] = centroid_gene
 
     old = centroids
-    centroids = {k: old[k] for k in list(old)[:1000]}
+    centroids = {k: old[k] for k in list(old)[:10000]}
 
     print(len(centroids))
     print("covered_genes")
@@ -342,7 +342,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         x = covered_genes
         y = centroids
         shared_items = {k: x[k] for k in x if k in y and x[k] == y[k]}
-        print(len(shared_items))
+        print("the number of shared items = ", len(shared_items))
 
     if False:
         args_list = []
