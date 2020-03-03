@@ -290,14 +290,12 @@ def keep_read_worker(aln):
 
 
 def gene_counts_one_gene(packed_args):
-    centroids, pangenome_bamfile, gene_id = packed_args
-
+    pangenome_bamfile, gene_id, gene_length = packed_args
     with AlignmentFile(pangenome_bamfile) as bamfile:
-        gene = centroids.get(gene_id)
-        gene["aligned_reads"] = bamfile.count(gene_id)
-        gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
-        gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
-        centroids[gene_id] = gene
+        aligned_reads = bamfile.count(gene_id)
+        mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
+        depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+        return (aligned_reads, mapped_reads, depth)
 
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
@@ -325,24 +323,24 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     # Identify the centroid genes with marker genes or not
     old = centroids
     centroids = {k: old[k] for k in list(old)[:10]}
-    centroids = defaultdict()
-    for k in list(old)[:10]:
-        centroids[k] = old[k]
-    print(centroids)
 
     args_list = []
     for gene_id in centroids.keys():
-        args_list.append((centroids, pangenome_bamfile, gene_id))
+        args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
 
-    multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
-    print(centroids)
+    results = multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
+    for gene_index, gene_id in enumerate(centroids):
+        gene = centroids.get(gene_id)
+        gene["aligned_reads"] = results[gene_index][0]
+        gene["mapped_reads"] = results[gene_index][1]
+        gene["depth"] = results[gene_index][2]
 
-    # Filter to genes with non-zero depth, then group by species
+
+    # Calculate the genes covered with non-zero depth
     nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage, num_covered_genes)
-
 
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = defaultdict(dict)
