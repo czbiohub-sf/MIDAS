@@ -289,13 +289,13 @@ def keep_read_worker(aln):
     return True
 
 
-def gene_counts(gene_id, pangenome_bamfile):
+def gene_counts(pangenome_bamfile, gene_id, gene_length):
+    # for chunks of genes, we need to have a dict of gene_id: gene_length
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
-        #gene_depth = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
-        gene_alnlen = (len(aln.query_alignment_sequence) for aln in  bamfile.fetch(gene_id))
-        return (aligned_reads, mapped_reads, gene_alnlen)
+        gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+        return (aligned_reads, mapped_reads, gene_depth)
 
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
@@ -329,6 +329,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 gene = centroids[gene_id]
                 gene["aligned_reads"] = bamfile.count(gene_id)
                 gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
+                #gene["query_alnlen"] = [len(aln.query_alignment_sequence) for aln in bamfile.fetch(gene_id)]
                 gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
                 covered_genes[gene_id] = gene
 
@@ -340,12 +341,16 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     args_list = []
     for gene_id in centroids.keys():
-        args_list.append((gene_id, pangenome_bamfile))
+        args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
+    args_list = args_list[:100]
     mp = multiprocessing.Pool(num_physical_cores)
     for gene_id, value in mp.starmap(gene_counts, args_list):
         print(gene_id, value)
 
     exit(1)
+
+    # Basically, if the covered_genes are the same with the centroids, we only need to update the centroids. after each multiprocessing
+
 
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
