@@ -296,8 +296,8 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
             # through this value we can easily know the ref_allele without need to loop over the BAM file
             #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
 
-            global global_args
-            args = global_args
+            #global global_args
+            #args = global_args
 
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 counts = bamfile.count_coverage(
