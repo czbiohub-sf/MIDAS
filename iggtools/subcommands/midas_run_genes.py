@@ -8,7 +8,7 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, num_physical_cores
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, multiprocessing_map, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
