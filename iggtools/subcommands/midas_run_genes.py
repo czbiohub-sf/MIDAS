@@ -320,8 +320,8 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             }
             centroids[centroid_gene_id] = centroid_gene
 
-    old = centroids
-    centroids = {k: old[k] for k in list(old)[:5000]}
+    #old = centroids
+    #centroids = {k: old[k] for k in list(old)[:5000]}
 
     args_list = []
     for gene_id in centroids.keys():

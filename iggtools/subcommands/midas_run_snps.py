@@ -266,6 +266,9 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
             }
 
 
+    genome_length = sum(c.contig_len for c in contigs)
+    print("genome_length", genome_length)
+
     # Summary statistics
     pileup_stats = {
         "genome_length": 0, # we already know this number, isn't it?
@@ -289,43 +292,47 @@ def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file,
 
             contig = contigs[contig_id]
 
-            repgenome_bamfile, contig_id, contigs, =  packged_args
+            pileup_stats, contigs, repgenome_bamfile, contig_id  =  packged_args
+            contig = contigs[contig_id]
 
             contig_pileup = defaultdict()
 
             # through this value we can easily know the ref_allele without need to loop over the BAM file
             #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
 
-            #global global_args
-            #args = global_args
+def process_contig(packged_args):
+    pileup_stats, contigs, repgenome_bamfile, contig_id = packged_args
 
-            with AlignmentFile(repgenome_bamfile) as bamfile:
-                counts = bamfile.count_coverage(
-                        contig_id,
-                        start=0,
-                        end=contig["contig_len"],
-                        quality_threshold=args.aln_baseq,
-                        read_callback=keep_read)
+    global global_args
+    args = global_args
+    results = []
+    with AlignmentFile(repgenome_bamfile) as bamfile:
+        counts = bamfile.count_coverage(
+                contig_id,
+                start=0,
+                end=contig["contig_len"],
+                quality_threshold=args.aln_baseq,
+                read_callback=keep_read)
 
-                for ref_pos in range(0, contig["contig_len"]):
-                    ref_allele = contig["contig_seq"][ref_pos]
-                    depth = sum([counts[nt][ref_pos] for nt in range(4)])
-                    count_a = counts[0][ref_pos]
-                    count_c = counts[1][ref_pos]
-                    count_g = counts[2][ref_pos]
-                    count_t = counts[3][ref_pos]
-                    record = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
+    for ref_pos in range(0, contig["contig_len"]):
+        ref_allele = contig["contig_seq"][ref_pos]
+        depth = sum([counts[nt][ref_pos] for nt in range(4)])
+        count_a = counts[0][ref_pos]
+        count_c = counts[1][ref_pos]
+        count_g = counts[2][ref_pos]
+        count_t = counts[3][ref_pos]
+        record = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
-                    # Do I write separately or do I write to the same file by multiprocessingself
-                    # Write to the same file while compute by different processes seems definitely a bad idea.
-                    if depth > 0 or zero_rows_allowed:
-                        file.write("\t".join(map(format_data, record)) + "\n")
+        # Do I write separately or do I write to the same file by multiprocessingself
+        # Write to the same file while compute by different processes seems definitely a bad idea.
+        if depth > 0 or zero_rows_allowed:
+            #file.write("\t".join(map(format_data, record)) + "\n")
+            results.append(record)
 
-                    #pileup_stats['genome_length'] += 1 # why do we do this here??
-
-                    pileup_stats['total_depth'] += depth
-                    if depth > 0:
-                        pileup_stats['covered_bases'] += 1
+        pileup_stats['genome_length'] += 1 # why do we do this here??
+        pileup_stats['total_depth'] += depth
+        if depth > 0:
+            pileup_stats['covered_bases'] += 1
 
     tsprint(json.dumps({species_id: pileup_stats}, indent=4))
     return (species_id, {k: str(v) for k, v in pileup_stats.items()})
