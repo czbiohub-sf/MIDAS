@@ -308,37 +308,33 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 "copies": 0.0,
             }
             centroids[centroid_gene_id] = centroid_gene
-
+    print(len(centroids))
     print("covered_genes")
     # multiple_iterator would cause overhead
     covered_genes = {}
-    i = 0
     with AlignmentFile(pangenome_bamfile) as bamfile:
         for gene_id in centroids.keys():
-            if i >1000:
-                break
-            i = i + 1
             gene = centroids[gene_id]
             gene["aligned_reads"] = bamfile.count(gene_id)
             gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
             gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
             covered_genes[gene_id] = gene
-
     print(len(covered_genes))
+    print(convered_genes[gene_id])
+    print(centroids[gene_id])
+    print("are they the same ??")
+
     # Filter to genes with non-zero depth, then group by species
-    for gd in covered_genes.values():
-        if gd["depth"] > 0:
-            print(gd)
     nz_gene_depth = [gd["depth"] for gd in covered_genes.values() if gd["depth"] > 0]
     num_covered_genes = len(nz_gene_depth)
     mean_coverage = np.mean(nz_gene_depth)
-    print(mean_coverage)
+    print(mean_coverage, num_covered_genes)
+
     # Read phyeco.map to identify which centroid gene is a marker gene
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema = MARKER_INFO_SCHEMA):
-            print(gene_id, marker_id)
             if gene_id in centroids.keys():
                 markers[gene_id] = marker_id
     print(markers)
@@ -372,7 +368,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     values = [species_id, pangenome_size, \
               num_covered_genes, num_covered_genes / pangenome_size, \
               mean_coverage, markers_coverage, aligned_reads, mapped_reads]
-
+    print(values)
     return values
 
 
