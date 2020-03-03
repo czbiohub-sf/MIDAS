@@ -162,7 +162,7 @@ def count_mapped_bp(pangenome_bamfile, genes):
     nonzero_gene_depths = defaultdict(list)
     for g in covered_genes.values():
         gene_depth = g["depth"]
-        if gene_depth > 0:  # This should always pass, because args.aln_cov is always >0.
+        if gene_depth > 0:  # WRONG. covered_genes is the same with centriods. This should always pass, because args.aln_cov is always >0.
             species_id = g["species_id"]
             nonzero_gene_depths[species_id].append(gene_depth)
 
@@ -356,7 +356,6 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         #for gene_id, value in mp.starmap(gene_counts, args_list):
         #    print(gene_id, value)
 
-    exit(1)
 
     # Basically, if the covered_genes are the same with the centroids, we only need to update the centroids. after each multiprocessing
 
