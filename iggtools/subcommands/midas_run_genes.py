@@ -289,7 +289,8 @@ def keep_read_worker(aln):
     return True
 
 
-def gene_counts(pangenome_bamfile, gene_id, gene_length):
+def gene_counts(packed_args):
+    pangenome_bamfile, gene_id, gene_length = packed_args
     # for chunks of genes, we need to have a dict of gene_id: gene_length
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
@@ -343,9 +344,12 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     for gene_id in centroids.keys():
         args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
     args_list = args_list[:100]
-    mp = multiprocessing.Pool(num_physical_cores)
-    for gene_id, value in mp.starmap(gene_counts, args_list):
-        print(gene_id, value)
+
+    results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
+    #mp = multiprocessing.Pool(num_physical_cores)
+    print(results)
+    #for gene_id, value in mp.starmap(gene_counts, args_list):
+    #    print(gene_id, value)
 
     exit(1)
 
