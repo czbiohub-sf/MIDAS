@@ -290,13 +290,13 @@ def keep_read_worker(aln):
 
 
 def gene_counts_one_gene(packed_args):
-    pangenome_bamfile, gene_id, gene_length = packed_args
-    # for chunks of genes, we need to have a dict of gene_id: gene_length
+    centroids, pangenome_bamfile, gene_id = packed_args
+
     with AlignmentFile(pangenome_bamfile) as bamfile:
-        aligned_reads = bamfile.count(gene_id)
-        mapped_reads = bamfile.count(gene_id, read_callback=keep_read_worker)
-        gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
-        return (aligned_reads, mapped_reads, gene_depth)
+        gene = centroids[gene_id]
+        gene["aligned_reads"] = bamfile.count(gene_id)
+        gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
+        gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
 
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
@@ -321,43 +321,17 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             }
             centroids[centroid_gene_id] = centroid_gene
 
-
     # Identify the centroid genes with marker genes or not
-    awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    markers = {}
-    with InputStream(marker_genes_mapfile(), awk_command) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-            print(gene_id)
-            if gene_id in centroids.keys():
-                markers[gene_id] = marker_id
-    print(markers)
-    exit(0)
-    #old = centroids
-    #centroids = {k: old[k] for k in list(old)[:10000]}
+    old = centroids
+    centroids = {k: old[k] for k in list(old)[:100]}
+    print(centroids)
 
-    if False:
-        with AlignmentFile(pangenome_bamfile) as bamfile:
-            for gene_id in centroids.keys():
-                gene = centroids[gene_id]
-                gene["aligned_reads"] = bamfile.count(gene_id)
-                gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
-                gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
+    args_list = []
+    for gene_id in centroids.keys():
+        args_list.append((centroids, pangenome_bamfile, gene_id))
 
-
-    if True:
-        args_list = []
-        for gene_id in centroids.keys():
-            args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-        print(len(args_list))
-
-
-        results = multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
-        print(results[:10])
-        # we only need to update the centroids. after each multiprocessing
-        for gene_index, gene_id in enumerate(centroids.keys()):
-            centroids[gene_id]["aligned_reads"] = results[gene_index][0]
-            centroids[gene_id]["mapped_reads"] = results[gene_index][1]
-            centroids[gene_id]["depth"] = results[gene_index][2]
+    multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
+    print(centroids)
 
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
@@ -365,14 +339,21 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     mean_coverage = np.mean(nz_gene_depth)
     print(mean_coverage, num_covered_genes)
 
-    # Identify the centroid genes with marker genes or not
+    # Extract the depth of the marker_genes:
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = {}
     with InputStream(marker_genes_mapfile(), awk_command) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-            if gene_id in centroids.keys():
-                markers[gene_id] = marker_id
+        marker = dict(select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA))
+        for gene_id, marker_id in :
+            #if gene_id in centroids.keys(): #<--- add this later
+            markers[gene_id] = marker_id
     print(markers)
+
+    with InputStream(pangenome_file("101329", "gene_info.txt.lz4")) as stream:
+
+        gene_id centroid_99     centroid_95     centroid_90     centroid_85     centroid_80     centroid_75
+
+    exit(1)
     #for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
     # Normalize gene_depth by median_marker_depth, to infer gene_copy_count
     # compute marker depth: marker_id as the unique identifier
@@ -380,6 +361,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     for gene_id, marker_id in markers.items():
         markers_depth[marker_id] += centroids[gene_id]["depth"]
     print(markers_depth)
+
     # compute median marker depth for current species_id
     markers_coverage = np.median(list(markers_depth.values()))
     # infer copy count for each covered gene
