@@ -289,7 +289,7 @@ def keep_read_worker(aln):
     return True
 
 
-def gene_counts(packed_args):
+def gene_counts_one_gene(packed_args):
     pangenome_bamfile, gene_id, gene_length = packed_args
     # for chunks of genes, we need to have a dict of gene_id: gene_length
     with AlignmentFile(pangenome_bamfile) as bamfile:
@@ -321,12 +321,10 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
             }
             centroids[centroid_gene_id] = centroid_gene
 
-    old = centroids
-    centroids = {k: old[k] for k in list(old)[:10000]}
+    #old = centroids
+    #centroids = {k: old[k] for k in list(old)[:10000]}
 
-    print(len(centroids))
-
-    if True:
+    if False:
         with AlignmentFile(pangenome_bamfile) as bamfile:
             for gene_id in centroids.keys():
                 gene = centroids[gene_id]
@@ -335,16 +333,19 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
 
 
-    if False:
+    if True:
         args_list = []
         for gene_id in centroids.keys():
             args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
         print(len(args_list))
 
-        results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
-        print(results)
-
-    # we only need to update the centroids. after each multiprocessing
+        results = multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
+        print(results[:10])
+        # we only need to update the centroids. after each multiprocessing
+        for gene_index, gene_id in enumerate(centroids.keys()):
+            centroids[gene_id]["aligned_reads"] = results[gene_index][0]
+            centroids[gene_id]["mapped_reads"] = results[gene_index][1]
+            centroids[gene_id]["depth"] = results[gene_index][2-
 
     # Filter to genes with non-zero depth, then group by species
     nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
