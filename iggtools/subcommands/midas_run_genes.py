@@ -334,7 +334,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         gene["aligned_reads"] = results[gene_index][0]
         gene["mapped_reads"] = results[gene_index][1]
         gene["depth"] = results[gene_index][2]
-
+    print(centroids)
 
     # Calculate the genes covered with non-zero depth
     nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
