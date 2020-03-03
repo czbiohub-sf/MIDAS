@@ -297,6 +297,7 @@ def gene_counts_one_gene(packed_args):
         gene["aligned_reads"] = bamfile.count(gene_id)
         gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
         gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
+        centroids[gene_id] = gene
 
 
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
