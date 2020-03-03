@@ -320,7 +320,8 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
                 "copies": 0.0,
             }
             centroids[centroid_gene_id] = centroid_gene
-    centroids = centroids[:1000]
+
+    centroids = take(1000, centroids.items())
     print(len(centroids))
     print("covered_genes")
     # multiple_iterator would cause overhead
