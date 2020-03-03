@@ -343,7 +343,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     args_list = []
     for gene_id in centroids.keys():
         args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-    args_list = args_list[:100]
+    print(len(args_list))
 
     results = multiprocessing_map(gene_counts, args_list, num_procs=num_physical_cores)
     #mp = multiprocessing.Pool(num_physical_cores)
