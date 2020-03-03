@@ -351,12 +351,10 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     print(markers)
     exit(1)
     # Get the gene_id to centroid_gene_id map
-    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
-        for row in select_from_tsv(stream, ["gene_id", "centroid_99"]):
+#    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
+        #for row in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             #if row[0] in markers.keys():
             #    markers
-
-
 
     #for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
     # Normalize gene_depth by median_marker_depth, to infer gene_copy_count
