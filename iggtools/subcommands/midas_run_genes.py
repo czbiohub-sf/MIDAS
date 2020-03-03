@@ -299,6 +299,12 @@ def gene_counts(packed_args):
         return (aligned_reads, mapped_reads, gene_depth)
 
 
+from itertools import islice
+
+def take(n, iterable):
+    "Return first n items of the iterable as a list"
+    return list(islice(iterable, n))
+
 def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     global global_args
