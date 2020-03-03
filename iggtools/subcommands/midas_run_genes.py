@@ -293,7 +293,7 @@ def gene_counts_one_gene(packed_args):
     centroids, pangenome_bamfile, gene_id = packed_args
 
     with AlignmentFile(pangenome_bamfile) as bamfile:
-        gene = centroids[gene_id]
+        gene = centroids.get(gene_id)
         gene["aligned_reads"] = bamfile.count(gene_id)
         gene["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read_worker)
         gene["depth"] = sum((len(aln.query_alignment_sequence) / gene["length"] for aln in bamfile.fetch(gene_id)))
@@ -323,7 +323,10 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
 
     # Identify the centroid genes with marker genes or not
     old = centroids
-    centroids = {k: old[k] for k in list(old)[:100]}
+    centroids = {k: old[k] for k in list(old)[:10]}
+    centroids = defaultdict()
+    for k in list(old)[:10]:
+        centroids[k] = old[k]
     print(centroids)
 
     args_list = []
@@ -347,11 +350,12 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             assert marker_id not in markers, f"marker_id {marker_id} for species {species_id} corresponds to multiple gene_ids."
             markers[marker_id]["gene_id"] = gene_id
+            markers[marker_id] = gene_id
             #if gene_id in centroids.keys(): #<--- add this later
     print(markers)
-    exit(1)
+
     # Get the gene_id to centroid_gene_id map
-#    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
+    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
         #for row in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             #if row[0] in markers.keys():
             #    markers
