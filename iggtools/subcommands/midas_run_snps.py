@@ -154,99 +154,6 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read_worker(aln, pileup_stats):
-    global global_args
-    args = global_args
-
-    pileup_stats['aligned_reads'] += 1
-
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < args.aln_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < args.aln_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < args.aln_cov:
-        return False
-
-    pileup_stats['mapped_reads'] += 1
-    return True
-
-
-def species_pileup_old(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
-    """ Read in contigs information for one species_id """
-
-    global global_args
-    args = global_args
-
-    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
-    contigs = {}
-    with InputStream(contig_file) as file:
-        for rec in Bio.SeqIO.parse(file, 'fasta'):
-            contigs[rec.id] = {
-                "species_id": species_id,
-                "contig_len": int(len(rec.seq)),
-                "contig_seq": str(rec.seq),
-            }
-            contigs_db_stats['total_length'] += contigs[rec.id]["contig_len"]
-            contigs_db_stats['total_seqs'] += 1
-
-    # Summary statistics
-    pileup_stats = {
-        "genome_length": 0,
-        "total_depth": 0,
-        "covered_bases": 0,
-        "aligned_reads":0,
-        "mapped_reads":0,
-        }
-
-    def keep_read(x):
-        return keep_read_worker(x, pileup_stats)
-
-    with OutputStream(snps_pileup_path) as file:
-        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
-        zero_rows_allowed = not args.sparse
-
-        # Loop over alignment for current species's contigs
-        with AlignmentFile(repgenome_bamfile) as bamfile:
-            for contig_id in sorted(list(contigs.keys())): # why need to sort?
-
-                contig = contigs[contig_id]
-                counts = bamfile.count_coverage(
-                    contig_id,
-                    start=0,
-                    end=contig["contig_len"],
-                    quality_threshold=args.aln_baseq,
-                    read_callback=keep_read)
-
-                for ref_pos in range(0, contig["contig_len"]):
-                    ref_allele = contig["contig_seq"][ref_pos]
-                    depth = sum([counts[nt][ref_pos] for nt in range(4)])
-                    count_a = counts[0][ref_pos]
-                    count_c = counts[1][ref_pos]
-                    count_g = counts[2][ref_pos]
-                    count_t = counts[3][ref_pos]
-                    values = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
-
-                    if depth > 0 or zero_rows_allowed:
-                        file.write('\t'.join(str(val) for val in values) + '\n')
-
-                    pileup_stats['genome_length'] += 1
-                    pileup_stats['total_depth'] += depth
-                    if depth > 0:
-                        pileup_stats['covered_bases'] += 1
-
-    tsprint(json.dumps({species_id: pileup_stats}, indent=4))
-    return (species_id, {k: str(v) for k, v in pileup_stats.items()})
-
-
 def keep_read(aln):
     global global_args
     args = global_args
@@ -298,14 +205,14 @@ def contig_pileup(packged_args):
                 read_callback=keep_read)
 
     aln_stats = {
-            "species_id": species_id,
-            "contig_id": contig_id,
-            "contig_length": contig["contig_len"],
-            "aligned_reads": aligned_reads,
-            "mapped_reads": mapped_reads,
-            "contig_total_depth": 0,
-            "contig_covered_bases":0
-    }
+        "species_id": species_id,
+        "contig_id": contig_id,
+        "contig_length": contig["contig_len"],
+        "aligned_reads": aligned_reads,
+        "mapped_reads": mapped_reads,
+        "contig_total_depth": 0,
+        "contig_covered_bases":0
+        }
 
     pileup_counts = defaultdict(list)
     for ref_pos in range(0, contig["contig_len"]):
@@ -376,8 +283,6 @@ def species_pileup(species_ids, contigs_files):
 #        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
         # through this value we can easily know the ref_allele without need to loop over the BAM file
         #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
-
-
 
 
 def pysam_pileup_old(species_ids, contigs_files):
@@ -469,10 +374,11 @@ def midas_run_snps(args):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
         # Use Bowtie2 to map reads to a representative genomes
-        bowtie2_align(bt2_db_dir, bt2_db_name, args)
+        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+        bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
+        samtools_index(repgenome_bamfile, args.debug)
 
         # Use mpileup to identify SNPs
-        samtools_index(args, bt2_db_dir, bt2_db_name)
         species_pileup(species_profile.keys(), contigs_files)
 
         species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)

@@ -7,7 +7,7 @@ from iggtools.models.pool import Pool, select_species
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, multithreading_map, num_physical_cores, download_reference
 from iggtools.params import outputs
-from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, DECIMALS
+from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, DECIMALS
 
 
 DEFAULT_GENOME_DEPTH = 1.0

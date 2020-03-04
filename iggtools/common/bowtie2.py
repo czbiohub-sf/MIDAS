@@ -34,14 +34,14 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
     return bt2_db_prefix
 
 
-def bowtie2_align(bt2_db_dir, bt2_db_name, args):
+def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     """ Use Bowtie2 to map reads to prebuilt bowtie2 database """
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
     bamfile_prefix = f"{bt2_db_dir}/{bt2_db_name}"
 
-    if args.debug and os.path.exists(f"{bamfile_prefix}.bam"):
-        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {bamfile_prefix}.bam")
+    if args.debug and os.path.exists(bamfile_path):
+        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {bamfile_path}")
         return
 
     # Construct bowtie2 align input arguments
@@ -62,25 +62,25 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, args):
         if args.aln_sort:
             command(f"set -o pipefail; {bt2_command} | \
                     samtools view --threads {num_physical_cores} -b - | \
-                    samtools sort --threads {num_physical_cores} -o {bamfile_prefix}.bam")
+                    samtools sort --threads {num_physical_cores} -o {bamfile_path}")
         else:
             command(f"set -o pipefail; {bt2_command} | \
-                    samtools view --threads {num_physical_cores} -b - > {bamfile_prefix}.bam")
+                    samtools view --threads {num_physical_cores} -b - > {bamfile_path}")
     except:
-        tsprint(f"Bowtie2 align to {bamfile_prefix}.bam run into error")
-        command(f"rm -f {bamfile_prefix}.bam")
+        tsprint(f"Bowtie2 align to {bamfile_path} run into error")
+        command(f"rm -f {bamfile_path}")
         raise
 
 
-def samtools_index(args, bt2_db_dir, bt2_db_name):
-    bamfile_prefix = f"{bt2_db_dir}/{bt2_db_name}"
-    if args.debug and os.path.exists(f"{bamfile_prefix}.bam.bai"):
-        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_prefix}.bam")
+def samtools_index(bamfile_path, debug):
+    
+    if debug and os.path.exists(f"{bamfile_path}.bai"):
+        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_path}.bai")
         return
 
     try:
-        command(f"samtools index -@ {num_physical_cores} {bamfile_prefix}.bam")
+        command(f"samtools index -@ {num_physical_cores} {bamfile_path}")
     except:
-        tsprint(f"Samtools index {bamfile_prefix}.bam run into error")
-        command(f"rm -f {bamfile_prefix}.bam.bai")
+        tsprint(f"Samtools index {bamfile_path} run into error")
+        command(f"rm -f {bamfile_path}.bai")
         raise

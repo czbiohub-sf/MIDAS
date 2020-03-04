@@ -122,7 +122,7 @@ DEFAULT_MIN_COPY = 0.35
 
 DECIMALS = ".3f"
 
-genes_profile_schema = {
+genes_summary_schema = {
     "species_id": str,
     "pangenome_size": int,
     "covered_genes": int,
@@ -142,11 +142,12 @@ genes_info_schema = {
 }
 
 
-genes_schema = {
+genes_coverage_schema = {
     "gene_id": str,
-    "count_reads": int,
-    "coverage": float,
-    "copy_number": float,
+    "aligned_reads": int,
+    "mapped_reads": int,
+    "total_depth": float,
+    "copy_numbers": float,
 }
 
 

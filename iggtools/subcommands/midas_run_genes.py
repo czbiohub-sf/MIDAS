@@ -12,7 +12,7 @@ from iggtools.common.utils import tsprint, command, InputStream, OutputStream, s
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
-from iggtools.params.schemas import genes_profile_schema, genes_info_schema, genes_schema, MARKER_INFO_SCHEMA, format_data
+from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 
 
@@ -113,92 +113,9 @@ def register_args(main_func):
     return main_func
 
 
-def count_mapped_bp(pangenome_bamfile, genes):
-    """ Count number of bp mapped to each gene across pangenomes.
-    Return number covered genes and average gene depth per species.
-    Result contains only covered species, but being a defaultdict,
-    would yield 0 for any uncovered species, which is appropriate.
-    """
-
-    global global_args
-    args = global_args
-
-    bamfile = AlignmentFile(pangenome_bamfile, "rb")
-    covered_genes = {}
-
-    # loop over alignments, sum values per gene
-    for aln in bamfile.fetch(until_eof=True):
-        gene_id = bamfile.get_reference_name(aln.reference_id)
-        gene = genes[gene_id]
-        gene["aligned_reads"] += 1
-        if keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov):
-            gene["mapped_reads"] += 1
-            gene["depth"] += len(aln.query_alignment_sequence) / float(gene["length"])
-            covered_genes[gene_id] = gene
-
-    tsprint("Pangenome count_mapped_bp:  total aligned reads: %s" % sum(g["aligned_reads"] for g in genes.values()))
-    tsprint("Pangenome count_mapped_bp:  total mapped reads: %s" % sum(g["mapped_reads"] for g in genes.values()))
-
-    # Filter to genes with non-zero depth, then group by species
-    nonzero_gene_depths = defaultdict(list)
-    for g in covered_genes.values():
-        gene_depth = g["depth"]
-        if gene_depth > 0:  # WRONG. covered_genes is the same with centriods. This should always pass, because args.aln_cov is always >0.
-            species_id = g["species_id"]
-            nonzero_gene_depths[species_id].append(gene_depth)
-
-    # Compute number of covered genes per species, and average gene depth.
-    num_covered_genes = defaultdict(int)
-    mean_coverage = defaultdict(float)
-    for species_id, non_zero_depths in nonzero_gene_depths.items():
-        num_covered_genes[species_id] = len(non_zero_depths)
-        mean_coverage[species_id] = np.mean(non_zero_depths)
-
-    return num_covered_genes, mean_coverage, covered_genes
-
-
-
-def write_genes_coverage(my_args):
-    species_genes, path = my_args
-    """ Write centroid genes mappign for one species """
-    with OutputStream(path) as sp_out:
-        sp_out.write('\t'.join(genes_schema.keys()) + '\n')
-        for gene_id, gene in species_genes.items():
-            if gene["depth"] == 0:
-                # Sparse by default here.
-                # You can get the pangenome_size from the summary file, emitted below.
-                continue
-            values = [gene_id, gene["mapped_reads"], gene["depth"], gene["copies"]]
-            sp_out.write("\t".join(map(format_data, values)) + "\n")
-
-
-def write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, outfile):
-    # summary stats
-    with OutputStream(outfile) as file:
-        file.write('\t'.join(genes_profile_schema.keys()) + '\n')
-        for species_id, species_genes in species.items():
-            # No sparsity here -- should be extremely rare for a species row to be all 0.
-            aligned_reads = sum(g["aligned_reads"] for g in species_genes.values())
-            mapped_reads = sum(g["mapped_reads"] for g in species_genes.values())
-            pangenome_size = len(species_genes)
-
-            values = [
-                species_id,
-                pangenome_size,
-                num_covered_genes[species_id],
-                num_covered_genes[species_id] / pangenome_size,
-                species_mean_coverage[species_id],
-                species_markers_coverage[species_id],
-                aligned_reads,
-                mapped_reads
-            ]
-
-            file.write("\t".join(map(format_data, values)) + "\n")
-
-
-def scan_centroids(centroids_file):
+def scan_centroids(centroids_file, species_id):
+    """ parse centroid fasta for given species_id"""
     centroids = {}
-    # Read in the per-species centroid fasta file
     # TODO part of the information should already be processed during the database build
     with InputStream(centroids_file) as file:
         for centroid in Bio.SeqIO.parse(file, 'fasta'):
@@ -237,16 +154,39 @@ def keep_read(aln):
     return True
 
 
+def write_genes_summary(genes_summary_list, genes_summary_path):
+    with OutputStream(genes_summary_path) as stream:
+        stream.write("\t".join(genes_summary_schema.keys()) + "\n")
+
+        for record in genes_summary_list:
+            stream.write("\t".join(map(format_data, record)) + "\n")
+
+
+def write_genes_coverage(centroids, coverage_path):
+
+    with OutputStream(coverage_path) as stream:
+        stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
+
+        for gene_id, gene_dict in centroids.items():
+            if gene_dict["depth"] == 0: # Sparse by default here.
+                continue
+            vals = [gene_id, gene_dict["aligned_reads"], gene_dict["mapped_reads"], gene_dict["depth"], gene_dict["copies"]]
+            stream.write("\t".join(map(format_data, vals)) + "\n")
+    return "success"
+
+
 def compute_gene_coverage(packed_args):
+    """ Count number of bp mapped to each pan-gene. """
     pangenome_bamfile, gene_id, gene_length = packed_args
+
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
         depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
-        return (aligned_reads, mapped_reads, depth)
+    return (aligned_reads, mapped_reads, depth)
 
 
-def compute_median_marker_depth(species_id, centroids):
+def compute_median_marker_depth(centroids, species_id):
     """ Compute median marker depth to infer gene copy count """
 
     # Get the gene_id - marker_id map
@@ -275,13 +215,13 @@ def compute_median_marker_depth(species_id, centroids):
     return np.median(list(markers_depth.values()))
 
 
-def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, path):
-
+def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, coverage_path):
+    """ Compute coverage of pangenome for given species_id and write results to disk """
     global global_args
     args = global_args
 
-    centroids = scan_centroids(centroids_file)
-    centroids = {k: centroids[k] for k in list(centroids)[:500]}
+    centroids = scan_centroids(centroids_file, species_id)
+    centroids = {k: centroids[k] for k in list(centroids)[:100]}
 
     args_list = []
     for gene_id in centroids.keys():
@@ -294,13 +234,8 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, path
         gene["mapped_reads"] = results[gene_index][1]
         gene["depth"] = results[gene_index][2]
 
-    # Calculate the genes covered with non-zero depth
-    nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
-    num_covered_genes = len(nz_gene_depth)
-    mean_coverage = np.mean(nz_gene_depth)
-    print(mean_coverage, num_covered_genes)
+    marker_median_depth = compute_median_marker_depth(centroids, species_id)
 
-    marker_median_depth = compute_median_marker_depth(species_id, centroids)
     # Infer gene copy count
     if marker_median_depth > 0:
         for gene in centroids.values():
@@ -308,21 +243,22 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, path
     else:
         tsprint("Caution: the marker_gene_median_depth for {species_id} is zero")
 
-    # write to file
-    with OutputStream(path) as sp_out:
-        sp_out.write('\t'.join(genes_schema.keys()) + '\n')
-        for gene_id, gene in covered_genes.items():
-            values = [gene_id, gene["mapped_reads"], gene["depth"], gene["copies"]]
-            sp_out.write("\t".join(map(format_data, values)) + "\n")
+    # Write gene coverage to file
+    flag = write_genes_coverage(centroids, coverage_path)
+    assert flag == "success", f"Error for write genes coverage for {species_id}"
 
-    # summary
+    # Collect species-level stats
+    nz_gene_depth = [gd["depth"] for gd in centroids.values() if gd["depth"] > 0]
+    num_covered_genes = len(nz_gene_depth) #count # covered genes
+    mean_coverage = np.mean(nz_gene_depth) # average gene depth
     pangenome_size = len(centroids)
-    aligned_reads = sum(g["aligned_reads"] for g in covered_genes.values())
-    mapped_reads = sum(g["mapped_reads"] for g in covered_genes.values())
-    values = [species_id, pangenome_size, \
-              num_covered_genes, num_covered_genes / pangenome_size, \
-              mean_coverage, markers_coverage, aligned_reads, mapped_reads]
-    print(values)
+    fraction_covered = num_covered_genes / pangenome_size
+    aligned_reads = sum(g["aligned_reads"] for g in centroids.values())
+    mapped_reads = sum(g["mapped_reads"] for g in centroids.values())
+
+    values = [species_id, pangenome_size, num_covered_genes, fraction_covered, \
+              mean_coverage, marker_median_depth, aligned_reads, mapped_reads]
+
     return values
 
 
@@ -362,47 +298,26 @@ def midas_run_genes(args):
             centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
 
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
+
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-        # Here: database and bam file should not have the default behavior as same path ...
-        # This doesn't make sense.
-        bowtie2_align(bt2_db_dir, bt2_db_name, args)
-        samtools_index(args, bt2_db_dir, bt2_db_name)
+        pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
+        bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
+        samtools_index(pangenome_bamfile, args.debug)
 
-        # TODO: the following compute is not paralled. Finish the workflow for one species,
-        # compute and write for one species. Then do multiprocessing.
-
-        if False:
-            # Compute coverage of pangenome for each present species and write results to disk
-            marker_genes_map = marker_genes_mapfile()
-
-            print("scan_centroids")
-            species, genes = scan_centroids(species_profile.keys(), centroids_files)
-            print("count_mapped_bp")
-            num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(sample.get_target_layout("genes_pangenomes_bam"), genes)
-            markers = scan_markers(genes, marker_genes_map)
-            print("normalize")
-            species_markers_coverage = normalize(genes, covered_genes, markers)
-            # Write results
-            print("write results")
-            argument_list = []
-            for species_id, species_genes in species.items():
-                path = sample.get_target_layout("genes_coverage", species_id)
-                argument_list.append((species_genes, path))
-            contigs_files = multithreading_map(write_genes_coverage, argument_list, num_physical_cores)
-
-            write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, sample.get_target_layout("genes_summary"))
-
-        species_ids = list(species_profile.keys())[:1]
+        genes_summary_list = []
         for species_index, species_id in enumerate(species_ids):
-            pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
             coverage_path = sample.get_target_layout("genes_coverage", species_id)
-            compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path)
+            genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
+
+        write_genes_summary(genes_summary_list, sample.get_target_layout("genes_summary"))
+
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
             sample.remove_output_dir()
+        raise
 
 
 @register_args
