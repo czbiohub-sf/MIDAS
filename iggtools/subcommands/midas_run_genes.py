@@ -221,7 +221,7 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, cove
     args = global_args
 
     centroids = scan_centroids(centroids_file, species_id)
-    centroids = {k: centroids[k] for k in list(centroids)[:100]}
+    #centroids = {k: centroids[k] for k in list(centroids)[:100]}
 
     args_list = []
     for gene_id in centroids.keys():
@@ -307,6 +307,7 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug)
 
         genes_summary_list = []
+        species_ids = list(species_profile.keys())
         for species_index, species_id in enumerate(species_ids):
             coverage_path = sample.get_target_layout("genes_coverage", species_id)
             genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
