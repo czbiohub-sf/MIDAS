@@ -289,7 +289,7 @@ def keep_read_worker(aln):
     return True
 
 
-def gene_counts_one_gene(packed_args):
+def gene_count(packed_args):
     pangenome_bamfile, gene_id, gene_length = packed_args
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
@@ -326,7 +326,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     args_list = []
     for gene_id in centroids.keys():
         args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-    results = multiprocessing_map(gene_counts_one_gene, args_list, num_procs=num_physical_cores)
+    results = multiprocessing_map(gene_count, args_list, num_procs=num_physical_cores)
 
     for gene_index, gene_id in enumerate(centroids):
         gene = centroids.get(gene_id)
@@ -363,6 +363,7 @@ def species_count(species_id, centroids_file, pangenome_bamfile, path):
     for gene_id in markers.keys():
         marker_id = markers[gene_id]
         centroid_gene_id = gene_info[gene_id]
+        print(marker_id, gene_id, centroid_gene_id)
         markers_depth[marker_id] += centroids[centroid_gene_id]["depth"]
 
     print(markers_depth)

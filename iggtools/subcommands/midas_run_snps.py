@@ -247,73 +247,67 @@ def species_pileup_old(species_id, repgenome_bamfile, snps_pileup_path, contig_f
     return (species_id, {k: str(v) for k, v in pileup_stats.items()})
 
 
-def species_pileup(species_id, repgenome_bamfile, snps_pileup_path, contig_file, contigs_db_stats):
-    """ Read in contigs information for one species_id """
-
+def keep_read(aln):
     global global_args
     args = global_args
 
-    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
-    # CONTIGS_DB_STATS didn't work as expected, so I remove codes related to that for now. Add me back later on after figuring out the parallel.
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
 
-    contigs = {}
-    with InputStream(contig_file) as file:
-        for rec in Bio.SeqIO.parse(file, 'fasta'):
-            contigs[rec.id] = {
-                "species_id": species_id,
-                "contig_len": int(len(rec.seq)),
-                "contig_seq": str(rec.seq),
-            }
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < args.aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < args.aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < args.aln_cov:
+        return False
+
+    return True
 
 
-    genome_length = sum(c.contig_len for c in contigs)
-    print("genome_length", genome_length)
+def contig_pileup(packged_args):
 
-    # Summary statistics
-    pileup_stats = {
-        "genome_length": 0, # we already know this number, isn't it?
-        "total_depth": 0,
-        "covered_bases": 0,
-        "aligned_reads":0,
-        "mapped_reads":0,
-        }
-
-    def keep_read(x):
-        return keep_read_worker(x, pileup_stats)
-
-    with OutputStream(snps_pileup_path) as file:
-        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
-        zero_rows_allowed = not args.sparse
-
-        # at least we need to paralize of the unit of contigs
-        # Loop over alignment for current species's contigs
-        #with AlignmentFile(repgenome_bamfile) as bamfile:
-        for contig_id in sorted(list(contigs.keys())): # why need to sort?
-
-            contig = contigs[contig_id]
-
-            pileup_stats, contigs, repgenome_bamfile, contig_id  =  packged_args
-            contig = contigs[contig_id]
-
-            contig_pileup = defaultdict()
-
-            # through this value we can easily know the ref_allele without need to loop over the BAM file
-            #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
-
-def process_contig(packged_args):
-    pileup_stats, contigs, repgenome_bamfile, contig_id = packged_args
+    species_id, contig_id, repgenome_bamfile, contig = packged_args
 
     global global_args
     args = global_args
-    results = []
+    zero_rows_allowed = not args.sparse
+
     with AlignmentFile(repgenome_bamfile) as bamfile:
         counts = bamfile.count_coverage(
                 contig_id,
                 start=0,
                 end=contig["contig_len"],
-                quality_threshold=args.aln_baseq,
+                quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                read_callback=keep_read) # select a call-back to ignore reads when counting
+
+        aligned_reads = bamfile.count(
+                contig_id,
+                start=0,
+                end=contig["contig_len"])
+
+        mapped_reads = bamfile.count(
+                contig_id,
+                start=0,
+                end=contig["contig_len"],
                 read_callback=keep_read)
 
+    aln_stats = {
+            "species_id": species_id,
+            "contig_id": contig_id,
+            "contig_length": contig["contig_len"],
+            "aligned_reads": aligned_reads,
+            "mapped_reads": mapped_reads,
+            "contig_total_depth": 0,
+            "contig_covered_bases":0
+    }
+
+    pileup_counts = defaultdict(list)
     for ref_pos in range(0, contig["contig_len"]):
         ref_allele = contig["contig_seq"][ref_pos]
         depth = sum([counts[nt][ref_pos] for nt in range(4)])
@@ -323,19 +317,66 @@ def process_contig(packged_args):
         count_t = counts[3][ref_pos]
         record = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
-        # Do I write separately or do I write to the same file by multiprocessingself
-        # Write to the same file while compute by different processes seems definitely a bad idea.
-        if depth > 0 or zero_rows_allowed:
-            #file.write("\t".join(map(format_data, record)) + "\n")
-            results.append(record)
-
-        pileup_stats['genome_length'] += 1 # why do we do this here??
-        pileup_stats['total_depth'] += depth
+        aln_stats["contig_total_depth"] += depth
         if depth > 0:
-            pileup_stats['covered_bases'] += 1
+            aln_stats["contig_covered_bases"] += 1
+        if depth > 0 or zero_rows_allowed:
+            pileup_counts[species_id].append(record)
 
-    tsprint(json.dumps({species_id: pileup_stats}, indent=4))
-    return (species_id, {k: str(v) for k, v in pileup_stats.items()})
+    return (pileup_counts, aln_stats)
+
+
+def species_pileup(species_ids, contigs_files):
+    # snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
+    """ Read in contigs information for one species_id """
+
+    global global_args
+    args = global_args
+
+    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
+    # CONTIGS_DB_STATS didn't work as expected, so I remove codes related to that for now. Add me back later on after figuring out the parallel.
+
+    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+
+    argument_list = []
+    for species_index, species_id in enumerate(species_ids):
+
+        contigs = {}
+        i = 0
+        with InputStream(contigs_files[species_index]) as file:
+            for rec in Bio.SeqIO.parse(file, 'fasta'):
+                if i > 5:
+                    break
+                i += 1
+                contigs[rec.id] = {
+                    "species_id": species_id,
+                    "contig_len": int(len(rec.seq)),
+                    "contig_seq": str(rec.seq),
+                }
+
+        for contig_id in sorted(list(contigs.keys())): # why need to sort?
+            contig = contigs[contig_id]
+            argument_list.append((species_id, contig_id, repgenome_bamfile, contig))
+        print(len(argument_list))
+        print("now I start to process the data")
+        results = multiprocessing_map(contig_pileup, args_list)
+        print(results)
+
+        # Summary statistics
+        pileup_stats = {
+            "species_id": species_id,
+            "genome_length": sum(c.contig_len for c in contigs),
+            "total_depth": 0,
+            "covered_bases": 0,
+            "aligned_reads":0,
+            "mapped_reads":0,
+            }
+
+#    with OutputStream(snps_pileup_path) as file:
+#        file.write('\t'.join(snps_pileup_schema.keys()) + '\n')
+        # through this value we can easily know the ref_allele without need to loop over the BAM file
+        #(contig["contig_seq"][ref_pos] for ref_pos in range(0, contig["contig_len"]))
+
 
 
 
@@ -378,8 +419,6 @@ def pysam_pileup_old(species_ids, contigs_files):
     return species_pileup_stats
 
 
-
-
 def write_snps_summary(species_pileup_stats, outfile):
     """ Get summary of mapping statistics """
     with OutputStream(outfile) as file:
@@ -387,6 +426,7 @@ def write_snps_summary(species_pileup_stats, outfile):
         for species_id, species_aln in species_pileup_stats.items():
             values = list(species_aln.values())
             values.insert(0, species_id)
+            #file.write("\t".join(map(format_data, record)) + "\n")
             file.write('\t'.join(map(str, values)) + '\n')
 
 
@@ -433,6 +473,8 @@ def midas_run_snps(args):
 
         # Use mpileup to identify SNPs
         samtools_index(args, bt2_db_dir, bt2_db_name)
+        species_pileup(species_profile.keys(), contigs_files)
+
         species_pileup_stats = pysam_pileup(species_profile.keys(), contigs_files)
         # TODO: for the provided bowtie2 database index, we don't have the contigs files
         # One way is to move the scan_contigs_file_stats into build database and when provicded with bowtie2 index,
