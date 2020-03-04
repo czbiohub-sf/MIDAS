@@ -407,75 +407,73 @@ def midas_run_genes(args):
     global global_args
     global_args = args
 
-    #try:
-    if args.bt2_db_indexes:
-        if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(args.bt2_db_indexes)):
-            print("good the pre built bt2 index exist")
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(args.bt2_db_indexes)
+    try:
+        if args.bt2_db_indexes:
+            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(args.bt2_db_indexes)):
+                print("good the pre built bt2 index exist")
+                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+                bt2_db_name = os.path.basename(args.bt2_db_indexes)
+            else:
+                print("Error: good the pangenome pre built bt2 index exist")
+                exit(0)
         else:
-            print("Error: good the pangenome pre built bt2 index exist")
-            exit(0)
-    else:
-        bt2_db_dir = sample.get_target_layout("dbsdir")
-        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
-        bt2_db_name = "pangenomes"
+            bt2_db_dir = sample.get_target_layout("dbsdir")
+            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+            bt2_db_name = "pangenomes"
 
-        if args.species_list:
-            species_profile = sample.select_species(args.genome_coverage, args.species_list)
-        else:
-            species_profile = sample.select_species(args.genome_coverage)
+            if args.species_list:
+                species_profile = sample.select_species(args.genome_coverage, args.species_list)
+            else:
+                species_profile = sample.select_species(args.genome_coverage)
 
-        local_toc = download_reference(outputs.genomes, bt2_db_dir)
-        db = UHGG(local_toc)
+            local_toc = download_reference(outputs.genomes, bt2_db_dir)
+            db = UHGG(local_toc)
 
-        sample.create_species_subdir(species_profile.keys())
-        centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
+            sample.create_species_subdir(species_profile.keys())
+            centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
 
-        build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
-        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
+            # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+            # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-    # Here: database and bam file should not have the default behavior as same path ...
-    # This doesn't make sense.
-    bowtie2_align(bt2_db_dir, bt2_db_name, args)
+        # Here: database and bam file should not have the default behavior as same path ...
+        # This doesn't make sense.
+        bowtie2_align(bt2_db_dir, bt2_db_name, args)
+        samtools_index(args, bt2_db_dir, bt2_db_name)
 
-    samtools_index(args, bt2_db_dir, bt2_db_name)
+        # TODO: the following compute is not paralled. Finish the workflow for one species,
+        # compute and write for one species. Then do multiprocessing.
 
-    # TODO: the following compute is not paralled. Finish the workflow for one species,
-    # compute and write for one species. Then do multiprocessing.
+        if False:
+            # Compute coverage of pangenome for each present species and write results to disk
+            marker_genes_map = marker_genes_mapfile()
 
-    if False:
-        # Compute coverage of pangenome for each present species and write results to disk
-        marker_genes_map = marker_genes_mapfile()
+            print("scan_centroids")
+            species, genes = scan_centroids(species_profile.keys(), centroids_files)
+            print("count_mapped_bp")
+            num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(sample.get_target_layout("genes_pangenomes_bam"), genes)
+            markers = scan_markers(genes, marker_genes_map)
+            print("normalize")
+            species_markers_coverage = normalize(genes, covered_genes, markers)
+            # Write results
+            print("write results")
+            argument_list = []
+            for species_id, species_genes in species.items():
+                path = sample.get_target_layout("genes_coverage", species_id)
+                argument_list.append((species_genes, path))
+            contigs_files = multithreading_map(write_genes_coverage, argument_list, num_physical_cores)
 
-        print("scan_centroids")
-        species, genes = scan_centroids(species_profile.keys(), centroids_files)
-        print("count_mapped_bp")
-        num_covered_genes, species_mean_coverage, covered_genes = count_mapped_bp(sample.get_target_layout("genes_pangenomes_bam"), genes)
-        markers = scan_markers(genes, marker_genes_map)
-        print("normalize")
-        species_markers_coverage = normalize(genes, covered_genes, markers)
-        # Write results
-        print("write results")
-        argument_list = []
-        for species_id, species_genes in species.items():
-            path = sample.get_target_layout("genes_coverage", species_id)
-            argument_list.append((species_genes, path))
-        contigs_files = multithreading_map(write_genes_coverage, argument_list, num_physical_cores)
+            write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, sample.get_target_layout("genes_summary"))
 
-        write_genes_summary(species, num_covered_genes, species_markers_coverage, species_mean_coverage, sample.get_target_layout("genes_summary"))
-
-
-    species_ids = list(species_profile.keys())[:1]
-    for species_index, species_id in enumerate(species_ids):
-        pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
-        coverage_path = sample.get_target_layout("genes_coverage", species_id)
-        species_count(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path)
-    #except:
-    #    if not args.debug:
-    #        tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-    #        sample.remove_output_dir()
+        species_ids = list(species_profile.keys())[:1]
+        for species_index, species_id in enumerate(species_ids):
+            pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
+            coverage_path = sample.get_target_layout("genes_coverage", species_id)
+            species_count(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path)
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
+            sample.remove_output_dir()
 
 
 @register_args
