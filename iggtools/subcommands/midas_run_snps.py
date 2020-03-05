@@ -277,7 +277,7 @@ def slice_pileup(packed_args):
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
             print(ref_pos, ref_allele, contig_start, contig_end, str(len(counts[0])))
-            
+
             depth = sum([counts[nt][ref_pos] for nt in range(4)])
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
@@ -329,7 +329,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
             if contig_length <= slice_size:
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
+                slice_args = (species_id, slice_id, contig_id, 0, contig_length+1, repgenome_bamfile, headerless_sliced_path, contig)
 
                 argument_list.append(slice_args)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
@@ -340,9 +340,9 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
 
                     if ni == slice_num:
-                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
+                        slice_args = (species_id, slice_id, contig_id, ci, contig_length+1, repgenome_bamfile, headerless_sliced_path, contig)
                     else:
-                        slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
+                        slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size+1, repgenome_bamfile, headerless_sliced_path, contig)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
