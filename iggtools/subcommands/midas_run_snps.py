@@ -243,7 +243,7 @@ def slice_pileup(packed_args):
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end+1,
+                    end=contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
@@ -252,14 +252,14 @@ def slice_pileup(packed_args):
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end+1)
+                    end=contig_end)
 
             mapped_reads = bamfile.count(
                     contig_id,
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end+1,
+                    end=contig_end,
                     read_callback=keep_read)
 
         aln_stats = {
@@ -276,7 +276,9 @@ def slice_pileup(packed_args):
         records = []
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
-            print(ref_pos, ref_allele, contig_start, contig_end, len(counts))
+            print(ref_pos, ref_allele, contig_start, contig_end)
+            for nt  in range(4):
+                print("\t".join(map(str, counts[nt])) +  "\n")
             depth = sum([counts[nt][ref_pos] for nt in range(4)])
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
