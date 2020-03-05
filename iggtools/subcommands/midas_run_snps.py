@@ -261,7 +261,7 @@ def slice_pileup(packed_args):
                     start=contig_start,
                     end=contig_end,
                     read_callback=keep_read)
-        print(contig_start, contig_end, len(counts))
+        print(contig_start, contig_end, len(counts[0]))
         aln_stats = {
                 "species_id": species_id,
                 "contig_id": contig_id,
