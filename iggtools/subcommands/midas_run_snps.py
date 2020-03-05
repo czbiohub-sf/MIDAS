@@ -186,8 +186,8 @@ def scan_contigs(contig_file, species_id):
     return contigs
 
 
-def cat_files(sliced_files, one_file, chunk_num=20):
-    for temp_files in split(sliced_files, chunk_num):
+def cat_files(sliced_files, one_file, slice_num=20):
+    for temp_files in split(sliced_files, slice_num):
         command("cat " + " ".join(temp_files) + f" >> {one_file}")
 
 
@@ -335,11 +335,11 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
                 slice_id += 1
             else:
-                chunk_num = ceil(contig_length/slice_size) - 1
-                for ni, ci in enumerate(range(0, contig_length, chunk_size)):
+                slice_num = ceil(contig_length/slice_size) - 1
+                for ni, ci in enumerate(range(0, contig_length, slice_size)):
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
 
-                    if ni == chunk_num:
+                    if ni == slice_num:
                         slice_args = (species_id, slice_id, contig_id, ci+1, contig_length, repgenome_bamfile, headerless_sliced_path)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci+1, ci+chunk_size, repgenome_bamfile, headerless_sliced_path)
