@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
 import multiprocessing
+from math import ceil
 
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
