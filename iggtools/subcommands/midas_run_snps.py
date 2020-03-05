@@ -7,7 +7,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multithreading_hashmap, download_reference, split
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, split
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
@@ -174,7 +174,7 @@ def keep_read(aln):
 
 def scan_contigs(contig_file, species_id):
     contigs = {}
-    with InputStream(contigs_files[species_index]) as file:
+    with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             contigs[rec.id] = {
                 "species_id": species_id,
@@ -205,13 +205,16 @@ def merge_sliced_contigs_for_species(species_id):
 
 
 def contig_pileup(packed_args):
+
     print(packed_args[0], packed_args[1])
 
     global semaphore_for_species
 
     if packed_args[1] == -1:
+        print("am i here, do i still need to release")
         for _ in slice_count[species_id]:
-            semaphore_for_species[species_id].release() # no deadlock
+            print("release")
+            semaphore_for_species[species_id].acquire() # no deadlock
 
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
@@ -252,7 +255,7 @@ def contig_pileup(packed_args):
                 "contig_covered_bases":0
             }
 
-        with InputStream(headerless_contigs_pileup_path) as stream:
+        with OutputStream(headerless_contigs_pileup_path) as stream:
             for ref_pos in range(0, contig["contig_len"]):
                 ref_allele = contig["contig_seq"][ref_pos]
                 depth = sum([counts[nt][ref_pos] for nt in range(4)])
@@ -267,9 +270,10 @@ def contig_pileup(packed_args):
                     aln_stats["contig_covered_bases"] += 1
                 if depth > 0 or zero_rows_allowed:
                     stream.write("\t".join(map(format_data, record)) + "\n")
+
         return aln_stats
+
     finally:
-        # Or do I need a for loop here: think about what is the situation here...
         semaphore_for_species[species_id].release() # no deadlock
 
 
@@ -291,9 +295,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
+    print(species_ids)
     for species_index, species_id in enumerate(species_ids):
         # For each species
-        contigs = scan_contigs(contigs_files[species_index])
+        contigs = scan_contigs(contigs_files[species_index], species_id)
 
         contig_counter = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
@@ -315,7 +320,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
             semaphore_for_species[species_id].acquire()
         slice_count[species_id] = contig_counter
 
-    contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list)
+    contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
     return contigs_pileup_summary
 
