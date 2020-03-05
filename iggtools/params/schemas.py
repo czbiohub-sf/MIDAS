@@ -11,6 +11,7 @@ MARKER_INFO_SCHEMA = {
     "marker_id": str
 }
 
+
 BLAST_M8_SCHEMA = {
     'query': str,
     'target': str,

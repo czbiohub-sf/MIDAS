@@ -58,6 +58,11 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--species_profile_path',
+                           dest='species_profile_path',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Species profile path for the prebuild bowtie2 index")
 
     #  Alignment flags (bowtie, or postprocessing)
     subparser.add_argument('--aln_cov',
@@ -274,31 +279,34 @@ def midas_run_genes(args):
 
     try:
         if args.bt2_db_indexes:
-            if bowtie2_index_exists(os.path.dirname(args.bt2_db_indexes), os.path.basename(args.bt2_db_indexes)):
-                print("good the pre built bt2 index exist")
-                bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-                bt2_db_name = os.path.basename(args.bt2_db_indexes)
-            else:
-                print("Error: good the pangenome pre built bt2 index exist")
-                exit(0)
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
+            tsprint("Prebuild bowtie2 index and species_profile exit. Use them")
+
+            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+            bt2_db_name = os.path.basename(args.bt2_db_indexes)
+
+            species_profile = {}
+            with InputStream() as stream:
+                for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
+                    species_profile[species_id] = coverage
+
+            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
-            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
             bt2_db_name = "pangenomes"
+            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
 
             if args.species_list:
                 species_profile = sample.select_species(args.genome_coverage, args.species_list)
             else:
                 species_profile = sample.select_species(args.genome_coverage)
 
+            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+
             local_toc = download_reference(outputs.genomes, bt2_db_dir)
             db = UHGG(local_toc)
-
-            sample.create_species_subdir(species_profile.keys())
             centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
-
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
-
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
@@ -307,8 +315,7 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug)
 
         genes_summary_list = []
-        species_ids = list(species_profile.keys())
-        for species_index, species_id in enumerate(species_ids):
+        for species_index, species_id in enumerate(list(species_profile.keys())):
             coverage_path = sample.get_target_layout("genes_coverage", species_id)
             genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
 

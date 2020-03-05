@@ -73,7 +73,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
 
 
 def samtools_index(bamfile_path, debug):
-    
+
     if debug and os.path.exists(f"{bamfile_path}.bai"):
         tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_path}.bai")
         return

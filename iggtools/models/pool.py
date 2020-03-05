@@ -2,18 +2,26 @@ import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
 
-def get_pool_layout(species_id):
-    return {
-        "species_prev":     f"species/species_prevalence.tsv",
-        "snps_summary":     f"snps/output/snps_summary.tsv",
-        "snps_info":        f"snps/output/{species_id}/{species_id}.snps_info.tsv",
-        "snps_freq":        f"snps/output/{species_id}/{species_id}.snps_freqs.tsv",
-        "snps_depth":       f"snps/output/{species_id}/{species_id}.snps_depth.tsv",
-        "genes_summary":    f"genes/output/summary.tsv",
-        "genes_presabs":    f"genes/output/{species_id}/{species_id}.genes_presabs.tsv",
-        "genes_copynum":    f"genes/output/{species_id}/{species_id}.genes_copynum.tsv",
-        "genes_depth":      f"genes/output/{species_id}/{species_id}.genes_depth.tsv",
-    }
+def get_pool_layout(dbtype=""):
+    def per_species(species_id=""):
+        return {
+            "species_prevalence":    f"species/species_prevalence.tsv",
+
+            "snps_summary":          f"snps/output/snps_summary.tsv",
+            "snps_info":             f"snps/output/{species_id}/{species_id}.snps_info.tsv",
+            "snps_freq":             f"snps/output/{species_id}/{species_id}.snps_freqs.tsv",
+            "snps_depth":            f"snps/output/{species_id}/{species_id}.snps_depth.tsv",
+
+            "genes_summary":         f"genes/output/summary.tsv",
+            "genes_presabs":         f"genes/output/{species_id}/{species_id}.genes_presabs.tsv",
+            "genes_copynum":         f"genes/output/{species_id}/{species_id}.genes_copynum.tsv",
+            "genes_depth":           f"genes/output/{species_id}/{species_id}.genes_depth.tsv",
+
+            "outdir":                f"{dbtype}/output",
+            "tempdir":               f"{dbtype}/temp",
+            "dbsdir":                f"{sample_name}/dbs",
+        }
+    return per_species
 
 
 class Pool: # pylint: disable=too-few-public-methods
@@ -22,8 +30,38 @@ class Pool: # pylint: disable=too-few-public-methods
         self.list_of_samples = samples_list
         self.samples = self.init_samples(dbtype)
 
-        self.create_outdir(outdir, dbtype)
-        self.create_tempdir(paramstr)
+        self.layout = get_pool_layout(dbtype=dbtype)
+        self.outdir = self.get_target_layout("outdir")
+        self.tempdir = self.get_target_layout("tempdir")
+        self.dbsdir = self.get_target_layout("dbsdir")
+
+
+    def get_target_layout(self, filename, species_id=""):
+        return os.path.join(self.midas_outdir, self.layout(species_id)[filename])
+
+    def create_output_dir(self, debug=False):
+        tsprint(f"Create output directory for sample {self.sample_name}.")
+        command(f"rm -rf {self.outdir}")
+        command(f"mkdir -p {self.outdir}")
+
+        if debug and os.path.exists(self.tempdir):
+            tsprint(f"Reusing existing temp data in {self.tempdir} according to --debug flag.")
+        else:
+            tsprint(f"Create temp directory for sample {self.sample_name}.")
+            command(f"rm -rf {self.tempdir}")
+            command(f"mkdir -p {self.tempdir}")
+            tsprint(f"Create database directory for sample {self.sample_name}.")
+            command(f"rm -rf {self.dbsdir}")
+            command(f"mkdir -p {self.dbsdir}")
+
+    def create_species_subdir(self, species_ids, debug=False):
+        dbs_tempdir = self.get_target_layout("dbs_tempdir")
+        for species_id in species_ids:
+            if debug and os.path.exists(f"{dbs_tempdir}/{species_id}"):
+                continue
+            command(f"rm -rf {dbs_tempdir}/{species_id}")
+            command(f"mkdir -p {dbs_tempdir}/{species_id}")
+    
 
     def init_samples(self, dbtype):
         """ read in table-of-content: sample_name\tpath/to/midas_output """

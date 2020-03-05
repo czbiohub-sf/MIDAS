@@ -348,11 +348,12 @@ def process_chunk(packed_args):
         return {f"{species_id}_{proc_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
     finally:
         semaphore_for_species_id.release() # no deadlock
+        # should I have a
 
 
-def merge_files(local_files, merged_file, chunk_num):
-    for temp_files in split(local_files, chunk_num):
-        command("cat " + " ".join(temp_files) + f" >> {merged_file}")
+def cat_files(sliced_files, one_file, chunk_num=20):
+    for temp_files in split(sliced_files, chunk_num):
+        command("cat " + " ".join(temp_files) + f" >> {one_file}")
 
 
 def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
@@ -371,22 +372,21 @@ def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
     # Add header for the merged-chunks
     with OutputStream(snps_info_fp) as out_info:
         out_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
-    merge_files(snps_info_files, snps_info_fp, chunk_num=20)
+    cat_files(snps_info_files, snps_info_fp, chunk_num=20)
 
     with OutputStream(snps_freq_fp) as out_freq:
         out_freq.write("site_id\t" + "\t".join(samples_name) + "\n")
-    merge_files(snps_freq_files, snps_freq_fp, chunk_num=10)
+    cat_files(snps_freq_files, snps_freq_fp, chunk_num=10)
 
     with OutputStream(snps_depth_fp) as out_depth:
         out_depth.write("site_id\t" + "\t".join(samples_name) + "\n")
-    merge_files(snps_depth_files, snps_depth_fp, chunk_num=10)
+    cat_files(snps_depth_files, snps_depth_fp, chunk_num=10)
 
 
 def midas_merge_snps(args):
 
     # tempdir indicates the input arguments
-    paramstr = f"sd{args.site_depth}.sr{args.site_ratio}.sp{args.site_prev}.sm{args.snp_maf}"
-    pool_of_samples = Pool(args.samples_list, args.outdir, paramstr, "snps")
+    pool_of_samples = Pool(args.samples_list, args.outdir, "snps")
     list_of_species = select_species(pool_of_samples, "snps", args,)
 
     global global_pool_of_samples
@@ -394,7 +394,6 @@ def midas_merge_snps(args):
 
     global global_args
     global_args = args
-
 
     # Create species-to-process lookup table for each species
     chunk_size = args.chunk_size
@@ -404,7 +403,6 @@ def midas_merge_snps(args):
 
     # dict of semaphore and acquire before
     lookups = multiprocessing_map(create_lookup_table, ((species.id, representative[species.id], chunk_size) for species in list_of_species), num_procs=num_physical_cores)
-
 
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
     argument_list = []
@@ -419,18 +417,20 @@ def midas_merge_snps(args):
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.fetch_snps_pileup(species_id) for sample in list(species.samples)]
 
+
         chunk_counter = 0
         with open(lookups[si]) as stream:
             for line in stream:
                 species_id, proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+                chunk_counter += 1
+
                 my_args = (species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
                 argument_list.append(my_args)
-                chunk_counter += 1
             # submit the merge jobs
             argument_list.append(species_id, -1)
+
         semaphore_for_species_id[species_id] = multiprocessing.Semaphore(chunk_counter)
         chunk_count[species_id] = chunk_counter
-
         for _ in range(chunk_counter):
             semaphore_for_species_id[species_id].acquire()
 
@@ -455,6 +455,7 @@ def midas_merge_snps(args):
 
             current_species_id = species_id
             current_species_chunks = defaultdict()
+
         current_species_chunks[proc_id] = tuple(chunks_files_by_species.values())[0]
 
     samples_name = search_species(list_of_species, current_species_id).fetch_samples_name()
