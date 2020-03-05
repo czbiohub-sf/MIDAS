@@ -278,11 +278,11 @@ def slice_pileup(packed_args):
             ref_allele = contig["contig_seq"][ref_pos]
             print(ref_pos, ref_allele, contig_start, contig_end, str(len(counts[0])))
 
-            depth = sum([counts[nt][ref_pos] for nt in range(4)])
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
             count_g = counts[2][ref_pos]
             count_t = counts[3][ref_pos]
+            depth = sum([counts[nt][ref_pos] for nt in range(4)])
             row = (contig_id, ref_pos+1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
             aln_stats["contig_total_depth"] += depth
