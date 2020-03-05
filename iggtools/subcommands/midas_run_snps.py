@@ -197,7 +197,7 @@ def merge_sliced_contigs_for_species(species_id):
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
 
-    with InputStream(merged_file) as stream:
+    with OutputStream(merged_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
     cat_files(sliced_files, merged_file, 20)
@@ -212,11 +212,10 @@ def contig_pileup(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
 
-        #for _ in range(slice_counts[species_id]):
-        #    print("release or acquire??")
-        semaphore_for_species[species_id].release() # no deadlock
+        for _ in range(slice_counts[species_id]):
+            semaphore_for_species[species_id].release() # no deadlock
 
-        print("does this mean all my chunks have been written??", species_id)
+        print("Now it means we have all the lock released: ", species_id)
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
@@ -273,11 +272,8 @@ def contig_pileup(packed_args):
                     stream.write("\t".join(map(format_data, record)) + "\n")
 
         return aln_stats
-    except:
-        print("error")
-        raise
-    #finally:
-    #    semaphore_for_species[species_id].release() # no deadlock
+    finally:
+        semaphore_for_species[species_id].release() # no deadlock
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
