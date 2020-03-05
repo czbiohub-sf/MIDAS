@@ -7,7 +7,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, split
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, split, command
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
@@ -193,6 +193,8 @@ def cat_files(sliced_files, one_file, chunk_num=20):
 def merge_sliced_contigs_for_species(species_id):
 
     global species_sliced_snps_path
+    global semaphore_for_species
+    global slice_counts
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
@@ -201,6 +203,13 @@ def merge_sliced_contigs_for_species(species_id):
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
     cat_files(sliced_files, merged_file, 20)
+
+    for _ in range(slice_counts[species_id]):
+        semaphore_for_species[species_id].release() # no deadlock
+
+    #for s_file in sclies_files:
+    #    command("rm -rf {s_file}")
+
     return True
 
 
