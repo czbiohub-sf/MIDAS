@@ -197,7 +197,7 @@ def merge_sliced_contigs_for_species(species_id):
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
 
-    with InputStream(merge_file) as stream:
+    with InputStream(merged_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
     cat_files(sliced_files, merged_file, 20)
@@ -206,16 +206,17 @@ def merge_sliced_contigs_for_species(species_id):
 
 def contig_pileup(packed_args):
 
-    print(packed_args[0], packed_args[1])
-
     global semaphore_for_species
+    global slice_counts
 
     if packed_args[1] == -1:
-        print("am i here, do i still need to release")
-        for _ in slice_count[species_id]:
-            print("release")
-            semaphore_for_species[species_id].acquire() # no deadlock
+        species_id = packed_args[0]
 
+        #for _ in range(slice_counts[species_id]):
+        #    print("release or acquire??")
+        semaphore_for_species[species_id].release() # no deadlock
+
+        print("does this mean all my chunks have been written??", species_id)
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
@@ -272,9 +273,11 @@ def contig_pileup(packed_args):
                     stream.write("\t".join(map(format_data, record)) + "\n")
 
         return aln_stats
-
-    finally:
-        semaphore_for_species[species_id].release() # no deadlock
+    except:
+        print("error")
+        raise
+    #finally:
+    #    semaphore_for_species[species_id].release() # no deadlock
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
@@ -290,12 +293,11 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     global semaphore_for_species
     global species_sliced_snps_path
 
-    slice_count = dict()
+    slice_counts = dict()
     semaphore_for_species = dict()
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    print(species_ids)
     for species_index, species_id in enumerate(species_ids):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
@@ -318,7 +320,11 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         semaphore_for_species[species_id] = multiprocessing.Semaphore(contig_counter)
         for _ in range(contig_counter):
             semaphore_for_species[species_id].acquire()
-        slice_count[species_id] = contig_counter
+        slice_counts[species_id] = contig_counter
+
+    # double check
+    for species_id in species_sliced_snps_path.keys():
+        print(species_id, len(species_sliced_snps_path[species_id]))
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 

@@ -348,7 +348,7 @@ def process_chunk(packed_args):
         return {f"{species_id}_{proc_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
     finally:
         semaphore_for_species_id.release() # no deadlock
-        # should I have a
+
 
 
 def cat_files(sliced_files, one_file, chunk_num=20):
