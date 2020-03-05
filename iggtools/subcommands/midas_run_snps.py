@@ -235,7 +235,6 @@ def slice_pileup(packed_args):
     try:
         species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
         #species_id, contig_id, repgenome_bamfile, contig, headerless_contigs_pileup_path = packed_args
-        print(species_id, slice_id)
 
         zero_rows_allowed = not args.sparse
         with AlignmentFile(repgenome_bamfile) as bamfile:
@@ -276,6 +275,7 @@ def slice_pileup(packed_args):
 
         records = []
         for ref_pos in range(contig_start, contig_end):
+            print(ref_pos, contig_start, contig_end)
             ref_allele = contig["contig_seq"][ref_pos-1]
             depth = sum([counts[nt][ref_pos-1] for nt in range(4)])
             count_a = counts[0][ref_pos-1]
