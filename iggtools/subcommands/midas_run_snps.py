@@ -235,7 +235,8 @@ def slice_pileup(packed_args):
     try:
         species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
         #species_id, contig_id, repgenome_bamfile, contig, headerless_contigs_pileup_path = packed_args
-
+        print(species_id, slice_id)
+        
         zero_rows_allowed = not args.sparse
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(
