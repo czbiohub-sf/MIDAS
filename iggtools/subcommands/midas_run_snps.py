@@ -276,9 +276,8 @@ def slice_pileup(packed_args):
         records = []
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
-            print(ref_pos, ref_allele, contig_start, contig_end)
-            for nt  in range(4):
-                print("\t".join(map(str, len(counts[nt]))) +  "\n")
+            print(ref_pos, ref_allele, contig_start, contig_end, str(len(counts[0])))
+            
             depth = sum([counts[nt][ref_pos] for nt in range(4)])
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
