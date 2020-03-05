@@ -222,7 +222,7 @@ def contig_pileup(packed_args):
         species_id = packed_args[0]
 
         for _ in range(slice_counts[species_id]):
-            semaphore_for_species[species_id].release() # no deadlock
+            semaphore_for_species[species_id].acquire() # no deadlock
 
         print("Now it means we have all the lock released: ", species_id)
         flag = merge_sliced_contigs_for_species(species_id)
