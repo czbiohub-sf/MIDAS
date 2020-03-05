@@ -195,6 +195,7 @@ def merge_sliced_contigs_for_species(species_id):
     global species_sliced_snps_path
     global semaphore_for_species
     global slice_counts
+    global global_args
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
@@ -204,11 +205,9 @@ def merge_sliced_contigs_for_species(species_id):
 
     cat_files(sliced_files, merged_file, 20)
 
-    for _ in range(slice_counts[species_id]):
-        semaphore_for_species[species_id].release() # no deadlock
-
-    #for s_file in sclies_files:
-    #    command("rm -rf {s_file}")
+    if not global_args.debug:
+        for s_file in sclies_files:
+            command("rm -rf {s_file}")
 
     return True
 
@@ -222,9 +221,8 @@ def contig_pileup(packed_args):
         species_id = packed_args[0]
 
         for _ in range(slice_counts[species_id]):
-            semaphore_for_species[species_id].acquire() # no deadlock
+            semaphore_for_species[species_id].acquire()
 
-        print("Now it means we have all the lock released: ", species_id)
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
