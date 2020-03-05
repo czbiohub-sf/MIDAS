@@ -243,7 +243,7 @@ def slice_pileup(packed_args):
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end,
+                    end=contig_end+1,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
@@ -252,20 +252,20 @@ def slice_pileup(packed_args):
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end)
+                    end=contig_end+1)
 
             mapped_reads = bamfile.count(
                     contig_id,
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end,
+                    end=contig_end+1,
                     read_callback=keep_read)
 
         aln_stats = {
                 "species_id": species_id,
                 "contig_id": contig_id,
-                "slice_length": contig_end - contig_start + 1,
+                "slice_length": contig_end - contig_start,
                 #"contig_length": contig["contig_len"],
                 "aligned_reads": aligned_reads,
                 "mapped_reads": mapped_reads,
@@ -276,13 +276,13 @@ def slice_pileup(packed_args):
         records = []
         for ref_pos in range(contig_start, contig_end):
             print(ref_pos, contig_start, contig_end)
-            ref_allele = contig["contig_seq"][ref_pos-1]
+            ref_allele = contig["contig_seq"][ref_pos]
             depth = sum([counts[nt][ref_pos-1] for nt in range(4)])
-            count_a = counts[0][ref_pos-1]
-            count_c = counts[1][ref_pos-1]
-            count_g = counts[2][ref_pos-1]
-            count_t = counts[3][ref_pos-1]
-            row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
+            count_a = counts[0][ref_pos]
+            count_c = counts[1][ref_pos]
+            count_g = counts[2][ref_pos]
+            count_t = counts[3][ref_pos]
+            row = (contig_id, ref_pos+1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
             aln_stats["contig_total_depth"] += depth
             if depth > 0:
