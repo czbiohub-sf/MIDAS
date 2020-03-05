@@ -316,7 +316,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 20000
+    slice_size = 1000
     for species_index, species_id in enumerate(species_ids):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
