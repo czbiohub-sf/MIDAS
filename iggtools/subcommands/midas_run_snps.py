@@ -277,7 +277,7 @@ def slice_pileup(packed_args):
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
             print(ref_pos, ref_allele, contig_start, contig_end, str(len(counts[0])))
-
+            print(len(counts[0]), ref_pos)
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
             count_g = counts[2][ref_pos]
