@@ -205,6 +205,9 @@ def merge_sliced_contigs_for_species(species_id):
 
     cat_files(sliced_files, merged_file, 20)
 
+    for _ in range(slice_counts[species_id]):
+        semaphore_for_species[species_id].release() # no deadlock
+
     if not global_args.debug:
         for s_file in sclies_files:
             command("rm -rf {s_file}")
