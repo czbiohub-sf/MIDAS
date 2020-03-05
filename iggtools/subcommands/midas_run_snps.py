@@ -236,7 +236,7 @@ def slice_pileup(packed_args):
         species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
         #species_id, contig_id, repgenome_bamfile, contig, headerless_contigs_pileup_path = packed_args
         print(species_id, slice_id)
-        
+
         zero_rows_allowed = not args.sparse
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(
@@ -353,6 +353,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
         # Create a semaphore with contig_counter of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_id)
+        print(slice_id)
         for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_id
