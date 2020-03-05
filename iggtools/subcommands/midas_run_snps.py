@@ -243,7 +243,7 @@ def contig_pileup(packed_args):
                     #start=0,
                     #end=contig["contig_len"],
                     start=contig_start,
-                    end=contig_end
+                    end=contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
