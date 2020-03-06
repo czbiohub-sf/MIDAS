@@ -231,7 +231,7 @@ def contig_pileup(packed_args):
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
     try:
-        species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path = packed_args
+        species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
         #species_id, contig_id, repgenome_bamfile, contig, headerless_contigs_pileup_path = packed_args
 
         global global_args
