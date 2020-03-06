@@ -241,8 +241,6 @@ def contig_pileup(packed_args):
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(
                     contig_id,
-                    #start=0,
-                    #end=contig["contig_len"],
                     start=contig_start,
                     end=contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
@@ -250,15 +248,11 @@ def contig_pileup(packed_args):
 
             aligned_reads = bamfile.count(
                     contig_id,
-                    #start=0,
-                    #end=contig["contig_len"],
                     start=contig_start,
                     end=contig_end)
 
             mapped_reads = bamfile.count(
                     contig_id,
-                    #start=0,
-                    #end=contig["contig_len"],
                     start=contig_start,
                     end=contig_end,
                     read_callback=keep_read)
@@ -275,8 +269,9 @@ def contig_pileup(packed_args):
             }
 
         records = []
-        for ref_pos in range(0, contig["contig_len"]):
+        for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
+            print(contig_id, contig_start, contig_end, ref_pof, len(counts[0]))
             depth = sum([counts[nt][ref_pos] for nt in range(4)])
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
@@ -317,7 +312,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 20000
+    slice_size = 1000
     for species_index, species_id in enumerate(species_ids):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
@@ -325,14 +320,14 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         slice_id = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
-            contig_length = contig["contig_len"]
+            contig_length = int(contig["contig_len"])
 
             if contig_length <= slice_size:
 
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path)
+                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
 
-                print(species_id, slice_id, contig_id, 0, contig_length)
+                #print(species_id, slice_id, contig_id, 0, contig_length)
 
                 argument_list.append(slice_args)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
@@ -344,23 +339,15 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
 
                     if ni == chunk_num:
-                        slice_args = (species_id, slice_id, contig_id, ci+1, contig_length, repgenome_bamfile, headerless_sliced_path)
+                        slice_args = (species_id, slice_id, contig_id, ci+1, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
                         print(species_id, slice_id, contig_id, ci+1, contig_length)
                     else:
-                        slice_args = (species_id, slice_id, contig_id, ci+1, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
+                        slice_args = (species_id, slice_id, contig_id, ci+1, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
                         print(species_id, slice_id, contig_id, ci+1, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
                     slice_id += 1
-
-        exit(0)
-
-        my_args = (species_id, contig_id, repgenome_bamfile, contig, headerless_contigs_pileup_path)
-        argument_list.append(my_args)
-        species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path = packed_args
-
-
 
         # Submit the merge jobs
         argument_list.append((species_id, -1))
