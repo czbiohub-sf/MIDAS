@@ -340,10 +340,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
                     if ni == chunk_num:
                         slice_args = (species_id, slice_id, contig_id, ci+1, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
-                        print(species_id, slice_id, contig_id, ci+1, contig_length)
+                        #print(species_id, slice_id, contig_id, ci+1, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci+1, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
-                        print(species_id, slice_id, contig_id, ci+1, ci+slice_size)
+                        #print(species_id, slice_id, contig_id, ci+1, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
@@ -353,11 +353,11 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         argument_list.append((species_id, -1))
         species_sliced_snps_path[species_id].append(sample.get_target_layout("snps_pileup", species_id))
 
-        # Create a semaphore with contig_counter of elements
-        semaphore_for_species[species_id] = multiprocessing.Semaphore(contig_counter)
-        for _ in range(contig_counter):
+        # Create a semaphore with slice_size of elements
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
+        for _ in range(slice_size):
             semaphore_for_species[species_id].acquire()
-        slice_counts[species_id] = contig_counter
+        slice_counts[species_id] = slice_size
 
     # double check
     for species_id in species_sliced_snps_path.keys():
