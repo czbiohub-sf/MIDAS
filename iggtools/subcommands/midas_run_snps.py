@@ -348,7 +348,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                         print(species_id, slice_id, contig_id, ci+1, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci+1, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
-                        print(ci+1, ci+slice_size)
+                        print(species_id, slice_id, contig_id, ci+1, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
