@@ -336,7 +336,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
                 slice_id += 1
             else:
-                chunk_num = ceil(contig_len/slice_size) - 1
+                chunk_num = ceil(contig_length/slice_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, slice_size)):
                     print(species_id, slice_id, contig_id, contig_start, contig_end)
 
