@@ -239,14 +239,16 @@ def contig_pileup(packed_args):
         zero_rows_allowed = not args.sparse
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
-            coverage = bamfile.count_coverage(
+            print(contig_id, contig_start, contig_end)
+            counts = bamfile.count_coverage(
                     contig_id,
-                    start=int(contig_start),
-                    end=int(contig_end),
-                    quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
-                    read_callback=keep_read) # select a call-back to ignore reads when counting
+                    start=contig_start,
+                    end=contig_end)
+                    #quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                    #read_callback=keep_read) # select a call-back to ignore reads when counting
+            print(len(counts[0]))
+            exit(0)
 
-            print(contig_id, contig_start, contig_end, len(coverage[0]))
 
             aligned_reads = bamfile.count(
                     contig_id,
