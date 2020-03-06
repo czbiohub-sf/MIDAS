@@ -359,9 +359,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_size
 
-    # double check
-    for species_id in species_sliced_snps_path.keys():
-        print(species_id, len(species_sliced_snps_path[species_id]))
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
