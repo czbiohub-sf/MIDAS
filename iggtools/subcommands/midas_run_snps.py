@@ -200,7 +200,6 @@ def merge_sliced_contigs_for_species(species_id):
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
-    print("====================merging for {species_id}=================")
     with OutputStream(merged_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
@@ -223,10 +222,10 @@ def contig_pileup(packed_args):
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
-
+        print("====================wait for semaphore {species_id}=================")
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
-
+        print("====================merging for {species_id}=================")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
