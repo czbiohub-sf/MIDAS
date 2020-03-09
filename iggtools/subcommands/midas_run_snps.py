@@ -219,7 +219,7 @@ def contig_pileup(packed_args):
 
     global semaphore_for_species
     global slice_counts
-
+    print(packed_args)
     if packed_args[1] == -1:
         species_id = packed_args[0]
         print("====================wait for semaphore {species_id}=================")
@@ -284,7 +284,7 @@ def contig_pileup(packed_args):
             for row in records:
                 stream.write("\t".join(map(format_data, row)) + "\n")
 
-        print("aln_stats: {aln_stats}")
+        print(f"aln_stats: {aln_stats}")
         #return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock
