@@ -240,7 +240,7 @@ def contig_pileup(packed_args):
         slice_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
-            print(contig_id, contig_start, contig_end)
+            #print(contig_id, contig_start, contig_end)
             # This is redundant
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
@@ -280,7 +280,7 @@ def contig_pileup(packed_args):
                 aln_stats["contig_covered_bases"] += 1
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
-        
+
         assert within_slice_index+contig_start == contig_end
         #with OutputStream(headerless_sliced_path) as stream:
             #for row in records:
