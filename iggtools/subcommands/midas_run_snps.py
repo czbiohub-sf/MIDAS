@@ -342,7 +342,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
                     slice_id += 1
-            exit(0)
 
         # Submit the merge jobs
         argument_list.append((species_id, -1))
@@ -354,6 +353,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_size
 
+    exit(0)
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
