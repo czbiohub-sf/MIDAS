@@ -248,7 +248,6 @@ def contig_pileup(packed_args):
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
-        print(len(counts[0]))
         aln_stats = {
                 "species_id": species_id,
                 "contig_id": contig_id,
@@ -264,7 +263,6 @@ def contig_pileup(packed_args):
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
             try:
-
                 depth = sum([counts[nt][ref_pos] for nt in range(4)])
             except:
                 print(contig_id, contig_start, contig_end, len(counts[0]))
@@ -323,7 +321,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
                 slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
 
-                print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
+                #print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
 
                 argument_list.append(slice_args)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
@@ -336,10 +334,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
                     if ni == chunk_num:
                         slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
-                        print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
+                        #print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
-                        print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
+                        #print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
