@@ -237,6 +237,7 @@ def contig_pileup(packed_args):
         global global_args
         args = global_args
         zero_rows_allowed = not args.sparse
+        slice_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
             print(contig_id, contig_start, contig_end)
@@ -260,24 +261,26 @@ def contig_pileup(packed_args):
             }
 
         records = []
-        for ref_pos in range(contig_start, contig_end):
-            ref_allele = contig["contig_seq"][ref_pos]
-            try:
-                depth = sum([counts[nt][ref_pos] for nt in range(4)])
-            except IndexError:
-                print(contig_id, contig_start, contig_end, len(counts[0]))
-            count_a = counts[0][ref_pos]
-            count_c = counts[1][ref_pos]
-            count_g = counts[2][ref_pos]
-            count_t = counts[3][ref_pos]
-            row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
+        #for ref_pos in range(contig_start, contig_end):
+        for within_slice_index in range(0, slice_size):
+            print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
+
+            depth = sum([counts[nt][within_slice_index] for nt in range(4)])
+            count_a = counts[0][within_slice_index]
+            count_c = counts[1][within_slice_index]
+            count_g = counts[2][within_slice_index]
+            count_t = counts[3][within_slice_index]
+
+            ref_pos = within_slice_index + contig_start + 1
+            ref_allele = contig["contig_seq"][within_slice_index]
+            row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
 
             aln_stats["contig_total_depth"] += depth
             if depth > 0:
                 aln_stats["contig_covered_bases"] += 1
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
-
+        assert within_slice_index+contig_start == contig_end
         #with OutputStream(headerless_sliced_path) as stream:
             #for row in records:
                 #stream.write("\t".join(map(format_data, row)) + "\n")
