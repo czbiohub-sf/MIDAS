@@ -315,15 +315,19 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
         slice_id = 0
+        temp_count = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
             contig_length = int(contig["contig_len"])
 
+            if temp_count > 10:
+                break
+
             if contig_length <= slice_size:
 
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
-
+                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path) # contig
+                temp_count += 1
                 #print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
 
                 argument_list.append(slice_args)
@@ -337,9 +341,11 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
                     if ni == chunk_num:
                         slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path)#contig
+                        temp_count += 1
                         #print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
+                        temp_count += 1
                         #print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
 
                     argument_list.append(slice_args)
