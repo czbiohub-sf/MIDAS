@@ -279,9 +279,9 @@ def contig_pileup(packed_args):
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
 
-        with OutputStream(headerless_sliced_path) as stream:
-            for row in records:
-                stream.write("\t".join(map(format_data, row)) + "\n")
+        #with OutputStream(headerless_sliced_path) as stream:
+            #for row in records:
+                #stream.write("\t".join(map(format_data, row)) + "\n")
 
         return aln_stats
     finally:
