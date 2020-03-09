@@ -219,7 +219,7 @@ def contig_pileup(packed_args):
 
     global semaphore_for_species
     global slice_counts
-    print(packed_args)
+    print(packed_args[0], packed_args[1])
     if packed_args[1] == -1:
         species_id = packed_args[0]
         print("====================wait for semaphore {species_id}=================")
