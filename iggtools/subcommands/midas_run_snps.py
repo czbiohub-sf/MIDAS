@@ -200,7 +200,7 @@ def merge_sliced_contigs_for_species(species_id):
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
-
+    print("merging for {species_id}")
     with OutputStream(merged_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
@@ -463,10 +463,10 @@ def midas_run_snps(args):
         bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug)
 
-
         # Create species subdir at one place
         species_ids_of_interest = species_profile.keys()
         sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
+
         # Use mpileup to identify SNPs
         contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
         species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
