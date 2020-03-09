@@ -240,9 +240,8 @@ def contig_pileup(packed_args):
         slice_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
-            #print(contig_id, contig_start, contig_end)
-            # This is redundant
-            counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
+            counts = bamfile.count_coverage(
+                    contig_id, contig_start, contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
@@ -282,9 +281,9 @@ def contig_pileup(packed_args):
                 records.append(row)
 
         assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
-        #with OutputStream(headerless_sliced_path) as stream:
-            #for row in records:
-                #stream.write("\t".join(map(format_data, row)) + "\n")
+        with OutputStream(headerless_sliced_path) as stream:
+            for row in records:
+                stream.write("\t".join(map(format_data, row)) + "\n")
 
         return aln_stats
     finally:
@@ -309,7 +308,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 10000
+    slice_size = 20000
     for species_index, species_id in enumerate(species_ids):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
