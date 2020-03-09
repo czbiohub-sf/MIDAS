@@ -263,7 +263,7 @@ def contig_pileup(packed_args):
         records = []
         #for ref_pos in range(contig_start, contig_end):
         for within_slice_index in range(0, slice_size):
-            print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
+            #print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
 
             depth = sum([counts[nt][within_slice_index] for nt in range(4)])
             count_a = counts[0][within_slice_index]
@@ -281,7 +281,7 @@ def contig_pileup(packed_args):
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
 
-        assert within_slice_index+contig_start == contig_end, print(within_slice_index, contig_start, contig_end, slice_size, contig_id)
+        assert within_slice_index+contig_start == contig_end, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
         #with OutputStream(headerless_sliced_path) as stream:
             #for row in records:
                 #stream.write("\t".join(map(format_data, row)) + "\n")
