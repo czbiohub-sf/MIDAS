@@ -246,8 +246,8 @@ def contig_pileup(packed_args):
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
-
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
+
         print(len(counts[0]))
         aln_stats = {
                 "species_id": species_id,
@@ -263,7 +263,12 @@ def contig_pileup(packed_args):
         records = []
         for ref_pos in range(contig_start, contig_end):
             ref_allele = contig["contig_seq"][ref_pos]
-            depth = sum([counts[nt][ref_pos] for nt in range(4)])
+            try:
+
+                depth = sum([counts[nt][ref_pos] for nt in range(4)])
+            except:
+                print(contig_id, contig_start, contig_end, len(counts[0]))
+                raise
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
             count_g = counts[2][ref_pos]
