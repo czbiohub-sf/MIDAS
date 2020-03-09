@@ -200,7 +200,7 @@ def merge_sliced_contigs_for_species(species_id):
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
     merged_file = species_sliced_snps_path[species_id][-1]
-    print("merging for {species_id}")
+    print("====================merging for {species_id}=================")
     with OutputStream(merged_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
