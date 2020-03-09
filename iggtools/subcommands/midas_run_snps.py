@@ -271,7 +271,7 @@ def contig_pileup(packed_args):
             count_c = counts[1][ref_pos]
             count_g = counts[2][ref_pos]
             count_t = counts[3][ref_pos]
-            row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
+            row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g,r count_t)
 
             aln_stats["contig_total_depth"] += depth
             if depth > 0:
@@ -279,7 +279,7 @@ def contig_pileup(packed_args):
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
 
-        with OutputStream(headerless_contigs_pileup_path) as stream:
+        with OutputStream(headerless_sliced_path) as stream:
             for row in records:
                 stream.write("\t".join(map(format_data, row)) + "\n")
 
@@ -321,7 +321,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
                 slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
 
-                #print(species_id, slice_id, contig_id, 0, contig_length)
+                print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
 
                 argument_list.append(slice_args)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
@@ -333,15 +333,16 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
 
                     if ni == chunk_num:
-                        slice_args = (species_id, slice_id, contig_id, ci+1, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
-                        #print(species_id, slice_id, contig_id, ci+1, contig_length)
+                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
+                        print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
                     else:
-                        slice_args = (species_id, slice_id, contig_id, ci+1, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
-                        #print(species_id, slice_id, contig_id, ci+1, ci+slice_size)
+                        slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
+                        print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
                     slice_id += 1
+            exit(0)
 
         # Submit the merge jobs
         argument_list.append((species_id, -1))
