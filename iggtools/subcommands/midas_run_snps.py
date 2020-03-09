@@ -264,9 +264,8 @@ def contig_pileup(packed_args):
             ref_allele = contig["contig_seq"][ref_pos]
             try:
                 depth = sum([counts[nt][ref_pos] for nt in range(4)])
-            except:
+            except IndexError:
                 print(contig_id, contig_start, contig_end, len(counts[0]))
-                raise
             count_a = counts[0][ref_pos]
             count_c = counts[1][ref_pos]
             count_g = counts[2][ref_pos]
