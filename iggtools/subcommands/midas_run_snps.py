@@ -355,6 +355,8 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_size
 
+    print(argument_list)
+    exit(0)
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
     return contigs_pileup_summary
