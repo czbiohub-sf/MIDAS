@@ -243,15 +243,15 @@ def contig_pileup(packed_args):
             # This is redundant
             counts = bamfile.count_coverage(
                     contig_id,
-                    start=0,
-                    end=contig["contig_len"],
+                    start=contig_start,
+                    end=contig_end,
                     quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     read_callback=keep_read) # select a call-back to ignore reads when counting
 
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
 
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
-
+        print(len(counts[0]))
         aln_stats = {
                 "species_id": species_id,
                 "contig_id": contig_id,
@@ -352,8 +352,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         for _ in range(slice_size):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_size
-
-    exit(0)
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
