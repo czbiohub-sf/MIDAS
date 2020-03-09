@@ -280,6 +280,7 @@ def contig_pileup(packed_args):
                 aln_stats["contig_covered_bases"] += 1
             if depth > 0 or zero_rows_allowed:
                 records.append(row)
+        
         assert within_slice_index+contig_start == contig_end
         #with OutputStream(headerless_sliced_path) as stream:
             #for row in records:
