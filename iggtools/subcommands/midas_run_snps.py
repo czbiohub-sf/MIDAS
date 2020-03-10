@@ -188,7 +188,7 @@ def scan_contigs(contig_file, species_id):
 
 def cat_files(sliced_files, one_file, number_of_slices=20):
     for temp_files in split(sliced_files, number_of_slices):
-        command("cat " + " ".join(temp_files) + f" >> {one_file}")
+        command("cat " + " ".join(temp_files) + f" >> {one_file}", quiet=True)
 
 
 def merge_sliced_contigs_for_species(species_id):
@@ -198,7 +198,7 @@ def merge_sliced_contigs_for_species(species_id):
     global slice_counts
     global global_args
 
-    print(f"merge for {species_id}")
+    print(f"merge_sliced_contigs_for_species::å{species_id}")
     sliced_files = species_sliced_snps_path[species_id][:-1]
     species_file = species_sliced_snps_path[species_id][-1]
     with OutputStream(species_file) as stream:
@@ -366,11 +366,13 @@ def compute_species_pileup_summary(contigs_pileup_summary):
             species_pileup_summary[species_id] = per_species_pileup_stats
 
         perspecies_pileup = species_pileup_summary.get(species_id)
+        print("before: ", perspecies_pileup)
         perspecies_pileup["genome_length"] +=  record["slice_length"]
         perspecies_pileup["total_depth"] += record["contig_total_depth"]
         perspecies_pileup["covered_bases"] += record["contig_covered_bases"]
         perspecies_pileup["aligned_reads"] += record["aligned_reads"]
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
+        print("after", perspecies_pileup)
 
         if previous_species_id != species_id:
             print(f"{previous_species_id} - {species_id}")
@@ -382,6 +384,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
             previous_species_id = species_id
 
+    print(f"{previous_species_id} - {species_id}")
     if perspecies_pileup["genome_length"] > 0:
         perspecies_pileup["fraction_covered"] = perspecies_pileup["covered_bases"] / perspecies_pileup["covered_bases"]
     if perspecies_pileup["covered_bases"] > 0:
