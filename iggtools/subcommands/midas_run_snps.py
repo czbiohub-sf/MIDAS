@@ -362,6 +362,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
 
         species_id = record["species_id"]
         if species_id not in species_pileup_summary:
+            print(f"first time for {species_id}")
             species_pileup_summary[species_id] = per_species_pileup_stats
 
         perspecies_pileup = species_pileup_summary.get(species_id)
