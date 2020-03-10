@@ -355,7 +355,16 @@ def compute_species_pileup_summary(contigs_pileup_summary):
             if species_id not in species_pileup_summary:
                 print(f"first time for {species_id}")
                 print("BEFORE", species_pileup_summary, species_id)
-                species_pileup_summary[species_id] =
+                species_pileup_summary[species_id] = {
+                                "species_id": species_id,
+                                "genome_length": 0,
+                                "covered_bases": 0,
+                                "total_depth": 0,
+                                "aligned_reads":0,
+                                "mapped_reads":0,
+                                "fraction_covered": 0.0,
+                                "mean_coverage": 0.0
+                                }
 
                 print("AFTER", species_pileup_summary)
                 species_pileup_summary[species_id]["species_id"] = species_id
