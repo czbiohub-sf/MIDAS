@@ -358,7 +358,10 @@ def compute_species_pileup_summary(contigs_pileup_summary):
     current_species_id = None
 
     for record in contigs_pileup_summary:
-
+        if record is None:
+            print("this is the merging part")
+            continue
+        
         species_id = record["species_id"]
         if species_id not in species_pileup_summary:
             species_pileup_summary[species_id] = per_species_pileup_stats
