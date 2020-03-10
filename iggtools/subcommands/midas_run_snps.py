@@ -361,6 +361,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if record is None: continue
 
         species_id = record["species_id"]
+        print(f"for loop {species_id}")
         if species_id not in species_pileup_summary:
             species_pileup_summary[species_id] = per_species_pileup_stats
 
@@ -372,6 +373,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
 
         if previous_species_id != species_id:
+            print(f"{previous_species_id} - {species_id}")
             if previous_species_id is not None:
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
                 if previous_species_pileup["genome_length"] > 0:
