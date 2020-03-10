@@ -222,8 +222,10 @@ def contig_pileup(packed_args):
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
+        print("++++++++++++++++++++ wait")
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
+        print("++++++++++++++++++++ start")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
