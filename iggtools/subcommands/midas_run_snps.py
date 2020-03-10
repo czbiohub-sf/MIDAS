@@ -386,6 +386,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
                 if previous_species_pileup["covered_bases"] > 0:
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
                 print("haha after", previous_species_id, previous_species_pileup)
+                print("what's current species now", species_id, perspecies_pileup)
                 #species_pileup_summary[previous_species_id] = previous_species_pileup
             previous_species_id = species_id
 
