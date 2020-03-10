@@ -344,7 +344,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
 def compute_species_pileup_summary(contigs_pileup_summary):
 
-    def per_species_init_values(species_id):
 
     per_species_pileup_stats = {
         "species_id": "",
