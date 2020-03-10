@@ -222,10 +222,10 @@ def contig_pileup(packed_args):
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
-        print("++++++++++++++++++++ wait")
+        print(f"++++++++++++++++++++ wait {species_id}")
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
-        print("++++++++++++++++++++ start")
+        print(f"++++++++++++++++++++ start {species_id}")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
@@ -295,7 +295,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 50000
+    slice_size = 20000
     for species_index, species_id in enumerate(species_ids):
 
         contigs = scan_contigs(contigs_files[species_index], species_id)
