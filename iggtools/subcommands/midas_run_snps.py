@@ -282,7 +282,8 @@ def contig_pileup(packed_args):
                 records.append(row)
 
         assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
-        with OutputStream(headerless_sliced_path) as stream:
+        #with OutputStream(headerless_sliced_path) as stream:
+        with open(headerless_sliced_path,"w") as stream:
             for row in records:
                 stream.write("\t".join(map(format_data, row)) + "\n")
 
