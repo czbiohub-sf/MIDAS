@@ -458,7 +458,7 @@ def midas_run_snps(args):
     sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
     # Use mpileup to identify SNPs
-    #contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
+    contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
     species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
     write_species_pileup_summary(species_pileup_summary, sample.get_target_layout("snps_summary"))
 
