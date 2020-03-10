@@ -391,6 +391,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if previous_species_id != species_id:
             print(f"{previous_species_id} - {species_id}")
             if previous_species_id is not None:
+                print(species_pileup_summary)
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
                 print("finally previous", previous_species_id, previous_species_pileup)
                 print("finally current", species_id, current_species_pileup)
