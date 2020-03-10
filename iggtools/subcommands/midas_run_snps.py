@@ -355,9 +355,10 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         }
 
     species_pileup_summary = defaultdict(dict)
-    current_species_id = None
+    previous_species_id = None
 
     for record in contigs_pileup_summary:
+        if record is None: continue
 
         species_id = record["species_id"]
         if species_id not in species_pileup_summary:
@@ -370,13 +371,14 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         perspecies_pileup["aligned_reads"] += record["aligned_reads"]
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
 
-        if current_species_id is not None and current_species_id != species_id:
-            current_species_pileup = species_pileup_summary.get(current_species_id)
-            if current_species_pileup["genome_length"] > 0:
-                current_species_pileup["fraction_covered"] = current_species_pileup["covered_bases"] / current_species_pileup["covered_bases"]
-            if current_species_pileup["covered_bases"] > 0:
-                current_species_pileup["mean_coverage"] = current_species_pileup["total_depth"] / current_species_pileup["covered_bases"]
-            current_species_id = species_id
+        if previous_species_id != species_id:
+            if previous_species_id is not None:
+                previous_species_pileup = species_pileup_summary.get(previous_species_id)
+                if previous_species_pileup["genome_length"] > 0:
+                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
+                if previous_species_pileup["covered_bases"] > 0:
+                    previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
+            previous_species_id = species_id
 
     if perspecies_pileup["genome_length"] > 0:
         perspecies_pileup["fraction_covered"] = perspecies_pileup["covered_bases"] / perspecies_pileup["covered_bases"]
