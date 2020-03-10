@@ -426,52 +426,52 @@ def midas_run_snps(args):
     global_args = args
 
     #try:
-        if args.bt2_db_indexes:
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
-            tsprint("Prebuild repgenomes bowtie2 index and species_profile exit. Use them")
+    if args.bt2_db_indexes:
+        assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
+        tsprint("Prebuild repgenomes bowtie2 index and species_profile exit. Use them")
 
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(args.bt2_db_indexes)
+        bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+        bt2_db_name = os.path.basename(args.bt2_db_indexes)
 
-            species_profile = {}
-            with InputStream() as stream:
-                for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
-                    species_profile[species_id] = coverage
+        species_profile = {}
+        with InputStream() as stream:
+            for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
+                species_profile[species_id] = coverage
 
-            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+        sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
 
+    else:
+        bt2_db_dir = sample.get_target_layout("dbsdir")
+        bt2_db_name = "repgenomes"
+        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+
+        if args.species_list:
+            species_profile = sample.select_species(args.genome_coverage, args.species_list)
         else:
-            bt2_db_dir = sample.get_target_layout("dbsdir")
-            bt2_db_name = "repgenomes"
-            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+            species_profile = sample.select_species(args.genome_coverage)
 
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
+        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        db = UHGG(local_toc)
 
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
+        # Download repgenome_id.fna for every species in the restricted species profile
+        sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+        contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_temp_dir)
 
-            # Download repgenome_id.fna for every species in the restricted species profile
-            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
-            contigs_files = db.fetch_contigs(species_profile.keys(), bt2_db_temp_dir)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+    # Use Bowtie2 to map reads to a representative genomes
+    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+    bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
+    samtools_index(repgenome_bamfile, args.debug)
 
-        # Use Bowtie2 to map reads to a representative genomes
-        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
-        bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
-        samtools_index(repgenome_bamfile, args.debug)
+    # Create species subdir at one place
+    species_ids_of_interest = species_profile.keys()
+    sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
-        # Create species subdir at one place
-        species_ids_of_interest = species_profile.keys()
-        sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
-
-        # Use mpileup to identify SNPs
-        contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
-        species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
-        write_species_pileup_summary(species_pileup_summary, filepath)
+    # Use mpileup to identify SNPs
+    contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
+    species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
+    write_species_pileup_summary(species_pileup_summary, filepath)
 
         # TODO: for the provided bowtie2 database index, we don't have the contigs files
         # One way is to move the scan_contigs_file_stats into build database and when provicded with bowtie2 index,
