@@ -327,7 +327,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     slice_id += 1
 
         # Submit the merge jobs
-        print(slice_id, len(argument_list))
         argument_list.append((species_id, -1))
         species_sliced_snps_path[species_id].append(sample.get_target_layout("snps_pileup", species_id))
 
