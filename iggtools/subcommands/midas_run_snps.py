@@ -281,8 +281,8 @@ def contig_pileup(packed_args):
                     records.append(row)
 
             assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
-            #with OutputStream(headerless_sliced_path) as stream:
-            with open(headerless_sliced_path,"w") as stream:
+            with OutputStream(headerless_sliced_path) as stream:
+            #with open(headerless_sliced_path,"w") as stream:
                 for row in records:
                     stream.write("\t".join(map(format_data, row)) + "\n")
 
@@ -333,13 +333,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                 for ni, ci in enumerate(range(0, contig_length, slice_size)):
 
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-
                     if ni == chunk_num:
                         slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path) #contig
-                        #print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
-                        #print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
 
                     argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
