@@ -286,7 +286,7 @@ def contig_pileup(packed_args):
                 for row in records:
                     stream.write("\t".join(map(format_data, row)) + "\n")
 
-            #return aln_stats
+            return aln_stats
         finally:
             semaphore_for_species[species_id].release() # no deadlock
             #print(f"now release one for {species_id}")
