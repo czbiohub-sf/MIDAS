@@ -198,6 +198,7 @@ def merge_sliced_contigs_for_species(species_id):
     global slice_counts
     global global_args
 
+    print(f"merge for {species_id}")
     sliced_files = species_sliced_snps_path[species_id][:-1]
     species_file = species_sliced_snps_path[species_id][-1]
     with OutputStream(species_file) as stream:
