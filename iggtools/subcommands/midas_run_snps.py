@@ -345,6 +345,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 def compute_species_pileup_summary(contigs_pileup_summary):
 
     per_species_pileup_stats = {
+        "species_id": "",
         "genome_length": 0,
         "covered_bases": 0,
         "total_depth": 0,
@@ -364,16 +365,15 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if species_id not in species_pileup_summary:
             print(f"first time for {species_id}")
             species_pileup_summary[species_id] = per_species_pileup_stats
+            species_pileup_summary[species_id]["species_id"] = species_id
             print(species_pileup_summary)
 
         perspecies_pileup = species_pileup_summary.get(species_id)
-        #print(species_id, perspecies_pileup)
         perspecies_pileup["genome_length"] +=  record["slice_length"]
         perspecies_pileup["total_depth"] += record["contig_total_depth"]
         perspecies_pileup["covered_bases"] += record["contig_covered_bases"]
         perspecies_pileup["aligned_reads"] += record["aligned_reads"]
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
-        #species_pileup_summary[species_id] = species_pileup_summary
         assert perspecies_pileup["fraction_covered"] == 0.0, print(species_id,  perspecies_pileup)
 
         if previous_species_id != species_id:
@@ -381,6 +381,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
             if previous_species_id is not None:
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
                 print("haha before", previous_species_id, previous_species_pileup)
+                print("what's current species now", species_id, perspecies_pileup)
                 if previous_species_pileup["genome_length"] > 0:
                     previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
                 if previous_species_pileup["covered_bases"] > 0:
