@@ -361,7 +361,6 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if record is None: continue
 
         species_id = record["species_id"]
-        print(f"for loop {species_id}")
         if species_id not in species_pileup_summary:
             species_pileup_summary[species_id] = per_species_pileup_stats
 
