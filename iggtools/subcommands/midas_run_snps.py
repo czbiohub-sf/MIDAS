@@ -219,10 +219,11 @@ def contig_pileup(packed_args):
 
     global semaphore_for_species
     global slice_counts
-    print(packed_args[0], packed_args[1])
+
     if packed_args[1] == -1:
+        print(packed_args[0], packed_args[1])
         species_id = packed_args[0]
-        print("====================wait for semaphore {species_id}=================")
+        print("====================here i even here=================")
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
         print("====================merging for {species_id}=================")
@@ -285,10 +286,10 @@ def contig_pileup(packed_args):
             for row in records:
                 stream.write("\t".join(map(format_data, row)) + "\n")
 
-        print(f"aln_stats: {aln_stats}")
         #return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock
+        print(f"now release one for {species_id}")
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
@@ -319,9 +320,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
             contig_length = int(contig["contig_len"])
-
-            if temp_count > 10:
-                break
 
             if contig_length <= slice_size:
 
