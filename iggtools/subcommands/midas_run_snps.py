@@ -359,9 +359,8 @@ def compute_species_pileup_summary(contigs_pileup_summary):
 
     for record in contigs_pileup_summary:
         if record is None:
-            print("this is the merging part")
             continue
-        #print(record)
+
         species_id = record["species_id"]
         if species_id not in species_pileup_summary:
             species_pileup_summary[species_id] = per_species_pileup_stats
@@ -456,7 +455,7 @@ def midas_run_snps(args):
     contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
     print(contigs_pileup_summary)
     species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
-    write_species_pileup_summary(species_pileup_summary, filepath)
+    write_species_pileup_summary(species_pileup_summary, sample.get_target_layout("snps_summary"))
 
 
     #except:
