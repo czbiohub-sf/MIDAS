@@ -276,7 +276,7 @@ def contig_pileup(packed_args):
                         stream.write("\t".join(map(format_data, row)) + "\n")
 
                 assert within_slice_index+contig_start == contig_end-1, f"contig_pileup {contig_id} run into index mismatch error"
-            #return aln_stats
+            return aln_stats
         finally:
             semaphore_for_species[species_id].release() # no deadlock
 
