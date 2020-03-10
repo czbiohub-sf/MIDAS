@@ -229,66 +229,67 @@ def contig_pileup(packed_args):
         print("====================merging for {species_id}=================")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
+    
+    else:
+        try:
+            #species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
+            species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path = packed_args
 
-    try:
-        #species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
-        species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path = packed_args
+            global global_args
+            args = global_args
+            zero_rows_allowed = not args.sparse
+            slice_size = contig_end - contig_start
 
-        global global_args
-        args = global_args
-        zero_rows_allowed = not args.sparse
-        slice_size = contig_end - contig_start
+            with AlignmentFile(repgenome_bamfile) as bamfile:
+                counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
+                        quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                        read_callback=keep_read) # select a call-back to ignore reads when counting
+                aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
+                mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
-        with AlignmentFile(repgenome_bamfile) as bamfile:
-            counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
-                    quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
-                    read_callback=keep_read) # select a call-back to ignore reads when counting
-            aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
-            mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
+            aln_stats = {
+                    "species_id": species_id,
+                    "contig_id": contig_id,
+                    "slice_length": contig_end - contig_start,
+                    #"contig_length": contig["contig_len"],
+                    "aligned_reads": aligned_reads,
+                    "mapped_reads": mapped_reads,
+                    "contig_total_depth": 0,
+                    "contig_covered_bases":0
+                }
 
-        aln_stats = {
-                "species_id": species_id,
-                "contig_id": contig_id,
-                "slice_length": contig_end - contig_start,
-                #"contig_length": contig["contig_len"],
-                "aligned_reads": aligned_reads,
-                "mapped_reads": mapped_reads,
-                "contig_total_depth": 0,
-                "contig_covered_bases":0
-            }
+            records = []
+            #for ref_pos in range(contig_start, contig_end):
+            for within_slice_index in range(0, slice_size):
+                #print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
 
-        records = []
-        #for ref_pos in range(contig_start, contig_end):
-        for within_slice_index in range(0, slice_size):
-            #print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
+                depth = sum([counts[nt][within_slice_index] for nt in range(4)])
+                count_a = counts[0][within_slice_index]
+                count_c = counts[1][within_slice_index]
+                count_g = counts[2][within_slice_index]
+                count_t = counts[3][within_slice_index]
 
-            depth = sum([counts[nt][within_slice_index] for nt in range(4)])
-            count_a = counts[0][within_slice_index]
-            count_c = counts[1][within_slice_index]
-            count_g = counts[2][within_slice_index]
-            count_t = counts[3][within_slice_index]
+                ref_pos = within_slice_index + contig_start + 1
+                #ref_allele = contig["contig_seq"][within_slice_index]
+                ref_allele = ""
+                row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
 
-            ref_pos = within_slice_index + contig_start + 1
-            #ref_allele = contig["contig_seq"][within_slice_index]
-            ref_allele = ""
-            row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
+                aln_stats["contig_total_depth"] += depth
+                if depth > 0:
+                    aln_stats["contig_covered_bases"] += 1
+                if depth > 0 or zero_rows_allowed:
+                    records.append(row)
 
-            aln_stats["contig_total_depth"] += depth
-            if depth > 0:
-                aln_stats["contig_covered_bases"] += 1
-            if depth > 0 or zero_rows_allowed:
-                records.append(row)
+            assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
+            #with OutputStream(headerless_sliced_path) as stream:
+            with open(headerless_sliced_path,"w") as stream:
+                for row in records:
+                    stream.write("\t".join(map(format_data, row)) + "\n")
 
-        assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
-        #with OutputStream(headerless_sliced_path) as stream:
-        with open(headerless_sliced_path,"w") as stream:
-            for row in records:
-                stream.write("\t".join(map(format_data, row)) + "\n")
-
-        #return aln_stats
-    finally:
-        semaphore_for_species[species_id].release() # no deadlock
-        print(f"now release one for {species_id}")
+            #return aln_stats
+        finally:
+            semaphore_for_species[species_id].release() # no deadlock
+            print(f"now release one for {species_id}")
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
