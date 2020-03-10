@@ -243,7 +243,6 @@ def contig_pileup(packed_args):
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end, args.aln_baseq, keep_read)
                     #quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                     #read_callback=keep_read) # select a call-back to ignore reads when counting
-
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
@@ -270,8 +269,8 @@ def contig_pileup(packed_args):
             count_t = counts[3][within_slice_index]
 
             ref_pos = within_slice_index + contig_start + 1
-            ref_allele = ""
             #ref_allele = contig["contig_seq"][within_slice_index]
+            ref_allele = ""
             row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
 
             aln_stats["contig_total_depth"] += depth
@@ -316,16 +315,13 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
         slice_id = 0
-        temp_count = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
             contig_length = int(contig["contig_len"])
 
             if contig_length <= slice_size:
-
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
                 slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path) # contig
-                temp_count += 1
                 #print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
 
                 argument_list.append(slice_args)
@@ -338,12 +334,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
 
                     if ni == chunk_num:
-                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path)#contig
-                        temp_count += 1
+                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path) #contig
                         #print(species_id, slice_id, contig_id, contig_length, ci, contig_length)
                     else:
                         slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
-                        temp_count += 1
                         #print(species_id, slice_id, contig_id, contig_length, ci, ci+slice_size)
 
                     argument_list.append(slice_args)
@@ -356,8 +350,10 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
         # Create a semaphore with slice_size of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
-        for _ in range(slice_size):
+        for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
+            print(f"now acquire one for {species_id}")
+
         slice_counts[species_id] = slice_size
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
