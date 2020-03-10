@@ -289,7 +289,7 @@ def contig_pileup(packed_args):
             #return aln_stats
         finally:
             semaphore_for_species[species_id].release() # no deadlock
-            print(f"now release one for {species_id}")
+            #print(f"now release one for {species_id}")
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
