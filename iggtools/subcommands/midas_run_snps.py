@@ -229,7 +229,7 @@ def contig_pileup(packed_args):
         print("====================merging for {species_id}=================")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
-    
+
     else:
         try:
             #species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
@@ -315,7 +315,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
-        slice_id = 0
+        slice_id = 1
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
             contig_length = int(contig["contig_len"])
@@ -353,7 +353,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
         for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
-            print(f"now acquire one for {species_id}")
 
         slice_counts[species_id] = slice_id
 
