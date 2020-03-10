@@ -351,7 +351,6 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if record is None: continue
 
         species_id = record["species_id"]
-
         if species_id not in species_pileup_summary:
             species_pileup_summary[species_id] = {
                     "species_id": species_id,
@@ -370,30 +369,21 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         current_species_pileup["covered_bases"] += record["contig_covered_bases"]
         current_species_pileup["aligned_reads"] += record["aligned_reads"]
         current_species_pileup["mapped_reads"] += record["mapped_reads"]
-        assert current_species_pileup["fraction_covered"] == 0.0, print(species_id,  current_species_pileup)
+        assert current_species_pileup["fraction_covered"] == 0.0, f"compute_species_pileup_summary error for {species_id}"
 
         if previous_species_id != species_id:
-            print(f"{previous_species_id} - {species_id}")
             if previous_species_id is not None:
-                print(species_pileup_summary)
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
-                print("finally previous", previous_species_id, previous_species_pileup)
-                print("finally current", species_id, current_species_pileup)
                 if previous_species_pileup["genome_length"] > 0:
                     previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
                 if previous_species_pileup["covered_bases"] > 0:
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
-                print("finally after previous", previous_species_id, previous_species_pileup)
-                print("finally after current", species_id, current_species_pileup)
             previous_species_id = species_id
 
-    print(f"{previous_species_id} - {species_id}")
-    print("haha before", current_species_pileup)
     if current_species_pileup["genome_length"] > 0:
         current_species_pileup["fraction_covered"] = current_species_pileup["covered_bases"] / current_species_pileup["covered_bases"]
     if current_species_pileup["covered_bases"] > 0:
         current_species_pileup["mean_coverage"] = current_species_pileup["total_depth"] / current_species_pileup["covered_bases"]
-    print("haha after", current_species_pileup)
 
     return species_pileup_summary
 
@@ -403,8 +393,7 @@ def write_species_pileup_summary(species_pileup_summary, outfile):
     with OutputStream(outfile) as file:
         file.write('\t'.join(snps_profile_schema.keys()) + '\n')
         for species_id, species_summary in species_pileup_summary.items():
-            record = [species_id] + list(species_summary.values())
-            file.write("\t".join(map(format_data, record)) + "\n")
+            file.write("\t".join(map(format_data, species_summary.values())) + "\n")
 
 
 def midas_run_snps(args):
