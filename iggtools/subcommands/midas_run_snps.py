@@ -198,7 +198,7 @@ def merge_sliced_contigs_for_species(species_id):
     global slice_counts
     global global_args
 
-    print(f"merge_sliced_contigs_for_species::å{species_id}")
+    print(f"merge_sliced_contigs_for_species::{species_id}")
     sliced_files = species_sliced_snps_path[species_id][:-1]
     species_file = species_sliced_snps_path[species_id][-1]
     with OutputStream(species_file) as stream:
@@ -364,15 +364,16 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if species_id not in species_pileup_summary:
             print(f"first time for {species_id}")
             species_pileup_summary[species_id] = per_species_pileup_stats
+            print(species_pileup_summary)
 
         perspecies_pileup = species_pileup_summary.get(species_id)
-        print(species_id, perspecies_pileup)
+        #print(species_id, perspecies_pileup)
         perspecies_pileup["genome_length"] +=  record["slice_length"]
         perspecies_pileup["total_depth"] += record["contig_total_depth"]
         perspecies_pileup["covered_bases"] += record["contig_covered_bases"]
         perspecies_pileup["aligned_reads"] += record["aligned_reads"]
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
-        species_pileup_summary[species_id] = species_pileup_summary
+        #species_pileup_summary[species_id] = species_pileup_summary
         assert perspecies_pileup["fraction_covered"] == 0.0, print(species_id,  perspecies_pileup)
 
         if previous_species_id != species_id:
@@ -385,7 +386,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
                 if previous_species_pileup["covered_bases"] > 0:
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
                 print("haha after", previous_species_id, previous_species_pileup)
-                species_pileup_summary[previous_species_id] = previous_species_pileup
+                #species_pileup_summary[previous_species_id] = previous_species_pileup
             previous_species_id = species_id
 
     print(f"{previous_species_id} - {species_id}")
