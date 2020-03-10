@@ -376,6 +376,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if previous_species_id != species_id:
             print(f"{previous_species_id} - {species_id}")
             if previous_species_id is not None:
+                print("here")
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
                 if previous_species_pileup["genome_length"] > 0:
                     previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
