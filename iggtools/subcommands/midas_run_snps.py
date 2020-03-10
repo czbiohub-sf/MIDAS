@@ -371,7 +371,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
             species_pileup_summary[species_id]["species_id"] = species_id
             print(species_pileup_summary[species_id])
 
-        perspecies_pileup = species_pileup_summary.get(species_id, )
+        perspecies_pileup = species_pileup_summary.get(species_id)
         perspecies_pileup["genome_length"] +=  record["slice_length"]
         perspecies_pileup["total_depth"] += record["contig_total_depth"]
         perspecies_pileup["covered_bases"] += record["contig_covered_bases"]
