@@ -358,8 +358,6 @@ def compute_species_pileup_summary(contigs_pileup_summary):
     current_species_id = None
 
     for record in contigs_pileup_summary:
-        if record is None:
-            continue
 
         species_id = record["species_id"]
         if species_id not in species_pileup_summary:
@@ -374,12 +372,10 @@ def compute_species_pileup_summary(contigs_pileup_summary):
 
         if current_species_id is not None and current_species_id != species_id:
             current_species_pileup = species_pileup_summary.get(current_species_id)
-
             if current_species_pileup["genome_length"] > 0:
                 current_species_pileup["fraction_covered"] = current_species_pileup["covered_bases"] / current_species_pileup["covered_bases"]
             if current_species_pileup["covered_bases"] > 0:
                 current_species_pileup["mean_coverage"] = current_species_pileup["total_depth"] / current_species_pileup["covered_bases"]
-
             current_species_id = species_id
 
     if perspecies_pileup["genome_length"] > 0:
@@ -453,7 +449,6 @@ def midas_run_snps(args):
 
     # Use mpileup to identify SNPs
     contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
-    print(contigs_pileup_summary)
     species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
     write_species_pileup_summary(species_pileup_summary, sample.get_target_layout("snps_summary"))
 
