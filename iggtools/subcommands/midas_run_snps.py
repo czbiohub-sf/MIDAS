@@ -240,9 +240,9 @@ def contig_pileup(packed_args):
         slice_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
-            counts = bamfile.count_coverage(contig_id, contig_start, contig_end, args.aln_baseq, keep_read)
-                    #quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
-                    #read_callback=keep_read) # select a call-back to ignore reads when counting
+            counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
+                    quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                    read_callback=keep_read) # select a call-back to ignore reads when counting
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
