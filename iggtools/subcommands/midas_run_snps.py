@@ -205,8 +205,8 @@ def merge_sliced_contigs_for_species(species_id):
 
     cat_files(sliced_files, merged_file, 20)
 
-    for _ in range(slice_counts[species_id]):
-        semaphore_for_species[species_id].release() # no deadlock
+    #for _ in range(slice_counts[species_id]):
+    #    semaphore_for_species[species_id].release() # no deadlock
 
     if not global_args.debug:
         for s_file in sclies_files:
@@ -240,10 +240,9 @@ def contig_pileup(packed_args):
         slice_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
-            counts = bamfile.count_coverage(
-                    contig_id, contig_start, contig_end,
-                    quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
-                    read_callback=keep_read) # select a call-back to ignore reads when counting
+            counts = bamfile.count_coverage(contig_id, contig_start, contig_end, args.aln_baseq, keep_read)
+                    #quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                    #read_callback=keep_read) # select a call-back to ignore reads when counting
 
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
@@ -430,7 +429,7 @@ def midas_run_snps(args):
     global global_args
     global_args = args
 
-    try:
+    #try:
         if args.bt2_db_indexes:
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
             tsprint("Prebuild repgenomes bowtie2 index and species_profile exit. Use them")
@@ -482,11 +481,11 @@ def midas_run_snps(args):
         # One way is to move the scan_contigs_file_stats into build database and when provicded with bowtie2 index,
         # also need to provide something like genome_stats
 
-    except:
-        if not args.debug:
-            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_output_dir()
-        raise
+    #except:
+    #    if not args.debug:
+    #        tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+    #        sample.remove_output_dir()
+    #    raise
 
 
 @register_args
