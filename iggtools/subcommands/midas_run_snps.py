@@ -315,7 +315,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         # For each species
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
-        slice_id = 1
+        slice_id = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
             contig_length = int(contig["contig_len"])
@@ -351,7 +351,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
         # Create a semaphore with slice_size of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
-        for _ in range(slice_id):
+        for _ in range(slice_id+1):
             semaphore_for_species[species_id].acquire()
 
         slice_counts[species_id] = slice_id
