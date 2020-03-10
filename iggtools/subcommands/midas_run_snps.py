@@ -371,7 +371,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         perspecies_pileup["covered_bases"] += record["contig_covered_bases"]
         perspecies_pileup["aligned_reads"] += record["aligned_reads"]
         perspecies_pileup["mapped_reads"] += record["mapped_reads"]
-        assert perspecies_pileup["fraction_covered"] == 0.0, print(species_id)
+        assert perspecies_pileup["fraction_covered"] == 0.0, print(species_id,  perspecies_pileup)
 
         if previous_species_id != species_id:
             print(f"{previous_species_id} - {species_id}")
@@ -458,7 +458,7 @@ def midas_run_snps(args):
     sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
     # Use mpileup to identify SNPs
-    contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
+    #contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
     species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
     write_species_pileup_summary(species_pileup_summary, sample.get_target_layout("snps_summary"))
 
