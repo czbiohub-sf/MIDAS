@@ -186,8 +186,8 @@ def scan_contigs(contig_file, species_id):
     return contigs
 
 
-def cat_files(sliced_files, one_file, chunk_num=20):
-    for temp_files in split(sliced_files, chunk_num):
+def cat_files(sliced_files, one_file, number_of_slices=20):
+    for temp_files in split(sliced_files, number_of_slices):
         command("cat " + " ".join(temp_files) + f" >> {one_file}")
 
 
@@ -199,19 +199,18 @@ def merge_sliced_contigs_for_species(species_id):
     global global_args
 
     sliced_files = species_sliced_snps_path[species_id][:-1]
-    merged_file = species_sliced_snps_path[species_id][-1]
-    with OutputStream(merged_file) as stream:
+    species_file = species_sliced_snps_path[species_id][-1]
+    with OutputStream(species_file) as stream:
         stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
 
-    cat_files(sliced_files, merged_file, 20)
-
-    #for _ in range(slice_counts[species_id]):
-    #    semaphore_for_species[species_id].release() # no deadlock
+    cat_files(sliced_files, species_file, 20)
 
     if not global_args.debug:
-        for s_file in sclies_files:
+        for s_file in sliced_files:
             command("rm -rf {s_file}")
 
+    # return a status flag
+    # the path should be computable somewhere else
     return True
 
 
@@ -221,19 +220,15 @@ def contig_pileup(packed_args):
     global slice_counts
 
     if packed_args[1] == -1:
-        print(packed_args[0], packed_args[1])
         species_id = packed_args[0]
-        print("====================here i even here=================")
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
-        print("====================merging for {species_id}=================")
         flag = merge_sliced_contigs_for_species(species_id)
         assert flag == True, f"Failed to merge contigs snps files for species {species_id}"
 
     else:
         try:
-            #species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
-            species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path = packed_args
+            species_id, slice_id, contig_id, contig_start, contig_end, repgenome_bamfile, headerless_sliced_path, contig = packed_args
 
             global global_args
             args = global_args
@@ -251,50 +246,37 @@ def contig_pileup(packed_args):
                     "species_id": species_id,
                     "contig_id": contig_id,
                     "slice_length": contig_end - contig_start,
-                    #"contig_length": contig["contig_len"],
                     "aligned_reads": aligned_reads,
                     "mapped_reads": mapped_reads,
                     "contig_total_depth": 0,
                     "contig_covered_bases":0
                 }
 
-            records = []
-            #for ref_pos in range(contig_start, contig_end):
-            for within_slice_index in range(0, slice_size):
-                #print(contig_id, contig_start, contig_end, within_slice_index, len(counts[0]))
-
-                depth = sum([counts[nt][within_slice_index] for nt in range(4)])
-                count_a = counts[0][within_slice_index]
-                count_c = counts[1][within_slice_index]
-                count_g = counts[2][within_slice_index]
-                count_t = counts[3][within_slice_index]
-
-                ref_pos = within_slice_index + contig_start + 1
-                #ref_allele = contig["contig_seq"][within_slice_index]
-                ref_allele = ""
-                row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
-
-                aln_stats["contig_total_depth"] += depth
-                if depth > 0:
-                    aln_stats["contig_covered_bases"] += 1
-                if depth > 0 or zero_rows_allowed:
-                    records.append(row)
-
-            assert within_slice_index+contig_start == contig_end-1, print(contig_id, contig_start, contig_end, slice_size, within_slice_index, len(counts[0]))
             with OutputStream(headerless_sliced_path) as stream:
-            #with open(headerless_sliced_path,"w") as stream:
-                for row in records:
-                    stream.write("\t".join(map(format_data, row)) + "\n")
+                for within_slice_index in range(0, slice_size):
+                    depth = sum([counts[nt][within_slice_index] for nt in range(4)])
+                    count_a = counts[0][within_slice_index]
+                    count_c = counts[1][within_slice_index]
+                    count_g = counts[2][within_slice_index]
+                    count_t = counts[3][within_slice_index]
 
+                    ref_pos = within_slice_index + contig_start + 1
+                    ref_allele = contig["contig_seq"][ref_pos]
+                    row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
+
+                    aln_stats["contig_total_depth"] += depth
+                    if depth > 0:
+                        aln_stats["contig_covered_bases"] += 1
+                    if depth > 0 or zero_rows_allowed:
+                        stream.write("\t".join(map(format_data, row)) + "\n")
+
+                assert within_slice_index+contig_start == contig_end-1, f"contig_pileup {contig_id} run into index mismatch error"
             return aln_stats
         finally:
             semaphore_for_species[species_id].release() # no deadlock
-            #print(f"now release one for {species_id}")
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
-    # TODO: need to provide a way to generate the temp file for each contig's SNP pileup.
-    # snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
     """ Read in contigs information for one species_id """
 
     global global_args
@@ -310,48 +292,44 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 20000
+    slice_size = 50000
     for species_index, species_id in enumerate(species_ids):
-        # For each species
+
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
         slice_id = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
             contig = contigs[contig_id]
-            contig_length = int(contig["contig_len"])
+            contig_length = contig["contig_len"]
 
             if contig_length <= slice_size:
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path) # contig
-                #print(species_id, slice_id, contig_id, contig_length, 0, contig_length)
-
-                argument_list.append(slice_args)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
+
+                slice_args = (species_id, slice_id, contig_id, 0, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
+                argument_list.append(slice_args)
                 slice_id += 1
             else:
-                chunk_num = ceil(contig_length/slice_size) - 1
+                number_of_slices = ceil(contig_length/slice_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, slice_size)):
-
                     headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, slice_id)
-                    if ni == chunk_num:
-                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path) #contig
-                    else:
-                        slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path)
-
-                    argument_list.append(slice_args)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
+
+                    if ni == number_of_slices:
+                        slice_args = (species_id, slice_id, contig_id, ci, contig_length, repgenome_bamfile, headerless_sliced_path, contig)
+                    else:
+                        slice_args = (species_id, slice_id, contig_id, ci, ci+slice_size, repgenome_bamfile, headerless_sliced_path, contig)
+                    argument_list.append(slice_args)
                     slice_id += 1
 
         # Submit the merge jobs
         argument_list.append((species_id, -1))
         species_sliced_snps_path[species_id].append(sample.get_target_layout("snps_pileup", species_id))
-        print(species_sliced_snps_path)
 
-        # Create a semaphore with slice_size of elements
-        semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
-        for _ in range(slice_id+1):
+        # Create a semaphore with number_of_slices of elements
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_id)
+        for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
-
         slice_counts[species_id] = slice_id
 
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
@@ -381,7 +359,7 @@ def compute_species_pileup_summary(contigs_pileup_summary):
             species_pileup_summary[species_id] = per_species_pileup_stats
 
         perspecies_pileup = species_pileup_summary.get(species_id)
-        perspecies_pileup["genome_length"] +=  record["species_id"]["contig_length"]
+        perspecies_pileup["genome_length"] +=  record["species_id"]["slice_length"]
         perspecies_pileup["total_depth"] += record["species_id"]["contig_total_depth"]
         perspecies_pileup["covered_bases"] += record["species_id"]["contig_covered_bases"]
         perspecies_pileup["aligned_reads"] += record["species_id"]["aligned_reads"]
@@ -468,12 +446,10 @@ def midas_run_snps(args):
 
     # Use mpileup to identify SNPs
     contigs_pileup_summary = species_pileup(species_ids_of_interest, contigs_files, repgenome_bamfile)
+    print(contigs_pileup_summary)
     species_pileup_summary = compute_species_pileup_summary(contigs_pileup_summary)
     write_species_pileup_summary(species_pileup_summary, filepath)
 
-        # TODO: for the provided bowtie2 database index, we don't have the contigs files
-        # One way is to move the scan_contigs_file_stats into build database and when provicded with bowtie2 index,
-        # also need to provide something like genome_stats
 
     #except:
     #    if not args.debug:

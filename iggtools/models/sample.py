@@ -29,7 +29,7 @@ def get_single_layout(sample_name, dbtype=""):
             "species_output_subdir":  f"{sample_name}/{dbtype}/output/{species_id}",
             "species_temp_subdir":    f"{sample_name}/{dbtype}/temp/{species_id}",
 
-            "contigs_pileup":         f"{sample_name}/snps/temp/{species_id}/snps_{contig_id}.tsv", # lz4
+            "contigs_pileup":         f"{sample_name}/snps/temp/{species_id}/snps_{contig_id}.tsv.lz4",
         }
     return per_species
 
