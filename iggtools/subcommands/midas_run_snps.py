@@ -348,6 +348,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         # Submit the merge jobs
         argument_list.append((species_id, -1))
         species_sliced_snps_path[species_id].append(sample.get_target_layout("snps_pileup", species_id))
+        print(species_sliced_snps_path)
 
         # Create a semaphore with slice_size of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_size)
