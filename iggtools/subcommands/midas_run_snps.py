@@ -375,7 +375,6 @@ def compute_species_pileup_summary(contigs_pileup_summary):
         if previous_species_id != species_id:
             print(f"{previous_species_id} - {species_id}")
             if previous_species_id is not None:
-                print("here")
                 previous_species_pileup = species_pileup_summary.get(previous_species_id)
                 print("haha before", previous_species_pileup)
                 if previous_species_pileup["genome_length"] > 0:
@@ -383,14 +382,15 @@ def compute_species_pileup_summary(contigs_pileup_summary):
                 if previous_species_pileup["covered_bases"] > 0:
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
                 print("haha after", previous_species_pileup)
-                exit(0)
             previous_species_id = species_id
 
     print(f"{previous_species_id} - {species_id}")
+    print("haha before", perspecies_pileup)
     if perspecies_pileup["genome_length"] > 0:
         perspecies_pileup["fraction_covered"] = perspecies_pileup["covered_bases"] / perspecies_pileup["covered_bases"]
     if perspecies_pileup["covered_bases"] > 0:
         perspecies_pileup["mean_coverage"] = perspecies_pileup["total_depth"] / perspecies_pileup["covered_bases"]
+    print("haha after", perspecies_pileup)
 
     return species_pileup_summary
 
