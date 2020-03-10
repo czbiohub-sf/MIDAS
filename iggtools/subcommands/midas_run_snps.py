@@ -264,7 +264,7 @@ def contig_pileup(packed_args):
                     count_t = counts[3][within_slice_index]
 
                     ref_pos = within_slice_index + contig_start + 1
-                    print(len(contig["contig_seq"]), ref_pos)
+                    print(len(contig["contig_seq"]), ref_pos, contig_start, contig_end, slice_id, contig_id)
                     ref_allele = contig["contig_seq"][ref_pos]
                     row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
 
@@ -335,7 +335,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_id
-    
+
     contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
 
     return contigs_pileup_summary
