@@ -263,10 +263,10 @@ def contig_pileup(packed_args):
                     count_g = counts[2][within_slice_index]
                     count_t = counts[3][within_slice_index]
 
-                    ref_pos = within_slice_index + contig_start + 1
-                    print(len(contig["contig_seq"]), ref_pos, contig_start, contig_end, slice_id, contig_id)
+                    ref_pos = within_slice_index + contig_start
+                    #print(len(contig["contig_seq"]), ref_pos, contig_start, contig_end, slice_id, contig_id)
                     ref_allele = contig["contig_seq"][ref_pos]
-                    row = (contig_id, ref_pos, ref_allele, depth, count_a, count_c, count_g, count_t)
+                    row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
                     aln_stats["contig_total_depth"] += depth
                     if depth > 0:
