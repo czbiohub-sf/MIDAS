@@ -329,7 +329,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
         # Create a semaphore with number_of_slices of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_id)
-        for _ in range(slice_id):
+        for _ in range(slice_id+1):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_id
 
