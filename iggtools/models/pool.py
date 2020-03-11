@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
 
@@ -223,7 +224,7 @@ class Sample: # pylint: disable=too-few-public-methods
 
         self.midas_outdir = midas_outdir
         assert os.path.exists(midas_outdir), f"Provided MIDAS output {midas_outdir} for {sample_name} in sample_list is invalid"
-
+2
         self.data_dir = os.path.join(self.midas_outdir, dbtype)
         assert os.path.exists(self.data_dir), f"Missing MIDAS {dbtype} directiory for {self.data_dir} for {sample_name}"
 
