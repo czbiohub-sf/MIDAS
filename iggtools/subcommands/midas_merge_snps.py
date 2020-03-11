@@ -258,7 +258,6 @@ def process_chunk(packed_args):
         #tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
         #return {f"{species_id}_{slice_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
         return True
-
     finally:
         semaphore_for_species[species_id].release() # no deadlock
         print(f"{species_id} release once")
@@ -351,10 +350,12 @@ def midas_merge_snps(args):
             argument_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_counter)
-        slice_counts[species_id] = slice_counter
         for _ in range(slice_counter):
             semaphore_for_species[species_id].acquire()
+        slice_counts[species_id] = slice_counter
 
+    print(slice_counts)
+    exit(0)
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
     chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
     # Do I still missing the merge_snps_summary?
