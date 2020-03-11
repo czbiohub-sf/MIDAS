@@ -73,6 +73,7 @@ class Pool: # pylint: disable=too-few-public-methods
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
+                sample.load_summary_by_dbtype(dbtype)
                 samples.append(sample)
         return samples
 
@@ -169,7 +170,6 @@ def init_species(pool_of_samples, dbtype, args):
         with InputStream(sample.get_target_layout(f"{dbtype}_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 species_id = record["species_id"]
-
                 # Skip unspeficied species
                 if (args.species_list and species_id not in args.species_list.split(",")):
                     continue
@@ -200,8 +200,9 @@ def filter_species(species, args):
     species_keep = []
     for sp in species:
         sp.samples_count = len(sp.samples)
+        # skip low prevalent species
         if sp.samples_count < args.sample_counts:
-            continue # skip low prevalent species
+            continue
         sp.samples_depth = sp.fetch_samples_depth()
         species_keep.append(sp)
     return species_keep

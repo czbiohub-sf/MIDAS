@@ -91,9 +91,21 @@ class Sample: # pylint: disable=too-few-public-methods
         ## how about provide the index, then we don't those species_id subdirectories .... good question
 
 
-    def load_species_profile(self, dbtype): # I think this is no longer needed
-        species_profile_path = self.layout()["species_profile"]
+    def load_species_profile(self): # I think this is not used anywhere anymore
+        species_profile_path = self.get_target_layout("species_profile")
         assert os.path.exists(species_profile_path), f"Sample::load_species_profile:: missing species profile {species_profile_path} for {self.sample_name}"
+
+
+    def load_summary_by_dbtype(self, dbtype):
+        summary_path = self.get_target_layout(f"{dbtype}_summary")
+        assert os.path.exists(summary_path), f"load_summary_by_dbtype:: missing summary {summary_path} for {self.sample_name}"
+
+        schema = fetch_schema_by_dbtype(dbtype)
+        profile = {}
+        with InputStream(summary_path) as stream:
+            for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+                profile[info["species_id"]] = info
+        self.profile = profile
 
     def select_species(self, genome_coverage, species_list=""):
         "Return map of species_id to coverage for the species present in the sample."
