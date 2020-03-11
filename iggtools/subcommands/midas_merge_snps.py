@@ -11,7 +11,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, split, I
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, imported_genome_file
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
-from iggtools.subcommand.midas_run_snps import cat_files, scan_contigs
+from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 
 
 DEFAULT_SAMPLE_COUNTS = 2
