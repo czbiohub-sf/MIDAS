@@ -2,6 +2,8 @@ import os
 from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
+from iggtools.models.sample import Sample
+
 
 def get_pool_layout(dbtype=""):
     def per_species(species_id=""):
@@ -27,7 +29,7 @@ def get_pool_layout(dbtype=""):
 
 class Pool: # pylint: disable=too-few-public-methods
 
-    def __init__(self, samples_list, outdir, dbtype=None):
+    def __init__(self, samples_list, outdir, paramstr, dbtype=None):
         self.list_of_samples = samples_list
         self.samples = self.init_samples(dbtype)
 
@@ -213,37 +215,3 @@ def search_species(list_of_species, species_id):
     curr_species = [species for species in list_of_species if species.id == species_id]
     assert len(curr_species) == 1, f"pool::search_species duplicated Species in list_of_species"
     return curr_species[0]
-
-
-class Sample: # pylint: disable=too-few-public-methods
-
-    def __init__(self, sample_name, midas_outdir, dbtype=None):
-        self.layout = get_pool_layout(sample_name)
-
-        self.sample_name = sample_name
-
-        self.midas_outdir = midas_outdir
-        assert os.path.exists(midas_outdir), f"Provided MIDAS output {midas_outdir} for {sample_name} in sample_list is invalid"
-2
-        self.data_dir = os.path.join(self.midas_outdir, dbtype)
-        assert os.path.exists(self.data_dir), f"Missing MIDAS {dbtype} directiory for {self.data_dir} for {sample_name}"
-
-        self.profile = {}
-        if dbtype is not None:
-            self.profile = self.fetch_profile(dbtype)
-
-    def fetch_profile(self, dbtype):
-        midas_profile_summary = f"{self.data_dir}/output/summary.tsv"
-        assert os.path.exists(midas_profile_summary), f"Missing MIDAS {midas_profile_summary} for {self.sample_name}"
-
-        schema = fetch_schema_by_dbtype(dbtype)
-        profile = defaultdict()
-        with InputStream(midas_profile_summary) as stream:
-            for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
-                profile[info["species_id"]] = info
-        return profile
-
-    def fetch_snps_pileup(self, species_id):
-        snps_pileup_dir = f"{self.data_dir}/output/{species_id}.snps.lz4"
-        assert os.path.exists(snps_pileup_dir), f"fetch_snps_pileup::missing pileup results {snps_pileup_dir} for {self.sample_name}"
-        return snps_pileup_dir
