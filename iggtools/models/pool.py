@@ -26,7 +26,7 @@ def get_pool_layout(dbtype=""):
 
 class Pool: # pylint: disable=too-few-public-methods
 
-    def __init__(self, samples_list, outdir, paramstr, dbtype=None):
+    def __init__(self, samples_list, outdir, dbtype=None):
         self.list_of_samples = samples_list
         self.samples = self.init_samples(dbtype)
 
@@ -68,7 +68,6 @@ class Pool: # pylint: disable=too-few-public-methods
         samples = []
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
-                print(row["sample_name"], row["midas_outdir"], dbtype)
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
                 samples.append(sample)
         return samples
