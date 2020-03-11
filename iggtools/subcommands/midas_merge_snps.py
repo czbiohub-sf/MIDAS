@@ -232,13 +232,12 @@ def process_chunk(packed_args):
         species_id = packed_args[0]
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
-        print(f"++++++++++++++++++++ start {species_id}")
+        print(f"++++++++++++++++++++ start merge {species_id}")
 
         # For the given species_id, what are the files I need to merge?
 
         samples_name = search_species(list_of_species, species_id).fetch_samples_name()
         current_species_chunks = species_sliced_pileup_path[species_id]
-        print(f"merge for {species_id} => {current_species_chunks}")
         return merge_chunks_by_species(current_species_chunks, species_id, samples_name)
 
     try:
@@ -257,6 +256,7 @@ def process_chunk(packed_args):
         pool_snps_and_write(accumulator, total_samples_count, species_id, slice_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
         #tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
         #return {f"{species_id}_{slice_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
+        print("===========================success++++++++++++++++++++++")
         return True
     finally:
         semaphore_for_species[species_id].release() # no deadlock
