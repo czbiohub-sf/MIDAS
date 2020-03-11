@@ -22,6 +22,7 @@ DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
+DEFAULT_CHUNK_SIZE = 20000
 
 
 def register_args(main_func):
@@ -45,6 +46,12 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Omit zero rows from output.")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
 
     subparser.add_argument('--genome_coverage',
                            type=float,
@@ -208,7 +215,7 @@ def merge_sliced_contigs_for_species(species_id):
 
     if not global_args.debug:
         for s_file in sliced_files:
-            command("rm -rf {s_file}")
+            command(f"rm -rf {s_file}")
 
     # return a status flag
     # the path should be computable somewhere else
@@ -295,7 +302,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     species_sliced_snps_path = defaultdict(list)
 
     argument_list = []
-    slice_size = 20000
+    slice_size = args.chunk_size
     for species_index, species_id in enumerate(species_ids):
 
         contigs = scan_contigs(contigs_files[species_index], species_id)

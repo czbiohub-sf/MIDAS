@@ -11,6 +11,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, split, I
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, imported_genome_file
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
+from iggtools.subcommand.midas_run_snps import cat_files, scan_contigs
 
 
 DEFAULT_SAMPLE_COUNTS = 2
@@ -32,7 +33,7 @@ DEFAULT_SNP_TYPE = "mono, bi"
 def register_args(main_func):
     subparser = add_subcommand('midas_merge_snps', main_func, help='pooled-samples SNPs calling')
 
-    subparser.add_argument('outdir',
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Subdirectory will be created for each species.""")
     subparser.add_argument('--samples_list',
@@ -133,18 +134,20 @@ def register_args(main_func):
 
 
 def create_lookup_table(packed_args):
-    """ Assign or chunk up (large) contigs into chunks for one species"""
+    """ Assign or chunk up (large) contigs into chunks_of_sites for one species"""
     species_id, genome_id, chunk_size = packed_args
 
     global global_pool_of_samples
     pool_of_samples = global_pool_of_samples
+
+    # TODO: create the files at one place
     species_tempdir = pool_of_samples.create_species_tempdir(species_id)
     proc_lookup_file = pool_of_samples.create_species_lookup_table(species_id)
 
     # Stream from S3 to extract the contig_ids
     contigs_file = download_reference(imported_genome_file(genome_id, species_id, "fna.lz4"), f"{species_tempdir}")
 
-    proc_id = 1
+    slice_id = 1
     with OutputStream(proc_lookup_file) as ostream, InputStream(contigs_file) as stream:
         for rec in Bio.SeqIO.parse(stream, 'fasta'):
             contig_id = rec.id
@@ -152,16 +155,18 @@ def create_lookup_table(packed_args):
 
             if contig_len <= chunk_size:
                 # Pileup is 1-based index
-                ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, 1, contig_len))) + "\n")
-                proc_id += 1
+                # what is the downstream used close/open situation?
+                # I would prefer the same habit with python
+                ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, 1, contig_len))) + "\n")
+                slice_id += 1
             else:
                 chunk_num = ceil(contig_len/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_len, chunk_size)):
                     if ni == chunk_num:
-                        ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, ci+1, contig_len))) + "\n")
+                        ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, ci+1, contig_len))) + "\n")
                     else:
-                        ostream.write("\t".join(map(str, (species_id, proc_id, contig_id, ci+1, ci + chunk_size))) + "\n")
-                    proc_id += 1
+                        ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, ci+1, ci+chunk_size))) + "\n")
+                    slice_id += 1
     return proc_lookup_file
 
 
@@ -250,15 +255,15 @@ def call_alleles(alleles_all, site_depth, snp_maf):
     return (major_allele, minor_allele, snp_type)
 
 
-def pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id):
+def pool_snps_and_write(accumulator, total_samples_count, species_id, slice_id):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
 
     global global_args
     args = global_args
 
-    global global_pool_of_samples
-    pool_of_samles = global_pool_of_samples
-    snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samles.create_species_pool_snps_chunk(species_id, proc_id)
+    #global pool_of_samles
+    # Here is another places where we should created the output and temp directories
+    #snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samles.create_species_pool_snps_chunk(species_id, slice_id)
 
     with OutputStream(snps_info_fp) as out_info, \
             OutputStream(snps_freq_fp) as out_freq, \
@@ -304,7 +309,6 @@ def pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id):
                     sample_mafs.append(rc_ACGT[minor_index] / sample_depth)
                 sample_depths.append(sample_depth)
 
-
             # Write
             out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
 
@@ -318,22 +322,30 @@ def pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id):
 
 
 def process_chunk(packed_args):
-    # proc_id == -1: merge
-    species_id, proc_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
+    # Boris said this list of sample_depths can cause overhead passing arguments around
 
-    global semaphore_for_species_id
+    global semaphore_for_species
+    global slice_counts
+    global list_of_species
 
-    if proc_id == -1:
+    if packed_args[1] == -1:
         # return a status flag
         # the path should be computable somewhere else
 
-        for _ in chunk_count[species_id]:
-            semaphore_for_species_id.acquire() # no deadlock
-        return merge_chunks_for_species(current_species_chunks, species_id, samples_name)
+        species_id = packed_args[0]
+        for _ in slice_counts[species_id]:
+            semaphore_for_species[species_id].acquire()
+
+        # For the given species_id, what are the files I need to merge?
+
+        samples_name = search_species(list_of_species, species_id).fetch_samples_name()
+        current_species_chunks = species_sliced_pileup_path[species_id]
+        return merge_chunks_by_species(current_species_chunks, species_id, samples_name)
 
     try:
-
         # For each process, scan over all the samples
+        species_id, slice_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
+
         accumulator = dict()
         for sample_index in range(total_samples_count):
             genome_coverage = samples_depth[sample_index]
@@ -341,25 +353,17 @@ def process_chunk(packed_args):
             ps_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
             accumulate(accumulator, ps_args)
 
-        # Compute and write pooled SNPs for each chunk of genomic sites
-        snps_info_fp, snps_freq_fp, snps_depth_fp = pool_snps_and_write(accumulator, total_samples_count, species_id, proc_id)
+        tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
+        #return {f"{species_id}_{slice_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
+        return True
 
-        tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {proc_id} for contig {contig_id}.")
-        return {f"{species_id}_{proc_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
     finally:
-        semaphore_for_species_id.release() # no deadlock
-
-
-
-def cat_files(sliced_files, one_file, chunk_num=20):
-    for temp_files in split(sliced_files, chunk_num):
-        command("cat " + " ".join(temp_files) + f" >> {one_file}")
+        semaphore_for_species[species_id].release() # no deadlock
 
 
 def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
 
-    global global_pool_of_samples
-    pool_of_samles = global_pool_of_samples
+    global pool_of_samples
     species_outdir = pool_of_samles.create_species_outdir(species_id)
 
     # Previously generated local temp chunk files per species_id
@@ -382,18 +386,21 @@ def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
         out_depth.write("site_id\t" + "\t".join(samples_name) + "\n")
     cat_files(snps_depth_files, snps_depth_fp, chunk_num=10)
 
+    return True
+
 
 def midas_merge_snps(args):
 
     # tempdir indicates the input arguments
+    global pool_of_samples
+    global list_of_species
+
     pool_of_samples = Pool(args.samples_list, args.outdir, "snps")
     list_of_species = select_species(pool_of_samples, "snps", args,)
 
-    global global_pool_of_samples
-    global_pool_of_samples = pool_of_samples
-
     global global_args
     global_args = args
+    global pool_of_samles
 
     # Create species-to-process lookup table for each species
     chunk_size = args.chunk_size
@@ -405,61 +412,47 @@ def midas_merge_snps(args):
     lookups = multiprocessing_map(create_lookup_table, ((species.id, representative[species.id], chunk_size) for species in list_of_species), num_procs=num_physical_cores)
 
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
-    argument_list = []
-    global semaphore_for_species_id
-    global chunk_count
-    chunk_count = dict()
-    semaphore_for_species_id = dict()
+    global semaphore_for_species
+    global slice_counts
+    global species_sliced_pileup_path
 
+    slice_counts = dict()
+    semaphore_for_species = dict()
+    species_sliced_pileup_path = defaultdict(dict)
+
+    argument_list = []
     for si, species in enumerate(list_of_species):
         species_id = species.id
         total_samples_count = len(species.samples)
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.fetch_snps_pileup(species_id) for sample in list(species.samples)]
 
-
-        chunk_counter = 0
+        slice_id = 0
         with open(lookups[si]) as stream:
             for line in stream:
-                species_id, proc_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
-                chunk_counter += 1
+                species_id, slice_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+                slice_id += 1
 
-                my_args = (species_id, proc_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
+                # Here is another places where we should created the output and temp directories
+                # Compute and write pooled SNPs for each chunk of genomic sites
+                snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samles.create_species_pool_snps_chunk(species_id, slice_id)
+                species_sliced_pileup_path[species_id][slice_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
+
+                my_args = (species_id, slice_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
                 argument_list.append(my_args)
-            # submit the merge jobs
-            argument_list.append(species_id, -1)
 
-        semaphore_for_species_id[species_id] = multiprocessing.Semaphore(chunk_counter)
-        chunk_count[species_id] = chunk_counter
-        for _ in range(chunk_counter):
-            semaphore_for_species_id[species_id].acquire()
+            # Submit the merge jobs
+            argument_list.append((species_id, -1))
 
-        chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_id)
+        slice_counts[species_id] = slice_id
+        for _ in range(slice_id):
+            semaphore_for_species[species_id].acquire()
 
+    chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
+    # Do I still missing the merge_snps_summary?
+    # I should try to finish the merge fast and stretch and leave the rest for tomorrow.
 
-    # Merge chunks of temp files by species to outdir
-    current_species_id = None
-    current_species_chunks = defaultdict()
-    previes_seen_species = set()
-
-    for chunks_files_by_species in chunks_files:
-        spid = list(chunks_files_by_species.keys())[0].split("_")
-        species_id, proc_id = spid[0], spid[1]
-        if species_id != current_species_id:
-            assert species_id not in previes_seen_species, "multiprocessing species_id appears out of order"
-            previes_seen_species.add(species_id)
-
-            if current_species_chunks:
-                samples_name = search_species(list_of_species, current_species_id).fetch_samples_name()
-                merge_chunks_by_species(current_species_chunks, current_species_id, samples_name)
-
-            current_species_id = species_id
-            current_species_chunks = defaultdict()
-
-        current_species_chunks[proc_id] = tuple(chunks_files_by_species.values())[0]
-
-    samples_name = search_species(list_of_species, current_species_id).fetch_samples_name()
-    merge_chunks_by_species(current_species_chunks, current_species_id, samples_name)
 
 
 @register_args

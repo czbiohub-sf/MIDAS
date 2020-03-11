@@ -61,7 +61,7 @@ class Pool: # pylint: disable=too-few-public-methods
                 continue
             command(f"rm -rf {dbs_tempdir}/{species_id}")
             command(f"mkdir -p {dbs_tempdir}/{species_id}")
-    
+
 
     def init_samples(self, dbtype):
         """ read in table-of-content: sample_name\tpath/to/midas_output """
@@ -217,7 +217,7 @@ def search_species(list_of_species, species_id):
 class Sample: # pylint: disable=too-few-public-methods
 
     def __init__(self, sample_name, midas_outdir, dbtype=None):
-        self.layout = get_layout(sample_name, species_id)
+        self.layout = get_pool_layout(sample_name, species_id)
 
         self.sample_name = sample_name
 
