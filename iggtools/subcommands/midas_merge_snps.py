@@ -44,7 +44,7 @@ def create_lookup_table(packed_args):
     # Stream from S3 to extract the contig_ids
     contigs_file = download_reference(imported_genome_file(genome_id, species_id, "fna.lz4"), f"{species_tempdir}")
 
-    slice_id = 1
+    chunk_id = 1
     with OutputStream(proc_lookup_file) as ostream, InputStream(contigs_file) as stream:
         for rec in Bio.SeqIO.parse(stream, 'fasta'):
             contig_id = rec.id
@@ -54,16 +54,16 @@ def create_lookup_table(packed_args):
                 # Pileup is 1-based index
                 # what is the downstream used close/open situation?
                 # I would prefer the same habit with python
-                ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, 1, contig_len))) + "\n")
-                slice_id += 1
+                ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, 1, contig_len))) + "\n")
+                chunk_id += 1
             else:
                 chunk_num = ceil(contig_len/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_len, chunk_size)):
                     if ni == chunk_num:
-                        ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, ci+1, contig_len))) + "\n")
+                        ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, ci+1, contig_len))) + "\n")
                     else:
-                        ostream.write("\t".join(map(str, (species_id, slice_id, contig_id, ci+1, ci+chunk_size))) + "\n")
-                    slice_id += 1
+                        ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, ci+1, ci+chunk_size))) + "\n")
+                    chunk_id += 1
     return proc_lookup_file
 
 
@@ -153,14 +153,11 @@ def call_alleles(alleles_all, site_depth, snp_maf):
     return (major_allele, minor_allele, snp_type)
 
 
-def pool_snps_and_write(accumulator, total_samples_count, species_id, slice_id, snps_info_fp, snps_freq_fp, snps_depth_fp):
+def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
 
     global global_args
     args = global_args
-
-    # Here is another places where we should created the output and temp directories
-    #snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samples.create_species_pool_snps_chunk(species_id, slice_id)
 
     with OutputStream(snps_info_fp) as out_info, \
             OutputStream(snps_freq_fp) as out_freq, \
@@ -242,7 +239,7 @@ def process_chunk(packed_args):
 
     try:
         # For each process, scan over all the samples
-        species_id, slice_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
+        species_id, chunk_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
 
         accumulator = dict()
         for sample_index in range(total_samples_count):
@@ -252,12 +249,10 @@ def process_chunk(packed_args):
             accumulate(accumulator, ps_args)
 
         # Compute and write pooled SNPs for each chunk of genomic sites
-        snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][slice_id]
-        pool_snps_and_write(accumulator, total_samples_count, species_id, slice_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
-        #tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
-        #return {f"{species_id}_{slice_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
-        print("===========================success++++++++++++++++++++++")
-        return True
+        snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
+        return compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
+        #tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {chunk_id} for contig {contig_id}.")
+        #return {f"{species_id}_{chunk_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
     finally:
         semaphore_for_species[species_id].release() # no deadlock
         print(f"{species_id} release once")
@@ -333,15 +328,15 @@ def midas_merge_snps(args):
         slice_counter = 0
         with open(lookups[si]) as stream:
             for line in stream:
-                species_id, slice_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
+                species_id, chunk_id, contig_id, contig_start, contig_end = tuple(line.strip("\n").split("\t"))
 
                 # Here is another places where we should created the output and temp directories
-                snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samples.create_species_pool_snps_chunk(species_id, slice_id)
-                species_sliced_pileup_path[species_id][slice_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
+                snps_info_fp, snps_freq_fp, snps_depth_fp = pool_of_samples.create_species_pool_snps_chunk(species_id, chunk_id)
+                species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
 
                 # TODO: we need to think of another way to pass on the arguments list: several lists of hundreds of elements is too bad
                 # can cause overhead passing arguments around
-                my_args = (species_id, slice_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
+                my_args = (species_id, chunk_id, contig_id, int(contig_start), int(contig_end), samples_depth, samples_snps_pileup, total_samples_count)
                 argument_list.append(my_args)
 
                 slice_counter += 1
@@ -357,10 +352,10 @@ def midas_merge_snps(args):
     print(slice_counts)
 
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
-    chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
+    proc_flags = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
     # Do I still missing the merge_snps_summary?
     # I should try to finish the merge fast and stretch and leave the rest for tomorrow.
-    print(chunks_files)
+    assert all(s is True for s in proc_flags)
 
 
 def register_args(main_func):

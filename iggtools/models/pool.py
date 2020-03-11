@@ -22,7 +22,7 @@ def get_pool_layout(dbtype=""):
 
             "outdir":                f"{dbtype}/output",
             "tempdir":               f"{dbtype}/temp",
-            "dbsdir":                f"{dbtype}/temp/dbs",
+            "dbsdir":                f"{dbtype}/dbs",
         }
     return per_species
 
