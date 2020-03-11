@@ -230,7 +230,7 @@ def process_chunk(packed_args):
         # the path should be computable somewhere else
 
         species_id = packed_args[0]
-        for _ in slice_counts[species_id]:
+        for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
 
         # For the given species_id, what are the files I need to merge?
@@ -254,7 +254,7 @@ def process_chunk(packed_args):
         # Compute and write pooled SNPs for each chunk of genomic sites
         snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][slice_id]
         pool_snps_and_write(accumulator, total_samples_count, species_id, slice_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
-        tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
+        #tsprint(f"process_chunk::Finished processing Species {species_id} - Process ID {slice_id} for contig {contig_id}.")
         #return {f"{species_id}_{slice_id}": (snps_info_fp, snps_freq_fp, snps_depth_fp)}
         return True
 
