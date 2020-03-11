@@ -232,7 +232,7 @@ class Sample: # pylint: disable=too-few-public-methods
             self.profile = self.fetch_profile(dbtype)
 
     def fetch_profile(self, dbtype):
-        midas_profile_summary = f"{self.data_dir}/summary.tsv"
+        midas_profile_summary = f"{self.data_dir}/output/summary.tsv"
         assert os.path.exists(midas_profile_summary), f"Missing MIDAS {midas_profile_summary} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
