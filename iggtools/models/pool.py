@@ -217,7 +217,7 @@ def search_species(list_of_species, species_id):
 class Sample: # pylint: disable=too-few-public-methods
 
     def __init__(self, sample_name, midas_outdir, dbtype=None):
-        self.layout = get_pool_layout(sample_name, species_id)
+        self.layout = get_pool_layout(sample_name)
 
         self.sample_name = sample_name
 
