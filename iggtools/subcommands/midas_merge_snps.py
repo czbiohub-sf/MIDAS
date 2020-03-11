@@ -355,7 +355,7 @@ def midas_merge_snps(args):
         slice_counts[species_id] = slice_counter
 
     print(slice_counts)
-    exit(0)
+    
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
     chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
     # Do I still missing the merge_snps_summary?

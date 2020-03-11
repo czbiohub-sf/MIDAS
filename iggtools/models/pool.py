@@ -105,6 +105,7 @@ class Pool: # pylint: disable=too-few-public-methods
 
     def create_species_pool_snps_chunk(self, species_id, process_id):
         # chunk file for one pair of species_id-process_id
+        # Todo: think about where should I save this?
         species_tempdir = self.create_species_tempdir(species_id)
         snps_info_fp = f"{species_tempdir}/proc.{process_id}_snps_info.tsv"
         snps_freq_fp = f"{species_tempdir}/proc.{process_id}_snps_freqs.tsv"
