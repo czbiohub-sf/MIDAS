@@ -395,7 +395,7 @@ def midas_merge_snps(args):
     global pool_of_samples
     global list_of_species
 
-    pool_of_samples = Pool(args.samples_list, args.outdir, "snps")
+    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
     list_of_species = select_species(pool_of_samples, "snps", args,)
 
     global global_args
