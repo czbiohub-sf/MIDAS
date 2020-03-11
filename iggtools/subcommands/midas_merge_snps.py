@@ -232,6 +232,7 @@ def process_chunk(packed_args):
         species_id = packed_args[0]
         for _ in range(slice_counts[species_id]):
             semaphore_for_species[species_id].acquire()
+        print(f"++++++++++++++++++++ start {species_id}")
 
         # For the given species_id, what are the files I need to merge?
 
@@ -260,6 +261,7 @@ def process_chunk(packed_args):
 
     finally:
         semaphore_for_species[species_id].release() # no deadlock
+        print(f"{species_id} release once")
 
 
 def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
