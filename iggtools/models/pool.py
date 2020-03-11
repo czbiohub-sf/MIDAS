@@ -68,6 +68,7 @@ class Pool: # pylint: disable=too-few-public-methods
         samples = []
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
+                print(row["sample_name"], row["midas_outdir"], dbtype)
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
                 samples.append(sample)
         return samples
@@ -224,7 +225,6 @@ class Sample: # pylint: disable=too-few-public-methods
         self.midas_outdir = midas_outdir
         assert os.path.exists(midas_outdir), f"Provided MIDAS output {midas_outdir} for {sample_name} in sample_list is invalid"
 
-        print(self.sample_name, self.midas_outdir, dbtype)
         self.data_dir = os.path.join(self.midas_outdir, dbtype)
         assert os.path.exists(self.data_dir), f"Missing MIDAS {dbtype} directiory for {self.data_dir} for {sample_name}"
 
