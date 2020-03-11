@@ -22,17 +22,18 @@ def get_pool_layout(dbtype=""):
 
             "outdir":                f"{dbtype}/output",
             "tempdir":               f"{dbtype}/temp",
-            "dbsdir":                f"{sample_name}/dbs",
+            "dbsdir":                f"{dbtype}/temp/dbs",
         }
     return per_species
 
 
 class Pool: # pylint: disable=too-few-public-methods
 
-    def __init__(self, samples_list, outdir, paramstr, dbtype=None):
+    def __init__(self, samples_list, midas_outdir, dbtype=None):
         self.list_of_samples = samples_list
-        self.samples = self.init_samples(dbtype)
+        self.midas_outdir = midas_outdir
 
+        self.samples = self.init_samples(dbtype)
         self.layout = get_pool_layout(dbtype=dbtype)
         self.outdir = self.get_target_layout("outdir")
         self.tempdir = self.get_target_layout("tempdir")
@@ -40,7 +41,7 @@ class Pool: # pylint: disable=too-few-public-methods
 
 
     def get_target_layout(self, filename, species_id=""):
-        return os.path.join(self.outdir, self.layout(species_id)[filename])
+        return os.path.join(self.midas_outdir, self.layout(species_id)[filename])
 
     def create_output_dir(self, debug=False):
         tsprint(f"Create output directory for sample {self.sample_name}.")
@@ -161,26 +162,28 @@ class Species:
         return samples_names
 
 
-def _filter_sample_species(info, args, dbtype):
-    """ select high quality sample-species pairs"""
-    if info['mean_coverage'] < args.genome_depth:
-        return False # skip low-coverage <species, sample>
-    if (dbtype == "snps" and info['fraction_covered'] < args.genome_coverage):
-        return False # skip low prevalent <species, sample>
-    return True
-
-
 def init_species(pool_of_samples, dbtype, args):
+    schema = fetch_schema_by_dbtype(dbtype)
     species = {}
     for sample in pool_of_samples.samples:
-        for species_id, info in sample.profile.items():
-            if (args.species_list and species_id not in args.species_list.split(",")):
-                continue # skip unspeficied species
+        with InputStream(sample.get_target_layout(f"{dbtype}_summary")) as stream:
+            for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+                species_id = record["species_id"]
 
-            if species_id not in species:
-                species[species_id] = Species(species_id)
+                # Skip unspeficied species
+                if (args.species_list and species_id not in args.species_list.split(",")):
+                    continue
 
-            if _filter_sample_species(info, args, dbtype):
+                # Read in all the species_id in the species profile
+                if species_id not in species:
+                    species[species_id] = Species(species_id)
+                # Skip low-coverage <species, sample>
+                if record['mean_coverage'] < args.genome_depth:
+                    continue
+                # Skip low prevalent <species, sample>
+                if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):
+                    continue
+                # Select high quality sample-species pairs
                 species[species_id].samples.append(sample)
 
     return list(species.values())

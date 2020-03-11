@@ -25,138 +25,6 @@ DEFAULT_ALN_TRIM = 0
 DEFAULT_CHUNK_SIZE = 20000
 
 
-def register_args(main_func):
-    subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
-    subparser.add_argument('-1',
-                           dest='r1',
-                           required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-
-    subparser.add_argument('--sparse',
-                           action='store_true',
-                           default=False,
-                           help=f"Omit zero rows from output.")
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-
-    subparser.add_argument('--genome_coverage',
-                           type=float,
-                           dest='genome_coverage',
-                           metavar='FLOAT',
-                           default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
-    # first add species_list
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--bt2_db_indexes',
-                           dest='bt2_db_indexes',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--species_profile_path',
-                           dest='species_profile_path',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Species profile path for the prebuild bowtie2 index")
-
-    # Alignment flags
-    subparser.add_argument('--aln_speed',
-                           type=str,
-                           dest='aln_speed',
-                           default='very-sensitive',
-                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
-                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
-    subparser.add_argument('--aln_mode',
-                           type=str,
-                           dest='aln_mode',
-                           default='global',
-                           choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 default --end-to-end).')
-    subparser.add_argument('--aln_interleaved',
-                           action='store_true',
-                           default=False,
-                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-    subparser.add_argument('--aln_sort',
-                           action='store_true',
-                           default=True,
-                           help=f"Sort BAM file.")
-
-    #  Pileup flags (samtools, or postprocessing)
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
-    subparser.add_argument('--aln_mapq',
-                           dest='aln_mapq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_MAPQ,
-                           help=f"Discard reads with mapping quality < MAPQ. ({DEFAULT_ALN_MAPQ})")
-    subparser.add_argument('--aln_readq',
-                           dest='aln_readq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_READQ,
-                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--aln_baseq',
-                           dest='aln_baseq',
-                           default=DEFAULT_ALN_BASEQ,
-                           type=int,
-                           metavar="INT",
-                           help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
-    subparser.add_argument('--aln_trim',
-                           dest='aln_trim',
-                           default=DEFAULT_ALN_TRIM,
-                           type=int,
-                           metavar="INT",
-                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    if False:
-        # This is unused.
-        subparser.add_argument('--aln_discard',
-                               dest='aln_baq',
-                               default=False,
-                               help='Discard discordant read-pairs (False)')
-        subparser.add_argument('--aln_baq',
-                               dest='aln_baq',
-                               default=False,
-                               help='Enable BAQ: per-base alignment quality (False)')
-        subparser.add_argument('--aln_adjust_mq',
-                               dest='aln_adjust_mq',
-                               default=False,
-                               help='Adjust MAPQ (False)')
-    return main_func
-
-
 def keep_read(aln):
     global global_args
     args = global_args
@@ -464,6 +332,138 @@ def midas_run_snps(args):
     #        tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
     #        sample.remove_output_dir()
     #    raise
+
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+    subparser.add_argument('-1',
+                           dest='r1',
+                           required=True,
+                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
+    subparser.add_argument('-2',
+                           dest='r2',
+                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
+    subparser.add_argument('--sparse',
+                           action='store_true',
+                           default=False,
+                           help=f"Omit zero rows from output.")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    subparser.add_argument('--genome_coverage',
+                           type=float,
+                           dest='genome_coverage',
+                           metavar='FLOAT',
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    # first add species_list
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--bt2_db_indexes',
+                           dest='bt2_db_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--species_profile_path',
+                           dest='species_profile_path',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Species profile path for the prebuild bowtie2 index")
+
+    # Alignment flags
+    subparser.add_argument('--aln_speed',
+                           type=str,
+                           dest='aln_speed',
+                           default='very-sensitive',
+                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
+                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
+    subparser.add_argument('--aln_mode',
+                           type=str,
+                           dest='aln_mode',
+                           default='global',
+                           choices=['local', 'global'],
+                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 default --end-to-end).')
+    subparser.add_argument('--aln_interleaved',
+                           action='store_true',
+                           default=False,
+                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
+
+    #  Pileup flags (samtools, or postprocessing)
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_ALN_MAPID,
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+    subparser.add_argument('--aln_mapq',
+                           dest='aln_mapq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_MAPQ,
+                           help=f"Discard reads with mapping quality < MAPQ. ({DEFAULT_ALN_MAPQ})")
+    subparser.add_argument('--aln_readq',
+                           dest='aln_readq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_READQ,
+                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+    subparser.add_argument('--aln_baseq',
+                           dest='aln_baseq',
+                           default=DEFAULT_ALN_BASEQ,
+                           type=int,
+                           metavar="INT",
+                           help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
+    subparser.add_argument('--aln_trim',
+                           dest='aln_trim',
+                           default=DEFAULT_ALN_TRIM,
+                           type=int,
+                           metavar="INT",
+                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
+    if False:
+        # This is unused.
+        subparser.add_argument('--aln_discard',
+                               dest='aln_baq',
+                               default=False,
+                               help='Discard discordant read-pairs (False)')
+        subparser.add_argument('--aln_baq',
+                               dest='aln_baq',
+                               default=False,
+                               help='Enable BAQ: per-base alignment quality (False)')
+        subparser.add_argument('--aln_adjust_mq',
+                               dest='aln_adjust_mq',
+                               default=False,
+                               help='Adjust MAPQ (False)')
+    return main_func
 
 
 @register_args

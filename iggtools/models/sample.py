@@ -91,7 +91,7 @@ class Sample: # pylint: disable=too-few-public-methods
         ## how about provide the index, then we don't those species_id subdirectories .... good question
 
 
-    def load_species_profile(self, dbtype):
+    def load_species_profile(self, dbtype): # I think this is no longer needed
         species_profile_path = self.layout()["species_profile"]
         assert os.path.exists(species_profile_path), f"Sample::load_species_profile:: missing species profile {species_profile_path} for {self.sample_name}"
 
@@ -100,11 +100,11 @@ class Sample: # pylint: disable=too-few-public-methods
         schema = fetch_schema_by_dbtype("species")
         profile = defaultdict()
         with InputStream(self.get_target_layout("species_profile")) as stream:
-            for aln in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
-                if species_list and aln["species_id"] not in args.species_list.split(","):
+            for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+                if species_list and record["species_id"] not in args.species_list.split(","):
                     continue
-                if aln["coverage"] >= genome_coverage:
-                    profile[aln["species_id"]] = aln["coverage"]
+                if record["coverage"] >= genome_coverage:
+                    profile[record["species_id"]] = record["coverage"]
         return profile
 
     def remove_output_dir(self):
