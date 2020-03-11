@@ -279,15 +279,15 @@ def merge_chunks_by_species(current_species_chunks, species_id, samples_name):
     # Add header for the merged-chunks
     with OutputStream(snps_info_fp) as out_info:
         out_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
-    cat_files(snps_info_files, snps_info_fp, chunk_num=20)
+    cat_files(snps_info_files, snps_info_fp, 20)
 
     with OutputStream(snps_freq_fp) as out_freq:
         out_freq.write("site_id\t" + "\t".join(samples_name) + "\n")
-    cat_files(snps_freq_files, snps_freq_fp, chunk_num=10)
+    cat_files(snps_freq_files, snps_freq_fp, 10)
 
     with OutputStream(snps_depth_fp) as out_depth:
         out_depth.write("site_id\t" + "\t".join(samples_name) + "\n")
-    cat_files(snps_depth_files, snps_depth_fp, chunk_num=10)
+    cat_files(snps_depth_files, snps_depth_fp, 10)
 
     return True
 
@@ -355,7 +355,7 @@ def midas_merge_snps(args):
         slice_counts[species_id] = slice_counter
 
     print(slice_counts)
-    
+
     # Accumulate and compute pooled SNPs stastics by chunks and write tempdir
     chunks_files = multiprocessing_map(process_chunk, argument_list, num_procs=num_physical_cores)
     # Do I still missing the merge_snps_summary?
