@@ -40,7 +40,7 @@ class Pool: # pylint: disable=too-few-public-methods
 
 
     def get_target_layout(self, filename, species_id=""):
-        return os.path.join(self.midas_outdir, self.layout(species_id)[filename])
+        return os.path.join(self.outdir, self.layout(species_id)[filename])
 
     def create_output_dir(self, debug=False):
         tsprint(f"Create output directory for sample {self.sample_name}.")
