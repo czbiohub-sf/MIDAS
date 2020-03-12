@@ -331,8 +331,6 @@ def midas_merge_snps(args):
                 row = list(sample.profile[species.id].values())
                 row.insert(1, sample.sample_name)
                 stream.write("\t".join(map(format_data, row)) + "\n")
-    exit(0)
-
 
     global global_args
     global_args = args
@@ -347,9 +345,6 @@ def midas_merge_snps(args):
     argument_list = design_chunks(list_of_species, contigs_files, args.chunk_size)
     proc_flags = multiprocessing_map(process_chunk, argument_list, num_physical_cores)
     assert all(s == "worked" for s in proc_flags)
-
-    # TODO: Do I still missing the merge_snps_summary? Yes I do. Although this should be fast.
-    # I should try to finish the merge fast and stretch and leave the rest for tomorrow.
 
 
 def register_args(main_func):
