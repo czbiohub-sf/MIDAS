@@ -323,7 +323,7 @@ def midas_run_snps(args):
         samtools_index(repgenome_bamfile, args.debug)
 
         # Use mpileup to call SNPs
-        arguments_list = design_chunks(species_ids_of_interest, contigs_files, repgenome_bamfile)
+        arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
         chunks_pileup_summary = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
