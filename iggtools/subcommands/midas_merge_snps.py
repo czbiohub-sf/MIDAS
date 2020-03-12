@@ -1,15 +1,13 @@
 import json
-import os
 from collections import defaultdict
 from operator import itemgetter
 import multiprocessing
 from math import ceil
-import Bio.SeqIO
 
 from iggtools.models.pool import Pool, select_species, search_species
-from iggtools.common.utils import tsprint, num_physical_cores, command, split, InputStream, OutputStream, multiprocessing_map, multithreading_map, download_reference, select_from_tsv
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, download_reference, select_from_tsv
 from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG, imported_genome_file
+from iggtools.models.uhgg import UHGG
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
 from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 from iggtools.common.argparser import add_subcommand
@@ -210,11 +208,14 @@ def accumulate(accumulator, proc_args):
             acc[9 + sample_index] = acgt_str
 
 
-def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp):
+def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
 
     global global_args
     args = global_args
+
+    global species_sliced_pileup_path
+    snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
 
     with OutputStream(snps_info_fp) as out_info, \
             OutputStream(snps_freq_fp) as out_freq, \
@@ -268,11 +269,10 @@ def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, 
 
             write_depths = "\t".join((str(depth) for depth in sample_depths))
             out_depth.write(f"{site_id}\t" + write_depths + "\n")
-
     return True
 
 
-def process_chunk(packed_args):
+def process_chunk_of_sites(packed_args):
 
     global semaphore_for_species
     global list_of_species
@@ -302,8 +302,7 @@ def process_chunk(packed_args):
             accumulate(accumulator, proc_args)
 
         # Compute and write pooled SNPs for each chunk of genomic sites
-        snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
-        compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
+        compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id)
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -343,7 +342,7 @@ def midas_merge_snps(args):
 
     # Compute pooled SNPs by the unit of chunks_of_sites
     argument_list = design_chunks(list_of_species, contigs_files, args.chunk_size)
-    proc_flags = multiprocessing_map(process_chunk, argument_list, num_physical_cores)
+    proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
     assert all(s == "worked" for s in proc_flags)
 
 
