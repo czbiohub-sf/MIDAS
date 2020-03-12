@@ -327,7 +327,7 @@ def midas_merge_snps(args):
     for species in list_of_species:
         print("this is for each species")
         for sample in species.samples:
-            print(sample.profile)
+            print(sample.profile[species.id])
     exit(0)
 
 
