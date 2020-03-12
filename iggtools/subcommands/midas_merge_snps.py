@@ -291,7 +291,7 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
                     if ni == number_of_chunks:
                         my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
                     else:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, samples_snps_pileup, total_samples_count)
+                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, samples_depth, samples_snps_pileup, total_samples_count)
                     argument_list.append(my_args)
 
                     snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
