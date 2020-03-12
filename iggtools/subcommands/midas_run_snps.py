@@ -71,7 +71,6 @@ def merge_sliced_contigs_for_species(species_id):
 
     global species_sliced_snps_path
     global semaphore_for_species
-    global slice_counts
     global global_args
 
     print(f"merge_sliced_contigs_for_species::{species_id}")
@@ -95,12 +94,13 @@ def merge_sliced_contigs_for_species(species_id):
 def pileup_chunk(packed_args):
 
     global semaphore_for_species
-    global slice_counts
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
+        number_of_chunks = len(semaphore_for_species[species_id]) - 1
+
         print(f"++++++++++++++++++++ wait {species_id}")
-        for _ in range(slice_counts[species_id]):
+        for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
         print(f"++++++++++++++++++++ start {species_id}")
         flag = merge_sliced_contigs_for_species(species_id)
@@ -217,11 +217,9 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
     args = global_args
     global sample
 
-    global slice_counts
     global semaphore_for_species
     global species_sliced_snps_path
 
-    slice_counts = dict()
     semaphore_for_species = dict()
     species_sliced_snps_path = defaultdict(list)
 
@@ -265,7 +263,6 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
         semaphore_for_species[species_id] = multiprocessing.Semaphore(slice_id)
         for _ in range(slice_id):
             semaphore_for_species[species_id].acquire()
-        slice_counts[species_id] = slice_id
 
     contigs_pileup_summary = multiprocessing_map(pileup_chunk, argument_list, num_procs=num_physical_cores)
 
