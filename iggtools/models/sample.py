@@ -82,9 +82,9 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(species_profile_path), f"Sample::load_species_profile:: missing species profile {species_profile_path} for {self.sample_name}"
 
 
-    def load_summary_by_dbtype(self, dbtype):
+    def load_profile_by_dbtype(self, dbtype):
         summary_path = self.get_target_layout(f"{dbtype}_summary")
-        assert os.path.exists(summary_path), f"load_summary_by_dbtype:: missing summary {summary_path} for {self.sample_name}"
+        assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing summary {summary_path} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
         profile = {}

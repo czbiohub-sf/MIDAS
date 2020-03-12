@@ -35,12 +35,94 @@ def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
 
 
+def call_alleles(tuple_of_alleles, site_depth, snp_maf):
+    """ Compute the pooled allele frequencies and call SNPs """
+    # Once you see all the samples, you can call SNPs
+    # keep alleles passing the min allele frequency
+    alleles_above_cutoff = tuple(al for al in tuple_of_alleles if al[1] / site_depth >= snp_maf)
+
+    # classify SNPs type
+    number_alleles = len(alleles_above_cutoff)
+    snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
+
+    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
+    # the one that comes later in the "ACGT" lexicographic order.
+    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
+    major_allele = alleles_above_cutoff[0][0]
+    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
+
+    return (major_allele, minor_allele, snp_type)
+
+
+def design_chunks(list_of_species, contigs_files, chunk_size):
+
+    # dict of semaphore and acquire before
+    global semaphore_for_species
+    global species_sliced_pileup_path
+
+    semaphore_for_species = dict()
+    species_sliced_pileup_path = defaultdict(dict)
+
+    # TODO: can we parallel this? write simultaneouly to the same global variable?
+    argument_list = []
+    for species_index, species in enumerate(list_of_species):
+        species_id = species.id
+        contigs = scan_contigs(contigs_files[species_index], species_id)
+
+        total_samples_count = len(species.samples)
+        samples_depth = species.samples_depth
+        samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
+
+        chunk_id = 0
+        for contig_id, contig in contigs.items():
+            contig_length = contig["contig_len"]
+
+            # pileup is 1-based index
+            if contig_length <= chunk_size:
+                my_args = (species_id, chunk_id, contig_id, 1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
+                argument_list.append(my_args)
+
+                snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
+                snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
+                snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
+                species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
+                chunk_id += 1
+            else:
+                number_of_chunks = ceil(contig_length/chunk_size) - 1
+                for ni, ci in enumerate(range(0, contig_length, chunk_size)):
+                    if ni == number_of_chunks:
+                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
+                    else:
+                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, samples_depth, samples_snps_pileup, total_samples_count)
+                    argument_list.append(my_args)
+
+                    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
+                    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
+                    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
+                    species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
+                    chunk_id += 1
+        # submit merge jobs
+        argument_list.append((species_id, -1))
+
+        snps_info_fp = pool_of_samples.get_target_layout("snps_info", species_id)
+        snps_freq_fp = pool_of_samples.get_target_layout("snps_freq", species_id)
+        snps_depth_fp = pool_of_samples.get_target_layout("snps_depth", species_id)
+        species_sliced_pileup_path[-1][species_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
+
+        # Create a semaphore with number_of_chunks for current species
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
+        for _ in range(chunk_id):
+            semaphore_for_species[species_id].acquire()
+
+    return argument_list
+
+
 def merge_chunks_by_species(species_id, samples_name):
 
     global global_args
     global species_sliced_pileup_path
-    snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[-1][species_id]
 
+    snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[-1][species_id]
     sliced_pileup_files = list(species_sliced_pileup_path[species_id].values())
     snps_info_files = [fi[0] for fi in sliced_pileup_files]
     snps_freq_files = [fi[1] for fi in sliced_pileup_files]
@@ -62,7 +144,6 @@ def merge_chunks_by_species(species_id, samples_name):
     if not global_args.debug:
         for s_file in snps_info_files + snps_freq_files + snps_depth_files:
             command(f"rm -rf {s_file}", quiet=True)
-
     return True
 
 
@@ -129,25 +210,6 @@ def accumulate(accumulator, proc_args):
             acc[9 + sample_index] = acgt_str
 
 
-def call_alleles(alleles_all, site_depth, snp_maf):
-    """ Compute the pooled allele frequencies and call SNPs """
-    # Once you see all the samples, you can call SNPs
-    # keep alleles passing the min allele frequency
-    alleles_above_cutoff = tuple(al for al in alleles_all if al[1] / site_depth >= snp_maf)
-
-    # classify SNPs type
-    number_alleles = len(alleles_above_cutoff)
-    snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
-
-    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
-    # the one that comes later in the "ACGT" lexicographic order.
-    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
-    major_allele = alleles_above_cutoff[0][0]
-    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
-
-    return (major_allele, minor_allele, snp_type)
-
-
 def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
 
@@ -171,12 +233,12 @@ def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, 
             # compute the pooled major allele based on the pooled-read-counts (abundance) or pooled-sample-counts (prevalence)
             if args.snp_pooled_method == "abundance":
                 site_depth = sum((rcA, rcC, rcG, rcT))
-                alleles_all = (('A', rcA), ('C', rcC), ('G', rcG), ('T', rcT))
+                tuple_of_alleles = (('A', rcA), ('C', rcC), ('G', rcG), ('T', rcT))
             else:
                 site_depth = count_samples
-                alleles_all = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
+                tuple_of_alleles = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
 
-            major_allele, minor_allele, snp_type = call_alleles(alleles_all, site_depth, args.snp_maf)
+            major_allele, minor_allele, snp_type = call_alleles(tuple_of_alleles, site_depth, args.snp_maf)
             major_index = 'ACGT'.index(major_allele)
             minor_index = 'ACGT'.index(minor_allele)
 
@@ -247,69 +309,6 @@ def process_chunk(packed_args):
         semaphore_for_species[species_id].release() # no deadlock
 
 
-def design_chunks(list_of_species, contigs_files, chunk_size):
-
-    # dict of semaphore and acquire before
-    global semaphore_for_species
-    global species_sliced_pileup_path
-
-    semaphore_for_species = dict()
-    species_sliced_pileup_path = defaultdict(dict)
-
-    # TODO: can we parallel this? write simultaneouly to the same global variable?
-    argument_list = []
-    for species_index, species in enumerate(list_of_species):
-        species_id = species.id
-        contigs = scan_contigs(contigs_files[species_index], species_id)
-
-        total_samples_count = len(species.samples)
-        samples_depth = species.samples_depth
-        samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
-
-        chunk_id = 0
-        for contig_id, contig in contigs.items():
-            contig_length = contig["contig_len"]
-
-            # pileup is 1-based index
-            if contig_length <= chunk_size:
-                my_args = (species_id, chunk_id, contig_id, 1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
-                argument_list.append(my_args)
-
-                snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
-                snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
-                snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
-                species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-                chunk_id += 1
-            else:
-                number_of_chunks = ceil(contig_length/chunk_size) - 1
-                for ni, ci in enumerate(range(0, contig_length, chunk_size)):
-                    if ni == number_of_chunks:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
-                    else:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, samples_depth, samples_snps_pileup, total_samples_count)
-                    argument_list.append(my_args)
-
-                    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
-                    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
-                    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
-                    species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-                    chunk_id += 1
-        # submit merge jobs
-        argument_list.append((species_id, -1))
-
-        snps_info_fp = pool_of_samples.get_target_layout("snps_info", species_id)
-        snps_freq_fp = pool_of_samples.get_target_layout("snps_freq", species_id)
-        snps_depth_fp = pool_of_samples.get_target_layout("snps_depth", species_id)
-        species_sliced_pileup_path[-1][species_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-
-        # Create a semaphore with number_of_chunks for current species
-        semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
-        for _ in range(chunk_id):
-            semaphore_for_species[species_id].acquire()
-
-    return argument_list
-
-
 def midas_merge_snps(args):
 
     global pool_of_samples
@@ -324,6 +323,12 @@ def midas_merge_snps(args):
     pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
     pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
 
+    # Write snps_summary.tsv
+    for species in list_of_species:
+        for sample in species.sample:
+            print(sample.profile)
+    exit(0)
+
 
     global global_args
     global_args = args
@@ -331,10 +336,11 @@ def midas_merge_snps(args):
     # Create species-to-process lookup table for each species
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
+    # Download representative genomes for every species into dbs/temp/{species}/
     contigs_files = db.fetch_contigs(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
 
+    # Compute pooled SNPs by the unit of chunks_of_sites
     argument_list = design_chunks(list_of_species, contigs_files, args.chunk_size)
-    # Compute ompute pooled SNPs by the unit of chunks_of_sites
     proc_flags = multiprocessing_map(process_chunk, argument_list, num_physical_cores)
     assert all(s == "worked" for s in proc_flags)
 

@@ -83,7 +83,8 @@ class Pool: # pylint: disable=too-few-public-methods
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
-                sample.load_summary_by_dbtype(dbtype)
+                # Save per-sample profile summary into memory for easy access
+                sample.load_profile_by_dbtype(dbtype)
                 samples.append(sample)
         return samples
 
@@ -135,7 +136,6 @@ def init_species(pool_of_samples, dbtype, args):
                 # Skip unspeficied species
                 if (args.species_list and species_id not in args.species_list.split(",")):
                     continue
-
                 # Read in all the species_id in the species profile
                 if species_id not in species:
                     species[species_id] = Species(species_id)
