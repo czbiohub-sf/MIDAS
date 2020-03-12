@@ -213,25 +213,24 @@ def compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, 
 def process_chunk(packed_args):
 
     global semaphore_for_species
-    global chunk_counts
     global list_of_species
     global species_sliced_pileup_path
 
     if packed_args[1] == -1:
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
-        assert chunk_counts[species_id] == len(species_sliced_pileup_path[species_id]), "how come debug me"
-        for _ in range(chunk_counts[species_id]):
+        species_number_of_chunks = len(species_sliced_pileup_path[species_id]
+        print(f"++++++++++++++++++++ wait {species_id}")
+        for _ in range(species_number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        print(f"++++++++++++++++++++ start merge {species_id}")
-
+        print(f"++++++++++++++++++++ start {species_id}")
         samples_name = search_species(list_of_species, species_id).fetch_samples_name()
         merge_chunks_by_species(species_id, samples_name)
         return "worked"
 
+    # For each process, scan over all the samples
     species_id, chunk_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
     try:
-        # For each process, scan over all the samples
         accumulator = dict()
         for sample_index in range(total_samples_count):
             genome_coverage = samples_depth[sample_index]
@@ -251,16 +250,13 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
 
     # dict of semaphore and acquire before
     global semaphore_for_species
-    global chunk_counts
     global species_sliced_pileup_path
 
-    chunk_counts = dict()
     semaphore_for_species = dict()
     species_sliced_pileup_path = defaultdict(dict)
 
+    # TODO: can we parallel this? write simultaneouly to the same global variable?
     argument_list = []
-    # Let's start with linear first and then move on to parallel.
-    # what to look after? can we parallel write to a global variable?
     for species_index, species in enumerate(list_of_species):
         species_id = species.id
         contigs = scan_contigs(contigs_files[species_index], species_id)
@@ -282,7 +278,6 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
                 snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
                 snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
                 species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-
                 chunk_id += 1
             else:
                 number_of_chunks = ceil(contig_length/chunk_size) - 1
@@ -297,7 +292,6 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
                     snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
                     snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
                     species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-
                     chunk_id += 1
         # submit merge jobs
         argument_list.append((species_id, -1))
@@ -311,7 +305,6 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
-        chunk_counts[species_id] = chunk_id
 
     return argument_list
 
