@@ -245,7 +245,7 @@ def process_chunk(packed_args):
         semaphore_for_species[species_id].release() # no deadlock
 
 
-def design_chunks(list_of_species, contigs_files):
+def design_chunks(list_of_species, contigs_files, chunk_size):
 
     # dict of semaphore and acquire before
     global semaphore_for_species
@@ -333,12 +333,11 @@ def midas_merge_snps(args):
     global_args = args
 
     # Create species-to-process lookup table for each species
-    chunk_size = args.chunk_size
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
     contigs_files = db.fetch_contigs(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
 
-    argument_list = design_chunks(list_of_species, contigs_files)
+    argument_list = design_chunks(list_of_species, contigs_files, args.chunk_size)
     # Compute ompute pooled SNPs by the unit of chunks_of_sites
     proc_flags = multiprocessing_map(process_chunk, argument_list, num_physical_cores)
     assert all(s == "worked" for s in proc_flags)
