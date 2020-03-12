@@ -325,6 +325,7 @@ def midas_merge_snps(args):
 
     # Write snps_summary.tsv
     for species in list_of_species:
+        print("this is for each species")
         for sample in species.samples:
             print(sample.profile)
     exit(0)
