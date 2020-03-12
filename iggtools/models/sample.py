@@ -5,7 +5,6 @@ from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, co
 
 
 # Executable Documentation
-
 # Low level functions: the Target Files
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", contig_id=""):
@@ -33,16 +32,6 @@ def get_single_layout(sample_name, dbtype=""):
         }
     return per_species
 
-# Q: how about the base_output_dir? should I put it inside the get_single_layout() function?
-# A: No. You should design the low level command for higher level application. Then you
-# have a separate command to do the higher level.
-
-# structure things well
-# you are the architect, you design it -- this feels really good
-# excuatable documentation <- this is super good
-
-# want to add a higher level functions: e.g. pool or orchestral
-
 
 if False:
     assert os.path.exists(midas_outdir), f"Provided MIDAS output {midas_outdir} for {sample_name} in sample_list is invalid"
@@ -54,7 +43,7 @@ class Sample: # pylint: disable=too-few-public-methods
         self.sample_name = sample_name
         self.midas_outdir = midas_outdir
 
-        self.layout = get_single_layout(sample_name, dbtype=dbtype)
+        self.layout = get_single_layout(sample_name, dbtype)
         self.outdir = self.get_target_layout("outdir")
         self.tempdir = self.get_target_layout("tempdir")
         self.dbsdir = self.get_target_layout("dbsdir")
@@ -86,9 +75,6 @@ class Sample: # pylint: disable=too-few-public-methods
                 continue
             command(f"rm -rf {species_subdir}")
             command(f"mkdir -p {species_subdir}")
-
-        ## maybe we should created the outdir and tempdir when know what species will we process
-        ## how about provide the index, then we don't those species_id subdirectories .... good question
 
 
     def load_species_profile(self): # I think this is not used anywhere anymore

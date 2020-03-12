@@ -171,6 +171,7 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
 
     argument_list = []
     slice_size = args.chunk_size
+    # TODO: this part can be done in parallel
     for species_index, species_id in enumerate(species_ids):
 
         contigs = scan_contigs(contigs_files[species_index], species_id)

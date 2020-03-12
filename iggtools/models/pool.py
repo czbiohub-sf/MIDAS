@@ -6,7 +6,7 @@ from iggtools.models.sample import Sample
 
 
 def get_pool_layout(dbtype=""):
-    def per_species(species_id=""):
+    def per_species(species_id="", chunk_id=""):
         return {
             "species_prevalence":    f"species/species_prevalence.tsv",
 
@@ -23,6 +23,15 @@ def get_pool_layout(dbtype=""):
             "outdir":                f"{dbtype}/output",
             "tempdir":               f"{dbtype}/temp",
             "dbsdir":                f"{dbtype}/dbs",
+
+            "outdir_by_species":     f"{dbtype}/output/{species_id}",
+            "tempdir_by_species":    f"{dbtype}/temp/{species_id}",
+
+            "lookup_table_by_chunk": f"{dbtype}/temp/{species_id}/cid_lookup.tsv",
+            "snps_info_by_chunk":    f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_info.tsv",
+            "snps_freq_by_chunk":    f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
+            "snps_depth_by_chunk":   f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_depth.tsv",
+
         }
     return per_species
 
@@ -33,38 +42,39 @@ class Pool: # pylint: disable=too-few-public-methods
         self.list_of_samples = samples_list
         self.midas_outdir = midas_outdir
 
-        self.samples = self.init_samples(dbtype)
-        self.layout = get_pool_layout(dbtype=dbtype)
+        self.layout = get_pool_layout(dbtype)
         self.outdir = self.get_target_layout("outdir")
         self.tempdir = self.get_target_layout("tempdir")
         self.dbsdir = self.get_target_layout("dbsdir")
 
+        self.samples = self.init_samples(dbtype)
 
-    def get_target_layout(self, filename, species_id=""):
-        return os.path.join(self.midas_outdir, self.layout(species_id)[filename])
+    def get_target_layout(self, filename, species_id="", chunk_id=""):
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
     def create_output_dir(self, debug=False):
-        tsprint(f"Create output directory for sample {self.sample_name}.")
+        tsprint(f"Create output directory for given pool of samples.")
         command(f"rm -rf {self.outdir}")
         command(f"mkdir -p {self.outdir}")
 
         if debug and os.path.exists(self.tempdir):
             tsprint(f"Reusing existing temp data in {self.tempdir} according to --debug flag.")
         else:
-            tsprint(f"Create temp directory for sample {self.sample_name}.")
+            tsprint(f"Create temp directory for given pool of samples.")
             command(f"rm -rf {self.tempdir}")
             command(f"mkdir -p {self.tempdir}")
-            tsprint(f"Create database directory for sample {self.sample_name}.")
+            tsprint(f"Create database directory for given pool of samples.")
             command(f"rm -rf {self.dbsdir}")
             command(f"mkdir -p {self.dbsdir}")
 
-    def create_species_subdir(self, species_ids, debug=False):
-        dbs_tempdir = self.get_target_layout("dbs_tempdir")
+
+    def create_species_subdir(self, species_ids, dir_name, debug=False):
+        dir_to_create = self.get_target_layout(dir_name)
         for species_id in species_ids:
-            if debug and os.path.exists(f"{dbs_tempdir}/{species_id}"):
+            if debug and os.path.exists(f"{dir_to_create}/{species_id}"):
                 continue
-            command(f"rm -rf {dbs_tempdir}/{species_id}")
-            command(f"mkdir -p {dbs_tempdir}/{species_id}")
+            command(f"rm -rf {dir_to_create}/{species_id}")
+            command(f"mkdir -p {dir_to_create}/{species_id}")
 
 
     def init_samples(self, dbtype):
@@ -76,55 +86,6 @@ class Pool: # pylint: disable=too-few-public-methods
                 sample.load_summary_by_dbtype(dbtype)
                 samples.append(sample)
         return samples
-
-    def create_outdir(self, outdir, dbtype):
-        # only created once in the beginning
-        outdir = f"{outdir}/merged/{dbtype}"
-        command(f"rm -rf {outdir}")
-        command(f"mkdir -p {outdir}")
-        self.outdir = outdir
-
-    def create_tempdir(self, paramstr):
-        # only created once in the beginning
-        tempdir = f"{self.outdir}/temp_{paramstr}"
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
-        self.tempdir = tempdir
-
-    def create_species_tempdir(self, species_id):
-        # first created when creating lookup tables
-        species_tempdir = f"{self.tempdir}/{species_id}"
-        if not os.path.exists(species_tempdir):
-            command(f"mkdir -p {species_tempdir}")
-        return species_tempdir
-
-    def create_species_lookup_table(self, species_id):
-        species_tempdir = self.create_species_tempdir(species_id)
-        proc_lookup_file = f"{species_tempdir}/procid_lookup.tsv"
-        return proc_lookup_file
-
-    def create_species_pool_snps_chunk(self, species_id, process_id):
-        # chunk file for one pair of species_id-process_id
-        # Todo: think about where should I save this?
-        species_tempdir = self.create_species_tempdir(species_id)
-        snps_info_fp = f"{species_tempdir}/proc.{process_id}_snps_info.tsv"
-        snps_freq_fp = f"{species_tempdir}/proc.{process_id}_snps_freqs.tsv"
-        snps_depth_fp = f"{species_tempdir}/proc.{process_id}_snps_depth.tsv"
-        return (snps_info_fp, snps_freq_fp, snps_depth_fp)
-
-    def create_species_outdir(self, species_id):
-        # first created when merge_chunks_by_species
-        species_outdir = f"{self.outdir}/{species_id}"
-        if not os.path.exists(species_outdir):
-            command(f"mkdir -p {species_outdir}")
-        return species_outdir
-
-    def create_species_pool_snps_results(self, species_id):
-        species_outdir = self.create_species_outdir(species_id)
-        snps_info_fp = f"{species_outdir}/{species_id}_snps_info.tsv"
-        snps_freq_fp = f"{species_outdir}/{species_id}_freqs.tsv"
-        snps_depth_fp = f"{species_outdir}/{species_id}_snps_depth.tsv"
-        return (snps_info_fp, snps_freq_fp, snps_depth_fp)
 
     def fetch_sample_names(self):
         sample_names = [sample.sample_name for sample in self.samples]
