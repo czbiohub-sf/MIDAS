@@ -328,8 +328,9 @@ def midas_merge_snps(args):
         #stream.write("\t".join(["species_id", "sample_name"] + list(snps_profile_schema.keys())[1:]) + "\n")
     for species in list_of_species:
         for sample in species.samples:
-            print(list(sample.profile[species.id].values()))
-            #print(list(sample.profile[species.id].values()).insert(1, sample.sample_name))
+            val = list(sample.profile[species.id].values())
+            val.insert(1, sample.sample_name)
+            print(val)
     exit(0)
 
 
