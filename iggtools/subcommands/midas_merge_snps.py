@@ -37,6 +37,7 @@ def acgt_string(A, C, G, T):
 
 def merge_chunks_by_species(species_id, samples_name):
 
+    global global_args
     global species_sliced_pileup_path
     snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[-1][species_id]
 
@@ -57,6 +58,10 @@ def merge_chunks_by_species(species_id, samples_name):
     with OutputStream(snps_depth_fp) as out_depth:
         out_depth.write("site_id\t" + "\t".join(samples_name) + "\n")
     cat_files(snps_depth_files, snps_depth_fp, 10)
+
+    if not global_args.debug:
+        for s_file in snps_info_files + snps_freq_files + snps_depth_files:
+            command(f"rm -rf {s_file}", quiet=True)
 
     return True
 
@@ -224,10 +229,9 @@ def process_chunk(packed_args):
         merge_chunks_by_species(species_id, samples_name)
         return "worked"
 
+    species_id, chunk_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
     try:
         # For each process, scan over all the samples
-        species_id, chunk_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
-
         accumulator = dict()
         for sample_index in range(total_samples_count):
             genome_coverage = samples_depth[sample_index]
@@ -240,7 +244,6 @@ def process_chunk(packed_args):
         compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
         tsprint(f"process_chunk::finish processing species {species_id} - chunkID {chunk_id} for contig {contig_id}.")
         return "worked"
-
     finally:
         semaphore_for_species[species_id].release() # no deadlock
 
