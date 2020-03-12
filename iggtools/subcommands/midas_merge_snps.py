@@ -219,7 +219,7 @@ def process_chunk(packed_args):
     if packed_args[1] == -1:
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
-        species_number_of_chunks = len(species_sliced_pileup_path[species_id]
+        species_number_of_chunks = len(species_sliced_pileup_path[species_id])
         print(f"++++++++++++++++++++ wait {species_id}")
         for _ in range(species_number_of_chunks):
             semaphore_for_species[species_id].acquire()
