@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command
+from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.sample import Sample
 
 

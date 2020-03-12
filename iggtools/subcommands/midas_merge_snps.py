@@ -35,51 +35,12 @@ def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
 
 
-def create_lookup_table(packed_args):
-    """ Assign or chunk up (large) contigs into chunks_of_sites for one species"""
-    species_id, genome_id, chunk_size = packed_args
-
-    global pool_of_samples
-
-    proc_lookup_file = pool_of_samples.get_target_layout("lookup_table_by_chunk", species_id)
-
-    species_tempdir = pool_of_samples.create_species_tempdir(species_id)
-
-
-    # Stream from S3 to extract the contig_ids
-    contigs_file = download_reference(imported_genome_file(genome_id, species_id, "fna.lz4"), f"{species_tempdir}")
-
-    chunk_id = 1
-    with OutputStream(proc_lookup_file) as ostream, InputStream(contigs_file) as stream:
-        for rec in Bio.SeqIO.parse(stream, 'fasta'):
-            contig_id = rec.id
-            contig_len = len(rec.seq)
-
-            if contig_len <= chunk_size:
-                # Pileup is 1-based index
-                # what is the downstream used close/open situation?
-                # I would prefer the same habit with python
-                ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, 1, contig_len))) + "\n")
-                chunk_id += 1
-            else:
-                chunk_num = ceil(contig_len/chunk_size) - 1
-                for ni, ci in enumerate(range(0, contig_len, chunk_size)):
-                    if ni == chunk_num:
-                        ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, ci+1, contig_len))) + "\n")
-                    else:
-                        ostream.write("\t".join(map(str, (species_id, chunk_id, contig_id, ci+1, ci+chunk_size))) + "\n")
-                    chunk_id += 1
-    return proc_lookup_file
-
-
 def merge_chunks_by_species(species_id, samples_name):
 
     global species_sliced_pileup_path
-    snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][-1]
+    snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[-1][species_id]
 
-    sliced_pileup_files = [v for k, v in species_sliced_pileup_path.items() if k != -1]
-    #sliced_pileup_files = list(species_sliced_pileup_path[species_id].values())
-
+    sliced_pileup_files = list(species_sliced_pileup_path[species_id].values())
     snps_info_files = [fi[0] for fi in sliced_pileup_files]
     snps_freq_files = [fi[1] for fi in sliced_pileup_files]
     snps_depth_files = [fi[2] for fi in sliced_pileup_files]
@@ -254,7 +215,7 @@ def process_chunk(packed_args):
     if packed_args[1] == -1:
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
-        assert chunk_counts[species_id] == len(species_sliced_pileup_path[species_id]) - 1, "how come"
+        assert chunk_counts[species_id] == len(species_sliced_pileup_path[species_id]), "how come debug me"
         for _ in range(chunk_counts[species_id]):
             semaphore_for_species[species_id].acquire()
         print(f"++++++++++++++++++++ start merge {species_id}")
