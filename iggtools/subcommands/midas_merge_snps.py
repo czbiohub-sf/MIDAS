@@ -10,7 +10,7 @@ from iggtools.models.pool import Pool, select_species, search_species
 from iggtools.common.utils import tsprint, num_physical_cores, command, split, InputStream, OutputStream, multiprocessing_map, multithreading_map, download_reference, select_from_tsv
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, imported_genome_file
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
 from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 from iggtools.common.argparser import add_subcommand
 
