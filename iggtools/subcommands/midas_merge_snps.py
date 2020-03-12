@@ -324,10 +324,13 @@ def midas_merge_snps(args):
     pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
 
     # Write snps_summary.tsv
+    #with OutputStream(pool_of_samples.get_target_layout("snps_summary"))
+    print(list(snps_profile_schema.keys())[1:])
     for species in list_of_species:
         print("this is for each species")
+
         for sample in species.samples:
-            print(sample.profile[species.id])
+            #print(sample.profile[species.id])
     exit(0)
 
 
