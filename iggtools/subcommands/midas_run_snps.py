@@ -15,6 +15,7 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_in
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
 from iggtools.models.sample import Sample
 
+
 DEFAULT_ALN_COV = 0.75
 DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
@@ -82,15 +83,16 @@ def merge_sliced_contigs_for_species(species_id):
     cat_files(sliced_files, species_file, 20)
 
     if not global_args.debug:
+        tsprint(f"Deleting temp sliced pileup files for {species_id}.")
         for s_file in sliced_files:
-            command(f"rm -rf {s_file}")
+            command(f"rm -rf {s_file}", quiet=True)
 
     # return a status flag
     # the path should be computable somewhere else
     return True
 
 
-def contig_pileup(packed_args):
+def pileup_chunk(packed_args):
 
     global semaphore_for_species
     global slice_counts
@@ -148,10 +150,64 @@ def contig_pileup(packed_args):
                     if depth > 0 or zero_rows_allowed:
                         stream.write("\t".join(map(format_data, row)) + "\n")
 
-                assert within_slice_index+contig_start == contig_end-1, f"contig_pileup {contig_id} run into index mismatch error"
+                assert within_slice_index+contig_start == contig_end-1, f"pileup_chunk {contig_id} run into index mismatch error"
             return aln_stats
         finally:
             semaphore_for_species[species_id].release() # no deadlock
+
+
+def compute_species_pileup_summary(contigs_pileup_summary):
+
+    species_pileup_summary = defaultdict(dict)
+    previous_species_id = None
+
+    for record in contigs_pileup_summary:
+        if record is None: continue
+
+        species_id = record["species_id"]
+        if species_id not in species_pileup_summary:
+            species_pileup_summary[species_id] = {
+                    "species_id": species_id,
+                    "genome_length": 0,
+                    "covered_bases": 0,
+                    "total_depth": 0,
+                    "aligned_reads":0,
+                    "mapped_reads":0,
+                    "fraction_covered": 0.0,
+                    "mean_coverage": 0.0
+                    }
+
+        current_species_pileup = species_pileup_summary.get(species_id)
+        current_species_pileup["genome_length"] +=  record["slice_length"]
+        current_species_pileup["total_depth"] += record["contig_total_depth"]
+        current_species_pileup["covered_bases"] += record["contig_covered_bases"]
+        current_species_pileup["aligned_reads"] += record["aligned_reads"]
+        current_species_pileup["mapped_reads"] += record["mapped_reads"]
+        assert current_species_pileup["fraction_covered"] == 0.0, f"compute_species_pileup_summary error for {species_id}"
+
+        if previous_species_id != species_id:
+            if previous_species_id is not None:
+                previous_species_pileup = species_pileup_summary.get(previous_species_id)
+                if previous_species_pileup["genome_length"] > 0:
+                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
+                if previous_species_pileup["covered_bases"] > 0:
+                    previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
+            previous_species_id = species_id
+
+    if current_species_pileup["genome_length"] > 0:
+        current_species_pileup["fraction_covered"] = current_species_pileup["covered_bases"] / current_species_pileup["covered_bases"]
+    if current_species_pileup["covered_bases"] > 0:
+        current_species_pileup["mean_coverage"] = current_species_pileup["total_depth"] / current_species_pileup["covered_bases"]
+
+    return species_pileup_summary
+
+
+def write_species_pileup_summary(species_pileup_summary, outfile):
+    """ Get summary of mapping statistics """
+    with OutputStream(outfile) as file:
+        file.write('\t'.join(snps_profile_schema.keys()) + '\n')
+        for species_id, species_summary in species_pileup_summary.items():
+            file.write("\t".join(map(format_data, species_summary.values())) + "\n")
 
 
 def species_pileup(species_ids, contigs_files, repgenome_bamfile):
@@ -211,63 +267,9 @@ def species_pileup(species_ids, contigs_files, repgenome_bamfile):
             semaphore_for_species[species_id].acquire()
         slice_counts[species_id] = slice_id
 
-    contigs_pileup_summary = multiprocessing_map(contig_pileup, argument_list, num_procs=num_physical_cores)
+    contigs_pileup_summary = multiprocessing_map(pileup_chunk, argument_list, num_procs=num_physical_cores)
 
     return contigs_pileup_summary
-
-
-def compute_species_pileup_summary(contigs_pileup_summary):
-
-    species_pileup_summary = defaultdict(dict)
-    previous_species_id = None
-
-    for record in contigs_pileup_summary:
-        if record is None: continue
-
-        species_id = record["species_id"]
-        if species_id not in species_pileup_summary:
-            species_pileup_summary[species_id] = {
-                    "species_id": species_id,
-                    "genome_length": 0,
-                    "covered_bases": 0,
-                    "total_depth": 0,
-                    "aligned_reads":0,
-                    "mapped_reads":0,
-                    "fraction_covered": 0.0,
-                    "mean_coverage": 0.0
-                    }
-
-        current_species_pileup = species_pileup_summary.get(species_id)
-        current_species_pileup["genome_length"] +=  record["slice_length"]
-        current_species_pileup["total_depth"] += record["contig_total_depth"]
-        current_species_pileup["covered_bases"] += record["contig_covered_bases"]
-        current_species_pileup["aligned_reads"] += record["aligned_reads"]
-        current_species_pileup["mapped_reads"] += record["mapped_reads"]
-        assert current_species_pileup["fraction_covered"] == 0.0, f"compute_species_pileup_summary error for {species_id}"
-
-        if previous_species_id != species_id:
-            if previous_species_id is not None:
-                previous_species_pileup = species_pileup_summary.get(previous_species_id)
-                if previous_species_pileup["genome_length"] > 0:
-                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
-                if previous_species_pileup["covered_bases"] > 0:
-                    previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
-            previous_species_id = species_id
-
-    if current_species_pileup["genome_length"] > 0:
-        current_species_pileup["fraction_covered"] = current_species_pileup["covered_bases"] / current_species_pileup["covered_bases"]
-    if current_species_pileup["covered_bases"] > 0:
-        current_species_pileup["mean_coverage"] = current_species_pileup["total_depth"] / current_species_pileup["covered_bases"]
-
-    return species_pileup_summary
-
-
-def write_species_pileup_summary(species_pileup_summary, outfile):
-    """ Get summary of mapping statistics """
-    with OutputStream(outfile) as file:
-        file.write('\t'.join(snps_profile_schema.keys()) + '\n')
-        for species_id, species_summary in species_pileup_summary.items():
-            file.write("\t".join(map(format_data, species_summary.values())) + "\n")
 
 
 def midas_run_snps(args):

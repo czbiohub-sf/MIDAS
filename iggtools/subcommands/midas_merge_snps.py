@@ -242,7 +242,6 @@ def process_chunk(packed_args):
         # Compute and write pooled SNPs for each chunk of genomic sites
         snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
         compute_pooled_snps_and_write(accumulator, total_samples_count, species_id, chunk_id, snps_info_fp, snps_freq_fp, snps_depth_fp)
-        tsprint(f"process_chunk::finish processing species {species_id} - chunkID {chunk_id} for contig {contig_id}.")
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -314,6 +313,9 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
             semaphore_for_species[species_id].acquire()
         chunk_counts[chunk_id] = chunk_id
 
+    print(chunk_counts)
+    print(species_sliced_pileup_path)
+    exit(0)
     return argument_list
 
 
