@@ -94,10 +94,11 @@ def merge_sliced_contigs_for_species(species_id):
 def pileup_chunk(packed_args):
 
     global semaphore_for_species
+    global species_sliced_snps_path
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
-        number_of_chunks = len(semaphore_for_species[species_id]) - 1
+        number_of_chunks = len(species_sliced_snps_path[species_id]) - 1
 
         print(f"++++++++++++++++++++ wait {species_id}")
         for _ in range(number_of_chunks):
