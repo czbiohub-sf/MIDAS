@@ -308,7 +308,7 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
         # Create a semaphore with number_of_chunks for current species
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
-            semaphore_for_species[chunk_id].acquire()
+            semaphore_for_species[species_id].acquire()
         chunk_counts[chunk_id] = chunk_id
 
     return argument_list

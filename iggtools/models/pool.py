@@ -52,29 +52,29 @@ class Pool: # pylint: disable=too-few-public-methods
     def get_target_layout(self, filename, species_id="", chunk_id=""):
         return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
-    def create_output_dir(self, debug=False):
+    def create_output_dir(self, debug=False, quiet=True):
         tsprint(f"Create output directory for given pool of samples.")
-        command(f"rm -rf {self.outdir}")
-        command(f"mkdir -p {self.outdir}")
+        command(f"rm -rf {self.outdir}", quiet)
+        command(f"mkdir -p {self.outdir}", quiet)
 
         if debug and os.path.exists(self.tempdir):
             tsprint(f"Reusing existing temp data in {self.tempdir} according to --debug flag.")
         else:
             tsprint(f"Create temp directory for given pool of samples.")
-            command(f"rm -rf {self.tempdir}")
-            command(f"mkdir -p {self.tempdir}")
+            command(f"rm -rf {self.tempdir}", quiet)
+            command(f"mkdir -p {self.tempdir}", quiet)
             tsprint(f"Create database directory for given pool of samples.")
-            command(f"rm -rf {self.dbsdir}")
-            command(f"mkdir -p {self.dbsdir}")
+            command(f"rm -rf {self.dbsdir}", quiet)
+            command(f"mkdir -p {self.dbsdir}", quiet)
 
 
-    def create_species_subdir(self, species_ids, dir_name, debug=False):
+    def create_species_subdir(self, species_ids, dir_name, debug=False, quiet=True):
         dir_to_create = self.get_target_layout(dir_name)
         for species_id in species_ids:
             if debug and os.path.exists(f"{dir_to_create}/{species_id}"):
                 continue
-            command(f"rm -rf {dir_to_create}/{species_id}")
-            command(f"mkdir -p {dir_to_create}/{species_id}")
+            command(f"rm -rf {dir_to_create}/{species_id}", quiet)
+            command(f"mkdir -p {dir_to_create}/{species_id}", quiet)
 
 
     def init_samples(self, dbtype):
