@@ -259,6 +259,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
 
 def midas_run_genes(args):
 
+    global sample
     sample = Sample(args.sample_name, args.midas_outdir, "genes")
     sample.create_output_dir(args.debug)
 
