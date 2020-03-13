@@ -232,7 +232,9 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         gene_count = 0
         chunk_id = 0
         curr_centroid_dict = defaultdict()
+        curr_list_of_genes = []
         with InputStream(centroid_file) as file:
+            # Todo: during database build, this should be solved ...
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
                 if gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size:
                     print(f"current chunk {chunk_id}:{gene_count}")
@@ -240,7 +242,9 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                     print(f"start new chunk => {chunk_id}")
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
+                    arguments_list.append(species_id, chunk_id, tuple(curr_list_of_genes))
                     curr_centroid_dict = defaultdict()
+                    curr_list_of_genes = []
 
                 curr_centroid_dict[centroid.id] = {
                     "centroid_gene_id": centroid.id,
@@ -251,18 +255,15 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                     "mapped_reads": 0,
                     "copies": 0.0,
                 }
+                curr_list_of_genes.append(centroid.id)
                 gene_count += 1
 
         species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-    print(len(species_sliced_genes_path))
-    print(len(species_sliced_genes_path[species_id]))
-        #semaphore_for_species[species_id] = Semaphore(chunk_id)
-        #for _ in range(chunk_id):
-        #    semaphore_for_species[species_id].acquire()
-        #arguments_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-        #results = multiprocessing_map(compute_gene_coverage, args_list, num_physical_cores)
-    exit(0)
-
+        if False:
+            semaphore_for_species[species_id] = Semaphore(chunk_id)
+            for _ in range(chunk_id):
+                semaphore_for_species[species_id].acquire()
+    return arguments_list
 
 def midas_run_genes(args):
 
@@ -316,8 +317,9 @@ def midas_run_genes(args):
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
-        species_ids_of_interest = species_ids_of_interest[:1]
+        species_ids_of_interest = species_ids_of_interest[:2]
         design_chunks(species_ids_of_interest, centroids_files, 5000)
+        print(arguments_list)
         exit(0)
 
         # Pangenome coverage compute
