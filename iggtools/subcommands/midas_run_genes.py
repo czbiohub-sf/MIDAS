@@ -234,7 +234,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         curr_centroid_dict = defaultdict()
         with InputStream(centroid_file) as file:
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-                print(f"{chunk_id}_{gene_id}")
+                print(f"{chunk_id}:{gene_count}")
                 if not (gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size):
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
