@@ -242,7 +242,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                     print(f"start new chunk => {chunk_id}")
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-                    arguments_list.append(species_id, chunk_id, tuple(curr_list_of_genes))
+                    arguments_list.append((species_id, chunk_id, tuple(curr_list_of_genes)))
                     curr_centroid_dict = defaultdict()
                     curr_list_of_genes = []
 
