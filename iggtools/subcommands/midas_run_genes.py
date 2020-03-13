@@ -254,6 +254,11 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                 gene_count += 1
 
         species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
+    print(len(species_sliced_genes_path))
+    print(len(species_sliced_genes_path[species_id]))
+        #semaphore_for_species[species_id] = Semaphore(chunk_id)
+        #for _ in range(chunk_id):
+        #    semaphore_for_species[species_id].acquire()
         #arguments_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
         #results = multiprocessing_map(compute_gene_coverage, args_list, num_physical_cores)
     exit(0)
