@@ -309,6 +309,7 @@ def midas_run_genes(args):
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
+        species_ids_of_interest = species_ids_of_interest[:1]
         design_chunks(species_ids_of_interest, centroids_files, 1000)
         exit(0)
 
