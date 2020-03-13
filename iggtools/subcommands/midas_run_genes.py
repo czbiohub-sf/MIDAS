@@ -8,7 +8,7 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_map, multiprocessing_map, download_reference, num_physical_cores
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
@@ -25,15 +25,14 @@ DEFAULT_ALN_MAPQ = 0
 DECIMALS = ".6f"
 
 
-def scan_centroids(centroids_file, species_id):
+def scan_centroids(centroid_file, species_id):
     """ parse centroid fasta for given species_id"""
+    # TODO：part of the information should already be processed during db build
     centroids = {}
-    # TODO part of the information should already be processed during the database build
-    with InputStream(centroids_file) as file:
+    with InputStream(centroid_file) as file:
         for centroid in Bio.SeqIO.parse(file, 'fasta'):
-            centroid_gene_id = centroid.id
-            centroid_gene = {
-                "centroid_gene_id": centroid_gene_id,
+            centroids[centroid.id] = {
+                "centroid_gene_id": centroid.id,
                 "species_id": species_id,
                 "length": len(centroid.seq),
                 "depth": 0.0,
@@ -41,7 +40,6 @@ def scan_centroids(centroids_file, species_id):
                 "mapped_reads": 0,
                 "copies": 0.0,
             }
-            centroids[centroid_gene_id] = centroid_gene
     return centroids
 
 
@@ -67,9 +65,9 @@ def keep_read(aln):
 
 
 def write_genes_summary(genes_summary_list, genes_summary_path):
+
     with OutputStream(genes_summary_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
-
         for record in genes_summary_list:
             stream.write("\t".join(map(format_data, record)) + "\n")
 
@@ -78,7 +76,6 @@ def write_genes_coverage(centroids, coverage_path):
 
     with OutputStream(coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
-
         for gene_id, gene_dict in centroids.items():
             if gene_dict["depth"] == 0: # Sparse by default here.
                 continue
@@ -90,7 +87,6 @@ def write_genes_coverage(centroids, coverage_path):
 def compute_gene_coverage(packed_args):
     """ Count number of bp mapped to each pan-gene. """
     pangenome_bamfile, gene_id, gene_length = packed_args
-
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
@@ -135,10 +131,12 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, cove
     centroids = scan_centroids(centroids_file, species_id)
     #centroids = {k: centroids[k] for k in list(centroids)[:100]}
 
+    print("===================start multi-processing")
     args_list = []
     for gene_id in centroids.keys():
         args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
     results = multiprocessing_map(compute_gene_coverage, args_list, num_procs=num_physical_cores)
+    print("===================end multi-processing")
 
     for gene_index, gene_id in enumerate(centroids):
         gene = centroids.get(gene_id)
@@ -197,6 +195,7 @@ def midas_run_genes(args):
                 for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
                     species_profile[species_id] = coverage
 
+            species_ids_of_interest = list(species_profile.keys())
             sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
@@ -208,8 +207,10 @@ def midas_run_genes(args):
             else:
                 species_profile = sample.select_species(args.genome_coverage)
 
-            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+            species_ids_of_interest = list(species_profile.keys())
+            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
+            # Build one bowtie database for species in the restricted species profile
             local_toc = download_reference(outputs.genomes, bt2_db_dir)
             db = UHGG(local_toc)
             centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
@@ -217,12 +218,14 @@ def midas_run_genes(args):
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
+        # Map reads to pan-genes bowtie2 database
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
+        # Pangenome coverage compute
         genes_summary_list = []
-        for species_index, species_id in enumerate(list(species_profile.keys())):
+        for species_index, species_id in enumerate(species_ids_of_interest):
             coverage_path = sample.get_target_layout("genes_coverage", species_id)
             genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
 

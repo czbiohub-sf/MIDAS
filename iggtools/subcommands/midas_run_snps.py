@@ -48,13 +48,14 @@ def keep_read(aln):
 
 
 def scan_contigs(contig_file, species_id):
+    # TODO: move to part of build db?
     contigs = {}
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             contigs[rec.id] = {
                 "species_id": species_id,
                 "contig_id": rec.id,
-                "contig_len": int(len(rec.seq)),
+                "contig_len": len(rec.seq),
                 "contig_seq": str(rec.seq),
             }
     return contigs
@@ -290,8 +291,8 @@ def midas_run_snps(args):
             with InputStream(args.species_profile_path) as stream:
                 for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
                     species_profile[species_id] = coverage
+
             species_ids_of_interest = species_profile.keys()
-            # Create per-species subdirectories in dbs/{species}
             sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
         else:
@@ -303,13 +304,13 @@ def midas_run_snps(args):
                 species_profile = sample.select_species(args.genome_coverage, args.species_list)
             else:
                 species_profile = sample.select_species(args.genome_coverage)
+
             species_ids_of_interest = species_profile.keys()
+            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
             # Build one bowtie database for species in the restricted species profile
             local_toc = download_reference(outputs.genomes, bt2_db_dir)
             db = UHGG(local_toc)
-            # Create per-species subdirectories in dbs/
-            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
             # Download representative genomes for every species into dbs/temp/{species}/
             contigs_files = db.fetch_contigs(species_ids_of_interest, bt2_db_temp_dir)
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
