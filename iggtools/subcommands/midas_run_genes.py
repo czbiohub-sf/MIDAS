@@ -11,7 +11,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
-from iggtools.models.uhgg import UHGG, pangenome_file, marker_genes_mapfile
+from iggtools.models.uhgg import UHGG, get_uhgg_layout
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 
@@ -73,7 +73,7 @@ def write_genes_summary(genes_summary_list, genes_summary_path):
 
 
 def write_genes_coverage(centroids, coverage_path):
-
+# write_chunks_per_gene
     with OutputStream(coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
         for gene_id, gene_dict in centroids.items():
@@ -86,11 +86,19 @@ def write_genes_coverage(centroids, coverage_path):
 
 def compute_gene_coverage(packed_args):
     """ Count number of bp mapped to each pan-gene. """
+    global semaphore_for_species
+    global species_sliced_genes_path
+
+    pangenome_bamfile = species_sliced_genes_path["pangenome_bamfile"]
+
     pangenome_bamfile, gene_id, gene_length = packed_args
+    species_id, gene_id, gene_length = packed_args
+
     with AlignmentFile(pangenome_bamfile) as bamfile:
         aligned_reads = bamfile.count(gene_id)
         mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
         depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+    species_sliced_genes_path[species_id][gene_id] = (aligned_reads, mapped_reads, depth)
     return (aligned_reads, mapped_reads, depth)
 
 
@@ -98,16 +106,19 @@ def compute_median_marker_depth(centroids, species_id):
     """ Compute median marker depth to infer gene copy count """
 
     # Get the gene_id - marker_id map
-    awk_command = f"awk \'$1 == \"{species_id}\"\'"
     markers = dict()
-    with InputStream(marker_genes_mapfile(), awk_command) as stream:
+    awk_command = f"awk \'$1 == \"{species_id}\"\'"
+    marker_genes_mapfile = get_uhgg_layout()["marker_genes_mapfile"]
+    with InputStream(marker_genes_mapfile, awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-            assert marker_id not in markers, f"Interesting, marker_id {marker_id} for species {species_id} corresponds to multiple gene_ids."
+            assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
             markers[gene_id] = marker_id
 
     # Get the gene_id to centroid_gene_id map
+    # TODO This part can also be done during the database build
     gene_info = dict()
-    with InputStream(pangenome_file(species_id, "gene_info.txt.lz4")) as stream:
+    pangenome_file = get_uhgg_layout(species_id, "gene_info.txt.lz4")["pangenome_file"]
+    with InputStream(pangenome_file) as stream:
         for gene_id, centroids_gene_id in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             if gene_id in markers.keys():
                 gene_info[gene_id] = centroids_gene_id
@@ -124,10 +135,18 @@ def compute_median_marker_depth(centroids, species_id):
 
 
 def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, coverage_path):
+#compute_chunk_coverage
+    species_id, gene_id, centroids_file, pangenome_bamfile, coverage_path = packed_args
+
     """ Compute coverage of pangenome for given species_id and write results to disk """
     global global_args
     args = global_args
 
+    global sample
+    global semaphore_for_species
+    global species_sliced_genes_path
+
+    # This is where we have the cat centroids.ffn
     centroids = scan_centroids(centroids_file, species_id)
     #centroids = {k: centroids[k] for k in list(centroids)[:100]}
 
@@ -135,14 +154,17 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, cove
     args_list = []
     for gene_id in centroids.keys():
         args_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
-    results = multiprocessing_map(compute_gene_coverage, args_list, num_procs=num_physical_cores)
+    results = multiprocessing_map(compute_gene_coverage, args_list, num_physical_cores)
     print("===================end multi-processing")
 
+    # This part can be deleted, might cause overhead
+    species_sliced_genes_path[species_id][gene_id]
     for gene_index, gene_id in enumerate(centroids):
         gene = centroids.get(gene_id)
         gene["aligned_reads"] = results[gene_index][0]
         gene["mapped_reads"] = results[gene_index][1]
         gene["depth"] = results[gene_index][2]
+    # This part can be deleted, might cause overhead
 
     marker_median_depth = compute_median_marker_depth(centroids, species_id)
 
@@ -151,9 +173,10 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, cove
         for gene in centroids.values():
             gene["copies"] = gene["depth"] / marker_median_depth
     else:
-        tsprint("Caution: the marker_gene_median_depth for {species_id} is zero")
+        tsprint("Hmmmm: the marker_gene_median_depth for {species_id} is zero")
 
     # Write gene coverage to file
+    # Write when all the genes are finished... so we need Semaphore
     flag = write_genes_coverage(centroids, coverage_path)
     assert flag == "success", f"Error for write genes coverage for {species_id}"
 
@@ -170,6 +193,68 @@ def compute_species_coverage(species_id, centroids_file, pangenome_bamfile, cove
               mean_coverage, marker_median_depth, aligned_reads, mapped_reads]
 
     return values
+
+
+def process_chunk(packed_args):
+    """ Compute coverage of pangenome for given species_id and write results to disk """
+
+    global semaphore_for_species
+    global species_sliced_genes_path
+
+    if packed_args[1] == -1:
+        species_id = packed_args[0]
+        number_of_chunks = len(species_sliced_genes_path[species_id]) - 1
+        for _ in range(number_of_chunks):
+            semaphore_for_species[species_id].acquire()
+
+        # write_chunks_per_gene
+        flag = write_genes_coverage(centroids, coverage_path)
+        assert flag == "success", f"Error for write genes coverage for {species_id}"
+        return "worked"
+
+    return compute_chunk_coverage(packed_args)
+
+
+def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
+    global sample
+    global semaphore_for_species
+    global species_sliced_genes_path
+
+    semaphore_for_species = dict()
+    species_sliced_genes_path = defaultdict(la)
+
+    species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
+    arguments_list = []
+
+    for species_index, species_id in enumerate(species_ids_of_interest):
+        centroid_file = centroids_files[species_index]
+
+        gene_count = 0
+        chunk_id = 0
+        curr_centroid_dict = defaultdict()
+        with InputStream(centroid_file) as file:
+            for centroid in Bio.SeqIO.parse(file, 'fasta'):
+                print(f"{chunk_id}_{gene_id}")
+                if not (gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size):
+                    chunk_id += 1
+                    species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
+                    curr_centroid_dict = defaultdict()
+
+                curr_centroid_dict[centroid.id] = {
+                    "centroid_gene_id": centroid.id,
+                    "species_id": species_id,
+                    "length": len(centroid.seq),
+                    "depth": 0.0,
+                    "aligned_reads": 0,
+                    "mapped_reads": 0,
+                    "copies": 0.0,
+                }
+                gene_count += 1
+
+        species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
+        #arguments_list.append((pangenome_bamfile, gene_id, centroids[gene_id]["length"]))
+        #results = multiprocessing_map(compute_gene_coverage, args_list, num_physical_cores)
+    exit(0)
 
 
 def midas_run_genes(args):
@@ -222,6 +307,9 @@ def midas_run_genes(args):
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
+
+        design_chunks(species_ids_of_interest, centroids_files, 1000)
+        exit(0)
 
         # Pangenome coverage compute
         genes_summary_list = []

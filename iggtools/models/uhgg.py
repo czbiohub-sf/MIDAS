@@ -6,6 +6,14 @@ from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, dow
 from iggtools.params import inputs, outputs
 
 
+def get_uhgg_layout(species_id="", component=""):
+    return {
+        "marker_genes_mapfile": f"{outputs.marker_genes}/phyeco.map.lz4",
+        # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
+        "pangenome_file": f"{outputs.pangenomes}/{species_id}/{component}",
+
+    }
+
 class UHGG:  # pylint: disable=too-few-public-methods
 
     def __init__(self, table_of_contents_tsv=TABLE_OF_CONTENTS):
@@ -69,9 +77,6 @@ def raw_genome_file(genome_id, representative_id):
 def pangenome_file(species_id, component):
     # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
     return f"{outputs.pangenomes}/{species_id}/{component}"
-
-def marker_genes_mapfile():
-    return f"{outputs.marker_genes}/phyeco.map.lz4"
 
 def fetch_file_from_s3(packed_args):
     s3_path, local_path = packed_args
