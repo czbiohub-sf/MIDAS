@@ -328,7 +328,7 @@ def midas_run_genes(args):
         # Pangenome coverage compute
         genes_summary_list = []
         for species_index, species_id in enumerate(species_ids_of_interest):
-            coverage_path = sample.get_target_layout("genes_coverage", species_id)
+            coverage_path = sample.get_target_layout(species_id)["genes_coverage"]
             genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
 
         write_genes_summary(genes_summary_list, sample.get_target_layout("genes_summary"))
