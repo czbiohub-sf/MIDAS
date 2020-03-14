@@ -243,10 +243,10 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                     print(f"start new chunk => {chunk_id}")
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-                    with OutputStream(sample.get_target_layout(species_id, chunk_id)["genes_list"]) as stream:
+                    with OutputStream(sample.get_target_layout("genes_list", species_id, chunk_id)) as stream:
                         stream.write("\n".join(curr_list_of_genes) + "\n")
 
-                    arguments_list.append((species_id, chunk_id, sample.get_target_layout(species_id, chunk_id)["genes_list"]))
+                    arguments_list.append((species_id, chunk_id, sample.get_target_layout("genes_list", species_id, chunk_id)))
                     curr_centroid_dict = defaultdict()
                     curr_list_of_genes = []
 
@@ -328,7 +328,7 @@ def midas_run_genes(args):
         # Pangenome coverage compute
         genes_summary_list = []
         for species_index, species_id in enumerate(species_ids_of_interest):
-            coverage_path = sample.get_target_layout(species_id)["genes_coverage"]
+            coverage_path = sample.get_target_layout("genes_coverage", species_id)
             genes_summary_list.append(compute_species_coverage(species_id, centroids_files[species_index], pangenome_bamfile, coverage_path))
 
         write_genes_summary(genes_summary_list, sample.get_target_layout("genes_summary"))
