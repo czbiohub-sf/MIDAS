@@ -134,6 +134,7 @@ def compute_chunk_coverage(packed_args):
     global species_sliced_genes_path
 
     try:
+        print(packed_args)
         species_id, chunk_id, genelist_file = packed_args
         pangenome_bamfile = species_sliced_genes_path["pangenome_bamfile"]
 
