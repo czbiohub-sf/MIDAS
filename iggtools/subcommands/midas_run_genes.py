@@ -203,6 +203,7 @@ def process_chunk(packed_args):
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
 
+        # The results are saved in species_sliced_genes_path[species_id][chunk_id]
         flag = write_chunks_per_gene(centroids, coverage_path)
         assert flag == "success", f"Error for write genes coverage for {species_id}"
         return "worked"
@@ -231,10 +232,9 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         with InputStream(centroid_file) as file:
             # Todo: during database build, this should be solved ...
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-                if gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size:
-                    print(f"current chunk {chunk_id}:{gene_count}")
-                else:
-                    print(f"start new chunk => {chunk_id}")
+                if not (gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size):
+                    #print(f"current chunk {chunk_id}:{gene_count}")
+                    #print(f"start new chunk => {chunk_id}")
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
                     with OutputStream(sample.get_target_layout("genes_list", species_id, chunk_id)) as stream:
@@ -255,8 +255,9 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                 }
                 curr_list_of_genes.append(centroid.id)
                 gene_count += 1
-            arguments_list.append((species_id, chunk_id, -1))
-            species_sliced_genes_path[species_id][-1] = ("path/to/write/file")
+            # compute and merge chunks
+            #arguments_list.append((species_id, chunk_id, -1))
+            #species_sliced_genes_path[species_id][-1] = ("path/to/write/file")
 
         species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
@@ -325,9 +326,10 @@ def midas_run_genes(args):
             args_list.append((centroids_files[species_index], species_id))
         results = multiprocessing_map(compute_marker_depth_per_species, args_list, num_physical_cores)
         print(results)
-        exit(0)
+
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
-        multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
+        results = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
+        print(results)
         exit(0)
 
         # Pangenome coverage compute
