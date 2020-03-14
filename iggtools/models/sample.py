@@ -29,6 +29,7 @@ def get_single_layout(sample_name, dbtype=""):
             "species_temp_subdir":    f"{sample_name}/{dbtype}/temp/{species_id}",
 
             "contigs_pileup":         f"{sample_name}/snps/temp/{species_id}/snps_{contig_id}.tsv.lz4",
+            "genes_list":             f"{sample_name}/genes/temp/{species_id}/glist_{contig_id}.tsv",
         }
     return per_species
 

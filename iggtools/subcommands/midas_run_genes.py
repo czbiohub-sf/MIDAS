@@ -21,6 +21,7 @@ DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
+DEFAULT_CHUNK_SIZE = 2000
 
 DECIMALS = ".6f"
 
@@ -242,7 +243,10 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                     print(f"start new chunk => {chunk_id}")
                     chunk_id += 1
                     species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-                    arguments_list.append((species_id, chunk_id, tuple(curr_list_of_genes)))
+                    with OutputStream(sample.get_target_layout(species_id, chunk_id)["genes_list"]) as stream:
+                        stream.write("\n".join(curr_list_of_genes) + "\n")
+
+                    arguments_list.append((species_id, chunk_id, sample.get_target_layout(species_id, chunk_id)["genes_list"]))
                     curr_centroid_dict = defaultdict()
                     curr_list_of_genes = []
 
@@ -259,10 +263,9 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                 gene_count += 1
 
         species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-        if False:
-            semaphore_for_species[species_id] = Semaphore(chunk_id)
-            for _ in range(chunk_id):
-                semaphore_for_species[species_id].acquire()
+        semaphore_for_species[species_id] = Semaphore(chunk_id)
+        for _ in range(chunk_id):
+            semaphore_for_species[species_id].acquire()
     return arguments_list
 
 def midas_run_genes(args):
@@ -318,7 +321,7 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug)
 
         species_ids_of_interest = species_ids_of_interest[:2]
-        arguments_list = design_chunks(species_ids_of_interest, centroids_files, 5000)
+        arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
         print(arguments_list)
         exit(0)
 
@@ -375,6 +378,13 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Species profile path for the prebuild bowtie2 index")
+
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
 
     #  Alignment flags (bowtie, or postprocessing)
     subparser.add_argument('--aln_cov',
