@@ -65,7 +65,8 @@ def scan_centroids(centroid_file, species_id):
     return centroids
 
 
-def compute_marker_depth_per_species(centroid_file, species_id):
+def compute_marker_depth_per_species(packed_args):
+    centroid_file, species_id = packed_args
     """ Compute median marker depth to infer gene copy count """
     # This need to be cleaned up
     centroids = scan_centroids(centroid_file, species_id)
