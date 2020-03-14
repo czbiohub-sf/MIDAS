@@ -135,9 +135,10 @@ def compute_chunk_coverage(packed_args):
 
     try:
         print(packed_args)
+
         species_id, chunk_id, genelist_file = packed_args
         pangenome_bamfile = species_sliced_genes_path["pangenome_bamfile"]
-
+        print(pangenome_bamfile)
         gene_ids = []
         with InputStream(genelist_file) as stream:
             for line in stream:
