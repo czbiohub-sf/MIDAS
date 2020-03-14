@@ -315,6 +315,8 @@ def midas_run_genes(args):
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
+        sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
+        
         # Map reads to pan-genes bowtie2 database
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
