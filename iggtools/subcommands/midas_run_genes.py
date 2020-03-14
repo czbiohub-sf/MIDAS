@@ -325,7 +325,7 @@ def midas_run_genes(args):
             args_list.append((centroids_files[species_index], species_id))
         results = multiprocessing_map(compute_marker_depth_per_species, args_list, num_physical_cores)
         print(results)
-
+        exit(0)
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
         multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
         exit(0)
