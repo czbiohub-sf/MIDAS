@@ -263,7 +263,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
                 gene_count += 1
 
         species_sliced_genes_path[species_id][chunk_id] = curr_centroid_dict
-        semaphore_for_species[species_id] = Semaphore(chunk_id)
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
     return arguments_list
@@ -316,7 +316,7 @@ def midas_run_genes(args):
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
         sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
-        
+
         # Map reads to pan-genes bowtie2 database
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
