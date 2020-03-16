@@ -136,6 +136,7 @@ def compute_and_write_chunks_per_species(species_id):
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
         for chunk_of_genes in all_chunks.values():
             for gid, gd in chunk_of_genes.items():
+                print(gid)
                 if gid == -1: # for merge task
                     continue
                 pangenome_size += 1
@@ -201,8 +202,10 @@ def process_chunk(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_genes_path[species_id])
+        tsprint(f"================= wait {species_id}")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
+        tsprint(f"================= merge {species_id}")
         return compute_and_write_chunks_per_species(species_id)
 
     return compute_chunk_of_genes_coverage(packed_args)
@@ -227,10 +230,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
         with InputStream(centroid_file) as file:
             # This should be done during database build
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-                if chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
-                    print(f"current chunk {species_id}:{chunk_id}:{gene_count}")
-                else:
-                    print(f"start new chunk => {species_id}:{chunk_id}:{gene_count}")
+                if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     chunk_id += 1
 
                     species_sliced_genes_path[species_id][chunk_id] = curr_chunk_genes_dict
@@ -248,7 +248,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                     "copies": 0.0,
                 }
                 gene_count += 1
-
+            print(f"==================== gene_count => {gene_count}")
             species_sliced_genes_path[species_id][chunk_id] = curr_chunk_genes_dict
             gene_list_path = sample.get_target_layout("genes_list", species_id, chunk_id)
             with OutputStream(gene_list_path) as stream:
