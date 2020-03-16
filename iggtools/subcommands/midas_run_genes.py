@@ -213,6 +213,7 @@ def compute_chunk_of_genes_coverage(packed_args):
                 genes_acc[gene_id]["aligned_reads"] = bamfile.count(gene_id)
                 genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
                 genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+        print("compute_chunk_of_genes_coverage:", genes_acc)
         return "worked"
     finally:
         semaphore_for_species[species_id].release()
@@ -274,7 +275,6 @@ def design_chunks(species_ids_of_interest, chunk_size):
             "marker_genes_mapping": sample.get_target_layout("marker_genes_mapping", species_id)
         }
 
-        print(species_sliced_genes_path[species_id])
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
