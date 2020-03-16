@@ -199,7 +199,7 @@ def midas_merge_genes(args):
     for species in list_of_species:
         species.write_summary("genes", outdir)
         species_id = species.id
-        species_sliced_coverage_path[species_id]["sample"] =
+        species_sliced_coverage_path[species_id]["sample"] = None
 
         for sample in species.samples:
             midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
