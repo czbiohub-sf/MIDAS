@@ -146,6 +146,7 @@ def compute_and_write_chunks_per_species(species_id):
     # first compute the marker genes median depths
     marker_genes_depth = []
     for chunk_id, chunk_of_genes in all_chunks.items():
+        print(chunk_of_genes)
         for gene_id, gene_val in chunk_of_genes.items():
             if gene_id in c_markers:
                 marker_genes_depth.append(gene_val["depth"])
@@ -269,6 +270,8 @@ def design_chunks(species_ids_of_interest, chunk_size):
         arguments_list.append((species_id, -1))
         species_sliced_genes_path[species_id][-1] = (sample.get_target_layout("genes_coverage", species_id), sample.get_target_layout("marker_genes_mapping", species_id))
 
+        print(species_sliced_genes_path[species_id])
+        exit(0)
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
@@ -334,8 +337,6 @@ def midas_run_genes(args):
         multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
 
         arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
-        print(arguments_list)
-
         results = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
         print(results)
         exit(0)
