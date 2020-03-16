@@ -93,7 +93,7 @@ def marker_to_centroid_mapping(species_id):
         marker_to_centroid_dict[marker_id] = centroid_gene_id
         # I don't think one marker_gene should map to multiple centroids genes
         #marker_to_centroid_dict[marker_id].append(centroid_gene_id)
-    print(f"-------------------marker_to_centroid_dict{marker_to_centroid_dict}")
+
     # Write marker_to_centroid_dict to file
     with OutputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
         for k, v in marker_to_centroid_dict.items():
@@ -247,7 +247,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                     "copies": 0.0,
                 }
                 gene_count += 1
-            print(f"==================== gene_count => {gene_count}")
+
             species_sliced_genes_path[species_id][chunk_id] = curr_chunk_genes_dict
             gene_list_path = sample.get_target_layout("genes_list", species_id, chunk_id)
             with OutputStream(gene_list_path) as stream:
@@ -314,7 +314,6 @@ def midas_run_genes(args):
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-        species_ids_of_interest = species_ids_of_interest[:2]
         sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
         # Map reads to pan-genes bowtie2 database
@@ -331,7 +330,7 @@ def midas_run_genes(args):
 
         arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
         results = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
-        print(results)
+        assert all(s == "worked" for s in results)
 
     except:
         if not args.debug:
