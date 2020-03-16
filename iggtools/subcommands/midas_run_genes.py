@@ -328,7 +328,7 @@ def midas_run_genes(args):
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-        #species_ids_of_interest = species_ids_of_interest[:2]
+        species_ids_of_interest = species_ids_of_interest[:2]
         sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
         # Map reads to pan-genes bowtie2 database
