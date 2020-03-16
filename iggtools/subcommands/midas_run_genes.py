@@ -150,14 +150,14 @@ def compute_and_write_chunks_per_species(species_id):
             if gene_id in c_markers:
                 marker_genes_depth.append(gene_val["depth"])
     species_marker_depth = np.median(marker_genes_depth)
-    tsprint(f"species_marker_depth => {species_marker_depth}")
+    tsprint(f"==================species_marker_depth => {species_marker_depth}")
 
     # Write current species's gene coverage to file
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
         for chunk_id, chunk_of_genes in all_chunks.items():
             for gene_id, gene_dict in chunk_of_genes.items():
-                print(gene_dict)
+                #print(gene_dict)
                 if gene_id == -1:
                      continue
                 if gene_dict["depth"] == 0: # Sparse by default here.
@@ -213,8 +213,8 @@ def compute_chunk_of_genes_coverage(packed_args):
                 genes_acc[gene_id]["aligned_reads"] = bamfile.count(gene_id)
                 genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
                 genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
-        print("compute_chunk_of_genes_coverage:", genes_acc)
-        
+        #print("compute_chunk_of_genes_coverage:", genes_acc)
+
         return "worked"
     finally:
         semaphore_for_species[species_id].release()
