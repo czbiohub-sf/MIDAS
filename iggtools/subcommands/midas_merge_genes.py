@@ -15,55 +15,7 @@ DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35
 
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
-
-    subparser.add_argument('outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
-    subparser.add_argument('--sample_list',
-                           dest='sample_list',
-                           type=str,
-                           required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
-
-    # Species and sample filters
-    subparser.add_argument('--species_id',
-                           dest='species_id',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--genome_depth',
-                           dest='genome_depth',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
-    subparser.add_argument('--sample_counts',
-                           dest='sample_counts', #min_samples
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_SAMPLE_COUNTS,
-                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
-
-    # Presence/Absence
-    subparser.add_argument('--min_copy',
-                           dest='min_copy',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_MIN_COPY,
-                           help=f"Genes >= MIN_COPY are classified as present ({DEFAULT_MIN_COPY})")
-
-    subparser.add_argument('--cluster_pid',
-                           dest='cluster_pid',
-                           type=str,
-                           default=DEFAULT_CLUSTER_ID,
-                           choices=['75', '80', '85', '90', '95', '99'],
-                           help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
-
-    return main_func
-
+DEFAULT_CHUNK_SIZE = 5000
 
 def check_outdir(args):
     outdir = f"{args.outdir}/merged/genes"
@@ -207,17 +159,22 @@ def per_species_worker(arguments):
 
 def midas_merge_genes(args):
 
-    outdir, tempdir = check_outdir(args)
+    global pool_of_samples
+    global list_of_species
 
-    pool_of_samples = Pool(args.sample_list, "genes")
-    list_of_species = select_species(pool_of_samples, args, "genes")
+    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
+    list_of_species = select_species(pool_of_samples, "genes", args)
 
-    for sp in list_of_species:
-        print([sd.sample_name for sd in sp.samples])
-        print(sp.samples_depth)
-    exit(0)
+    # Create the output/temp (species) directory when we know what species to process
+    species_ids_of_interest = [sp.id for sp in list_of_species]
+    pool_of_samples.create_output_dir()
+    pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
+    pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
 
-    #list_of_species = select_species(args, "genes", outdir)
+
+    global global_args
+    global_args = args
+
 
     # Download gene_info for every species in the restricted species profile.
     def download_genes_info(species_id):
@@ -234,6 +191,61 @@ def midas_merge_genes(args):
         argument_list.append((species_id, genes_info_files[species_id], species_samples, args, outdir))
 
     multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
+
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
+
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
+    subparser.add_argument('--sample_list',
+                           dest='sample_list',
+                           type=str,
+                           required=True,
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    # Species and sample filters
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--genome_depth',
+                           dest='genome_depth',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_GENOME_DEPTH,
+                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
+    subparser.add_argument('--sample_counts',
+                           dest='sample_counts', #min_samples
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SAMPLE_COUNTS,
+                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+
+    # Presence/Absence
+    subparser.add_argument('--min_copy',
+                           dest='min_copy',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_MIN_COPY,
+                           help=f"Genes >= MIN_COPY are classified as present ({DEFAULT_MIN_COPY})")
+
+    subparser.add_argument('--cluster_pid',
+                           dest='cluster_pid',
+                           type=str,
+                           default=DEFAULT_CLUSTER_ID,
+                           choices=['75', '80', '85', '90', '95', '99'],
+                           help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
+
+    return main_func
 
 
 @register_args

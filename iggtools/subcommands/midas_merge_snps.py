@@ -357,11 +357,6 @@ def register_args(main_func):
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to midas_run_species.py output directories")
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
@@ -369,8 +364,12 @@ def register_args(main_func):
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
 
-
     # Species and sample filters
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
     subparser.add_argument('--genome_depth',
                            dest='genome_depth',
                            type=float,

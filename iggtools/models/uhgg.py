@@ -24,22 +24,6 @@ class UHGG:  # pylint: disable=too-few-public-methods
     def fetch_representative_genome_id(self, species_id):
         return self.representatives[species_id]
 
-    def fetch_contigs(self, species_ids, bt2_db_dir):
-        argument_list = []
-        for species_id in species_ids:
-            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
-            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}"))
-        contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return contigs_files
-
-    def fetch_centroids(self, species_ids, bt2_db_dir):
-        argument_list = []
-        for species_id in species_ids:
-            centroid_file = get_uhgg_layout(species_id, "centroids.ffn.lz4")["pangenome_file"]
-            argument_list.append((centroid_file, bt2_db_dir))
-        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return centroids_files
-
     def fetch_marker_genes(self, dbs_dir):
         target_markers_db_files = [
             f"{outputs.marker_genes}/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]
@@ -48,6 +32,30 @@ class UHGG:  # pylint: disable=too-few-public-methods
         argument_list = ((mfile, dbs_dir) for mfile in target_markers_db_files)
         markers_db_files = multithreading_map(fetch_file_from_s3, argument_list)
         return markers_db_files
+
+    def fetch_contigs(self, species_ids, bt2_db_dir):
+        argument_list = []
+        for species_id in species_ids:
+            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
+            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}"))
+        contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return contigs_files
+
+    def fetch_centroids(self, species_ids, dbs_tempdir):
+        argument_list = []
+        for species_id in species_ids:
+            centroid_file = get_uhgg_layout(species_id, "centroids.ffn.lz4")["pangenome_file"]
+            argument_list.append((centroid_file, f"{dbs_tempdir}/{species_id}"))
+        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return centroids_files
+
+    def fetch_genes_info(self, species_ids, dbs_tempdir):
+        argument_list = []
+        for species_id in species_ids:
+            genes_info_file = get_uhgg_layout(species_id, "gene_info.txt.lz4")["pangenome_file"]
+            argument_list.append((genes_info_file, f"{dbs_tempdir}/{species_id}"))
+        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return centroids_files
 
 
 def _UHGG_load(toc_tsv, deep_sort=False):

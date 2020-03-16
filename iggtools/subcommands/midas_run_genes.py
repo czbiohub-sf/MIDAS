@@ -95,7 +95,7 @@ def marker_to_centroid_mapping(species_id):
         #marker_to_centroid_dict[marker_id].append(centroid_gene_id)
 
     # Write marker_to_centroid_dict to file
-    with OutputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
+    with open(sample.get_target_layout("marker_genes_mapping", species_id), "a") as stream:
         for k, v in marker_to_centroid_dict.items():
             stream.write("\t".join([k, v]) + "\n")
 
