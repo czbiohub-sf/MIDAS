@@ -145,6 +145,7 @@ genes_info_schema = {
 
 genes_coverage_schema = {
     "gene_id": str,
+    "gene_length": int, 
     "aligned_reads": int,
     "mapped_reads": int,
     "total_depth": float,

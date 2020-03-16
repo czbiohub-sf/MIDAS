@@ -11,7 +11,6 @@ def get_uhgg_layout(species_id="", component=""):
         "marker_genes_mapfile": f"{outputs.marker_genes}/phyeco.map.lz4",
         # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
         "pangenome_file": f"{outputs.pangenomes}/{species_id}/{component}",
-
     }
 
 class UHGG:  # pylint: disable=too-few-public-methods
@@ -36,8 +35,8 @@ class UHGG:  # pylint: disable=too-few-public-methods
     def fetch_centroids(self, species_ids, bt2_db_dir):
         argument_list = []
         for species_id in species_ids:
-            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
-            argument_list.append((pangenome_file(species_id, "centroids.ffn.lz4"), f"{bt2_db_dir}/{species_id}"))
+            centroid_file = get_uhgg_layout(species_id, "centroids.ffn.lz4")["pangenome_file"]
+            argument_list.append((centroid_file, bt2_db_dir))
         centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return centroids_files
 

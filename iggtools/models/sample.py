@@ -19,6 +19,8 @@ def get_single_layout(sample_name, dbtype=""):
             "tempdir":                f"{sample_name}/{dbtype}/temp",
             "dbsdir":                 f"{sample_name}/dbs",
             "dbs_tempdir":            f"{sample_name}/dbs/temp",
+            "contig_file":            f"{sample_name}/dbs/temp/{species_id}",
+            "centroid_file":          f"{sample_name}/dbs/temp/{species_id}/centroids.ffn.lz4",
 
             "species_alignments_m8":  f"{sample_name}/{dbtype}/temp/alignments.m8",
             "snps_repgenomes_bam":    f"{sample_name}/{dbtype}/temp/repgenomes.bam",
@@ -30,6 +32,7 @@ def get_single_layout(sample_name, dbtype=""):
 
             "contigs_pileup":         f"{sample_name}/snps/temp/{species_id}/snps_{contig_id}.tsv.lz4",
             "genes_list":             f"{sample_name}/genes/temp/{species_id}/glist_{contig_id}.tsv",
+            "marker_genes_mapping":   f"{sample_name}/genes/temp/{species_id}/marker_to_centroid.tsv",
         }
     return per_species
 
