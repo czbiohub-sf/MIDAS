@@ -20,7 +20,7 @@ def get_single_layout(sample_name, dbtype=""):
             "dbsdir":                 f"{sample_name}/dbs",
             "dbs_tempdir":            f"{sample_name}/dbs/temp",
             "contig_file":            f"{sample_name}/dbs/temp/{species_id}",
-            "centroid_file":          f"{sample_name}/dbs/temp/{species_id}/centroids.ffn.lz4",
+            "centroid_file":          f"{sample_name}/dbs/temp/{species_id}/centroids.ffn",
 
             "species_alignments_m8":  f"{sample_name}/{dbtype}/temp/alignments.m8",
             "snps_repgenomes_bam":    f"{sample_name}/{dbtype}/temp/repgenomes.bam",
