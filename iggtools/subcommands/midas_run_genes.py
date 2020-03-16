@@ -97,7 +97,7 @@ def marker_to_centroid_mapping(species_id):
         marker_to_centroid_dict[marker_id] = centroid_gene_id
         # I don't think one marker_gene should map to multiple centroids genes
         #marker_to_centroid_dict[marker_id].append(centroid_gene_id)
-
+    print(f"-------------------marker_to_centroid_dict{marker_to_centroid_dict}")
     # Write marker_to_centroid_dict to file
     with OutputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
         for k, v in marker_to_centroid_dict.items():
@@ -148,6 +148,7 @@ def compute_and_write_chunks_per_species(species_id):
     for chunk_id, chunk_of_genes in all_chunks.items():
         for gene_id, gene_val in chunk_of_genes.items():
             if gene_id in c_markers:
+                print("{gene_id} is a marker_gene")
                 marker_genes_depth.append(gene_val["depth"])
     species_marker_depth = np.median(marker_genes_depth)
     tsprint(f"==================species_marker_depth => {species_marker_depth}")
