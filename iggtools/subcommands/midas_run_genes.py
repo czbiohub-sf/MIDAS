@@ -133,8 +133,8 @@ def compute_and_write_chunks_per_species(species_id):
     global species_sliced_genes_path
 
     all_chunks = species_sliced_genes_path[species_id]
-    gene_coverage_path = species_sliced_genes_path[species_id][-1][0]
-    marker_to_centroid_path = species_sliced_genes_path[species_id][-1][1]
+    gene_coverage_path = species_sliced_genes_path[species_id][-1]["genes_coverage"]
+    marker_to_centroid_path = species_sliced_genes_path[species_id][-1]["marker_genes_mapping"]
 
     marker_to_centroid = {}
     with InputStream(marker_to_centroid_path) as stream:
