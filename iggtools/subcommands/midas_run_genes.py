@@ -278,65 +278,65 @@ def midas_run_genes(args):
     global global_args
     global_args = args
 
-    try:
-        if args.bt2_db_indexes:
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
-            tsprint("Prebuild bowtie2 index and species_profile exit. Use them")
+    #try:
+    if args.bt2_db_indexes:
+        assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
+        tsprint("Prebuild bowtie2 index and species_profile exit. Use them")
 
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(args.bt2_db_indexes)
+        bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
+        bt2_db_name = os.path.basename(args.bt2_db_indexes)
 
-            species_profile = {}
-            with InputStream(args.species_profile_path) as stream:
-                for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
-                    species_profile[species_id] = coverage
+        species_profile = {}
+        with InputStream(args.species_profile_path) as stream:
+            for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
+                species_profile[species_id] = coverage
 
-            species_ids_of_interest = list(species_profile.keys())
-            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+        species_ids_of_interest = list(species_profile.keys())
+        sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
+    else:
+        bt2_db_dir = sample.get_target_layout("dbsdir")
+        bt2_db_name = "pangenomes"
+        bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+
+        if args.species_list:
+            species_profile = sample.select_species(args.genome_coverage, args.species_list)
         else:
-            bt2_db_dir = sample.get_target_layout("dbsdir")
-            bt2_db_name = "pangenomes"
-            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
+            species_profile = sample.select_species(args.genome_coverage)
 
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
+        species_ids_of_interest = list(species_profile.keys())
+        sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
-            species_ids_of_interest = list(species_profile.keys())
-            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
+        # Build one bowtie database for species in the restricted species profile
+        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        db = UHGG(local_toc)
+        centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
+        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-            # Build one bowtie database for species in the restricted species profile
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
-            centroids_files = db.fetch_centroids(species_profile.keys(), bt2_db_temp_dir)
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
-            # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-            # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
+    sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
-        sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
+    # Map reads to pan-genes bowtie2 database
+    pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
+    bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
+    samtools_index(pangenome_bamfile, args.debug)
 
-        # Map reads to pan-genes bowtie2 database
-        pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
-        bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
-        samtools_index(pangenome_bamfile, args.debug)
+    # Convert marker_genes to centroid_genes for each species
+    multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
 
-        # Convert marker_genes to centroid_genes for each species
-        multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
+    species_genes_summary_path = sample.get_target_layout("genes_summary")
+    with OutputStream(species_genes_summary_path) as stream:
+        stream.write("\t".join(genes_summary_schema.keys()) + "\n")
 
-        species_genes_summary_path = sample.get_target_layout("genes_summary")
-        with OutputStream(species_genes_summary_path) as stream:
-            stream.write("\t".join(genes_summary_schema.keys()) + "\n")
+    arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
+    results = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
+    assert all(s == "worked" for s in results)
 
-        arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
-        results = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
-        assert all(s == "worked" for s in results)
-
-    except:
-        if not args.debug:
-            tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_output_dir()
-        raise
+    #except:
+    #    if not args.debug:
+    #        tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
+    #        sample.remove_output_dir()
+    #    raise
 
 
 def register_args(main_func):

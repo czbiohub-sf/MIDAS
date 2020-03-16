@@ -18,11 +18,6 @@ DEFAULT_MIN_COPY = 0.35
 DEFAULT_CHUNK_SIZE = 5000
 
 
-def pangenome_file(species_id, component):
-    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
-    return f"{outputs.pangenomes}/{species_id}/{component}"
-
-
 def read_cluster_map(gene_info_path, pid):
     genes_map = {}
     cols = ['gene_id', 'centroid_99', f"centroid_{pid}"]
@@ -30,6 +25,19 @@ def read_cluster_map(gene_info_path, pid):
         for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
             genes_map[r['centroid_99']] = r[f"centroid_{pid}"]
     return genes_map
+
+
+def write(accumulator, sample_names, outdir, species_id):
+    species_outdir = f"{outdir}/{species_id}"
+    command(f"rm -rf {species_outdir}")
+    command(f"mkdir -p {species_outdir}")
+
+    for file_type in genes_info_schema.keys():
+        outfile = f"{species_outdir}/genes_{file_type}.tsv.lz4"
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            for gene_id, gene_vals in accumulator[file_type].items():
+                stream.write(f"{gene_id}\t" + "\t".join((str(format(val, DECIMALS)) for val in gene_vals)) + "\n")
 
 
 def build_gene_matrices(sp, min_copy):
@@ -87,7 +95,6 @@ def collect(accumulator, ps_args):
                 accumulator["copynum"][gene_id] = acc_copynum
             acc_copynum[sample_index] += r["copy_number"]
 
-
             acc_depth = accumulator["depth"].get(gene_id)
             if not acc_depth:
                 acc_depth = [0.0] * total_sample_counts
@@ -101,31 +108,24 @@ def collect(accumulator, ps_args):
             acc_reads[sample_index] += r["count_reads"]
 
 
-def write(accumulator, sample_names, outdir, species_id):
-    species_outdir = f"{outdir}/{species_id}"
-    command(f"rm -rf {species_outdir}")
-    command(f"mkdir -p {species_outdir}")
+def per_species_worker(arguments):
+#def compute_chunk_gene_coverage(arguments):
 
-    for file_type in genes_info_schema.keys():
-        outfile = f"{species_outdir}/genes_{file_type}.tsv.lz4"
-        with OutputStream(outfile) as stream:
-            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
-            for gene_id, gene_vals in accumulator[file_type].items():
-                stream.write(f"{gene_id}\t" + "\t".join((str(format(val, DECIMALS)) for val in gene_vals)) + "\n")
+    global pool_of_samples
+    global global_args
 
-
-#def per_species_worker(arguments):
-def compute_chunk_gene_coverage(arguments):
-    species_id, genes_info_path, species_samples, args, outdir = arguments
+    #species_id, genes_info_path, species_samples, args, outdir = arguments
+    species_id, species_samples, args, outdir = arguments
     sample_names = list(species_samples.keys())
 
-    genes_map_dict = read_cluster_map(genes_info_path, args.cluster_pid)
+    # Read in genes_info for each species
+    genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
+    genes_map_dict = read_cluster_map(genes_info_path, global_args.cluster_pid)
 
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
-        midas_genes_path = f"{species_samples[sample_name]}/genes/output/{species_id}.genes.lz4"
+        #midas_genes_path = f"{species_samples[sample_name]}/genes/output/{species_id}.genes.lz4"
         midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
-
         assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
 
         ps_args = (genes_map_dict, sample_index, midas_genes_path, len(species_samples))
@@ -153,6 +153,12 @@ def process_chunk_of_genes(packed_args):
     total_samples_count
     try:
         accumulator = defaultdict(dict)
+        for sample_index in range(total_samples_count):
+            # how to find Sample object by sample_index
+            midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
+
+            ps_args = (genes_map_dict, sample_index, midas_genes_path, len(species_samples))
+            collect(accumulator, ps_args)
 
 
     finally:
@@ -185,12 +191,28 @@ def midas_merge_genes(args):
     genes_info_files = db.fetch_genes_info(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
 
     # Collect copy_number, coverage and read counts across ALl the samples
+
+    global species_sliced_coverage_path
+    species_sliced_coverage_path = defaultdict(dict)
+
     argument_list = []
-    for sp in list_of_species:
-        sp.write_summary("genes", outdir)
-        species_id = sp.id
-        species_samples = {sample.id: sample.dir for sample in sp.samples}
-        argument_list.append((species_id, genes_info_files[species_id], species_samples, args, outdir))
+    for species in list_of_species:
+        species.write_summary("genes", outdir)
+        species_id = species.id
+        species_sliced_coverage_path[species_id]["sample"] =
+
+        for sample in species.samples:
+            midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
+            sample.sample_name
+
+        species_samples = {sample.id: sample.dir for sample in species.samples}
+
+        for sample_index in range(total_samples_count):
+            # how to find Sample object by sample_index
+
+
+
+        argument_list.append((species_id, species_samples, args, outdir))
 
     multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
 
