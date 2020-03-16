@@ -21,7 +21,7 @@ DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
-DEFAULT_CHUNK_SIZE = 2000
+DEFAULT_CHUNK_SIZE = 5000
 
 DECIMALS = ".6f"
 
@@ -157,6 +157,7 @@ def compute_and_write_chunks_per_species(species_id):
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
         for chunk_id, chunk_of_genes in all_chunks.items():
             for gene_id, gene_dict in chunk_of_genes.items():
+                print(gene_dict)
                 if gene_id == -1:
                      continue
                 if gene_dict["depth"] == 0: # Sparse by default here.
@@ -164,7 +165,6 @@ def compute_and_write_chunks_per_species(species_id):
                 # second infer gene copy counts
                 if species_marker_depth > 0:
                     gene_dict["copies"] = gene_dict["depth"] / species_marker_depth
-                print(gene_dict)
                 vals = [gene_id, gene_dict["length"], gene_dict["aligned_reads"], gene_dict["mapped_reads"], gene_dict["depth"], gene_dict["copies"]]
                 stream.write("\t".join(map(format_data, vals)) + "\n")
     return True
@@ -328,7 +328,7 @@ def midas_run_genes(args):
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations.
 
-        species_ids_of_interest = species_ids_of_interest[:2]
+        #species_ids_of_interest = species_ids_of_interest[:2]
         sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
         # Map reads to pan-genes bowtie2 database
