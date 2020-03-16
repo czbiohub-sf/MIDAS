@@ -207,7 +207,7 @@ def midas_merge_genes(args):
 
         species_samples = {sample.id: sample.dir for sample in species.samples}
 
-        for sample_index in range(total_samples_count):
+        #for sample_index in range(total_samples_count):
             # how to find Sample object by sample_index
 
 
