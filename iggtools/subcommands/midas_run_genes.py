@@ -137,7 +137,7 @@ def compute_and_write_chunks_per_species(species_id):
     marker_to_centroid_path = species_sliced_genes_path[species_id][-1][1]
 
     marker_to_centroid = {}
-    with OutputStream(marker_to_centroid_path) as stream:
+    with InputStream(marker_to_centroid_path) as stream:
         for line in stream:
             line = line.rstrip("\n").split("\t")
             marker_to_centroid[line[0]] = line[1]
