@@ -134,15 +134,14 @@ def compute_and_write_chunks_per_species(species_id):
     #TODO: current linear writing takes too long
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
-        for chunk_of_genes in all_chunks.values():
+        for chunk_id, chunk_of_genes in all_chunks.items():
+            if chunk_id == -1: # for merge task
+                continue
+
             for gid, gd in chunk_of_genes.items():
-                print(gid)
-                if gid == -1: # for merge task
-                    continue
                 pangenome_size += 1
                 if gd["depth"] == 0: # Sparse by default.
                     continue
-
                 num_covered_genes += 1
                 total_nz_gene_depth += gd["depth"]
                 aligned_reads += gd["aligned_reads"]
