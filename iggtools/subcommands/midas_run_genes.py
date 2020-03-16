@@ -177,10 +177,12 @@ def process_chunk(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_genes_path[species_id])
+        print(f"==========================  wait for {species_id}")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
 
         # All chunk_of_genes coverage information are saved in species_sliced_genes_path[species_id][chunk_id]
+        print(f"==========================  merge for {species_id}")
         flag = compute_and_write_chunks_per_species(species_id)
         assert flag == True, f"Error for write genes coverage for {species_id}"
         return "worked"
