@@ -54,8 +54,8 @@ class UHGG:  # pylint: disable=too-few-public-methods
         for species_id in species_ids:
             genes_info_file = get_uhgg_layout(species_id, "gene_info.txt.lz4")["pangenome_file"]
             argument_list.append((genes_info_file, f"{dbs_tempdir}/{species_id}"))
-        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return centroids_files
+        genes_info_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
+        return genes_info_files
 
 
 def _UHGG_load(toc_tsv, deep_sort=False):

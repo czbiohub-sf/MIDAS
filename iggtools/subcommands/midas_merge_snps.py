@@ -67,9 +67,12 @@ def design_chunks(list_of_species, contigs_files, chunk_size):
         species_id = species.id
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
-        total_samples_count = len(species.samples)
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
+        total_samples_count = len(species.samples)
+
+        species_sliced_pileup_path[species_id]["samples_depth"] = samples_depth
+        species_sliced_pileup_path[species_id]["samples_snps_pileup"] = samples_snps_pileup
 
         chunk_id = 0
         for contig_id, contig in contigs.items():
