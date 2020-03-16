@@ -149,7 +149,7 @@ def compute_and_write_chunks_per_species(species_id):
         for gene_id, gene_val in chunk_of_genes.items():
             if gene_id in c_markers:
                 print(f"{gene_id} is a marker_gene")
-                print(gene_val["depth"])
+                print(gene_val)
                 marker_genes_depth.append(gene_val["depth"])
     species_marker_depth = np.median(marker_genes_depth)
     tsprint(f"==================species_marker_depth => {species_marker_depth}")
