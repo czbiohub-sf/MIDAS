@@ -236,7 +236,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                 #if not (gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size):
                     #print(f"current chunk {chunk_id}:{gene_count}")
                     #print(f"start new chunk => {chunk_id}")
-                if gene_count < chunk_id*chunk_size or gene_count >= (chunk_id+1)*chunk_size):
+                if not (gene_count >= chunk_id*chunk_size and gene_count < (chunk_id+1)*chunk_size):
                     chunk_id += 1
 
                     species_sliced_genes_path[species_id][chunk_id] = curr_chunk_genes_dict
