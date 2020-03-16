@@ -128,10 +128,11 @@ genes_summary_schema = {
     "pangenome_size": int,
     "covered_genes": int,
     "fraction_covered": float,
-    "mean_coverage": float,
-    "marker_coverage": float,
+    "mean_gene_depth": float,
     "aligned_reads": int,
-    "mapped_reads": int
+    "mapped_reads": int,
+    "median_marker_depth": float,
+    "mean_marker_depth": float,
 }
 
 
@@ -145,7 +146,7 @@ genes_info_schema = {
 
 genes_coverage_schema = {
     "gene_id": str,
-    "gene_length": int, 
+    "gene_length": int,
     "aligned_reads": int,
     "mapped_reads": int,
     "total_depth": float,
