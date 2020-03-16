@@ -214,6 +214,7 @@ def compute_chunk_of_genes_coverage(packed_args):
                 genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
                 genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
         print("compute_chunk_of_genes_coverage:", genes_acc)
+        exit(0)
         return "worked"
     finally:
         semaphore_for_species[species_id].release()
