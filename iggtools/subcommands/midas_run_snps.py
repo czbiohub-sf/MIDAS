@@ -76,15 +76,14 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
     semaphore_for_species = dict()
     # The design is per species_id: list of headerless_sliced_output_path indexed by the chunk_id
     species_sliced_snps_path = defaultdict(list)
-
     species_sliced_snps_path["input_bamfile"] = sample.get_target_layout("snps_repgenomes_bam")
-    arguments_list = []
 
+    arguments_list = []
     # TODO: this part can be done in parallel
     for species_index, species_id in enumerate(species_ids_of_interest):
 
         # Read in contigs information for one species.
-        # TODO: download contigs here
+        # TODO: download contigs here. Nope. we need to build one cat-ed bowtie2 database
         contigs = scan_contigs(contigs_files[species_index], species_id)
 
         chunk_id = 0
@@ -96,6 +95,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
                 headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, chunk_id)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
+                # TODO: instead contig as the last argument, just pass the contig_seq.
                 slice_args = (species_id, chunk_id, contig_id, 0, contig_length, contig)
                 arguments_list.append(slice_args)
                 chunk_id += 1
@@ -147,9 +147,10 @@ def merge_chunks_per_species(species_id):
     return True
 
 
-def pileup_chunk(packed_args):
+def pileup_one_chunk(packed_args):
     """ actual pileup compute for one chunk """
     try:
+        # [contig_start, contig_end)
         species_id, chunk_id, contig_id, contig_start, contig_end, contig = packed_args
 
         global semaphore_for_species
@@ -169,7 +170,7 @@ def pileup_chunk(packed_args):
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
-        # aln_stats need to be passed from child process back to parents
+        # aln_stats need to be passed from child process back to parents by writing to temp files
         aln_stats = {
             "species_id": species_id,
             "contig_id": contig_id,
@@ -197,13 +198,13 @@ def pileup_chunk(packed_args):
                     aln_stats["contig_covered_bases"] += 1
                 if depth > 0 or zero_rows_allowed:
                     stream.write("\t".join(map(format_data, row)) + "\n")
-            assert within_chunk_index+contig_start == contig_end-1, f"Pileup_chunk::index mismatch error for {contig_id}."
+            assert within_chunk_index+contig_start == contig_end-1, f"pileup_one_chunk::index mismatch error for {contig_id}."
         return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock
 
 
-def process_chunk(packed_args):
+def process_chunk_of_sites(packed_args):
 
     global semaphore_for_species
     global species_sliced_snps_path
@@ -215,7 +216,7 @@ def process_chunk(packed_args):
             semaphore_for_species[species_id].acquire()
         return merge_chunks_per_species(species_id)
 
-    return pileup_chunk(packed_args)
+    return pileup_one_chunk(packed_args)
 
 
 def write_species_pileup_summary(chunks_pileup_summary, outfile):
@@ -325,7 +326,7 @@ def midas_run_snps(args):
 
         # Use mpileup to call SNPs
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        chunks_pileup_summary = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
     except:
