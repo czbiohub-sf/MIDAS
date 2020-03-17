@@ -150,7 +150,7 @@ genes_coverage_schema = {
     "aligned_reads": int,
     "mapped_reads": int,
     "total_depth": float,
-    "copy_number": float,
+    "copy_numbers": float,
 }
 
 

@@ -59,7 +59,7 @@ def collect(accumulator, my_args):
             if not acc_copynum:
                 acc_copynum = [0.0] * total_sample_counts
                 accumulator["copynum"][gene_id] = acc_copynum
-            acc_copynum[sample_index] += r["copy_number"]
+            acc_copynum[sample_index] += r["copy_numbers"]
 
             acc_depth = accumulator["depth"].get(gene_id)
             if not acc_depth:
@@ -135,7 +135,7 @@ def midas_merge_genes(args):
     for species_index, species_id in enumerate(species_ids_of_interest):
         species_sliced_coverage_path[species_id]["genes_map"] = list_of_species_genes_map[species_index]
 
-    # Collect copy_number, coverage and read counts across ALl the samples
+    # Collect copy_numbers, coverage and read counts across ALl the samples
     argument_list = []
     for species in list_of_species:
         species_id = species.id
