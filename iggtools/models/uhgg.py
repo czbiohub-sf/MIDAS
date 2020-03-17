@@ -45,8 +45,7 @@ class UHGG:  # pylint: disable=too-few-public-methods
         argument_list = []
         for species_id in species_ids:
             centroid_file = get_uhgg_layout(species_id, "centroids.ffn.lz4")["pangenome_file"]
-            print(centroid_file)
-            argument_list.append((centroid_file, f"{dbs_tempdir}/{species_id}"))
+            argument_list.append((centroid_file, f"{dbs_tempdir}/{species_id}.lz4"))
         centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
         return centroids_files
 
