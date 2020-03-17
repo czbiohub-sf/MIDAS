@@ -355,12 +355,14 @@ def midas_run_genes(args):
 
     # Convert marker_genes to centroid_genes for each species
     multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
+    print(f"-------------------- start design_chunks")
 
     species_genes_summary_path = sample.get_target_layout("genes_summary")
     with OutputStream(species_genes_summary_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
 
     arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
+    print(f"-------------------- start process chunks")
     chunks_gene_coverage = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
     print(chunks_gene_coverage)
     exit(0)
