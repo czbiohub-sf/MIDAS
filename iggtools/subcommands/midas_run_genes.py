@@ -213,28 +213,28 @@ def compute_chunk_of_genes_coverage(packed_args):
     global semaphore_for_species
     global species_sliced_genes_path
 
-    try:
-        species_id, chunk_id, genelist_file = packed_args
-        pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
-        centroid99_marker = species_sliced_genes_path[species_id]["marker_genes"]
+    #try:
+    species_id, chunk_id, genelist_file = packed_args
+    pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
+    centroid99_marker = species_sliced_genes_path[species_id]["marker_genes"]
 
-        with InputStream(genelist_file) as stream:
-            for line in stream:
-                chunk_of_gene_ids = line.rstrip().split("\t")
+    with InputStream(genelist_file) as stream:
+        for line in stream:
+            chunk_of_gene_ids = line.rstrip().split("\t")
 
-        genes_acc = species_sliced_genes_path[species_id][chunk_id]
-        with AlignmentFile(pangenome_bamfile) as bamfile:
-            for gene_id in sorted(chunk_of_gene_ids):
-                gene_length = genes_acc[gene_id]["length"]
-                genes_acc[gene_id]["aligned_reads"] = bamfile.count(gene_id)
-                genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
-                genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
-                if gene_id in centroid99_marker:
-                    genes_acc[gene_id]["marker_depth"].append(genes_acc[gene_id]["depth"])
-        print(genes_acc[gene_id]["marker_depth"])
-        return "worked"
-    finally:
-        semaphore_for_species[species_id].release()
+    genes_acc = species_sliced_genes_path[species_id][chunk_id]
+    with AlignmentFile(pangenome_bamfile) as bamfile:
+        for gene_id in sorted(chunk_of_gene_ids):
+            gene_length = genes_acc[gene_id]["length"]
+            genes_acc[gene_id]["aligned_reads"] = bamfile.count(gene_id)
+            genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
+            genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+            if gene_id in centroid99_marker:
+                genes_acc[gene_id]["marker_depth"].append(genes_acc[gene_id]["depth"])
+    print(genes_acc[gene_id]["marker_depth"])
+    return "worked"
+    #finally:
+    #    semaphore_for_species[species_id].release()
 
 
 def process_chunk(packed_args):
