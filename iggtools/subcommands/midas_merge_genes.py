@@ -91,7 +91,7 @@ def per_species_worker(species_id):
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
-        my_args = (species_id, sample_index, midas_genes_path, genes_map_dict, len(species_samples))
+        my_args = (species_id, sample_index, midas_genes_path, len(species_samples))
         collect(accumulator, my_args)
 
     for gene_id, copynum in accumulator["copynum"].items():
