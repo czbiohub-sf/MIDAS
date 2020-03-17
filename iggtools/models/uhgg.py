@@ -8,6 +8,7 @@ from iggtools.params import inputs, outputs
 
 def get_uhgg_layout(species_id="", component=""):
     return {
+        "marker_genes_fasta": f"{outputs.marker_genes}/phyeco.fa.lz4",
         "marker_genes_mapfile": f"{outputs.marker_genes}/phyeco.map.lz4",
         # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
         "pangenome_file": f"{outputs.pangenomes}/{species_id}/{component}",

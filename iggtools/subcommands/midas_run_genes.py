@@ -23,8 +23,6 @@ DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
 DEFAULT_CHUNK_SIZE = 5000
 
-DECIMALS = ".6f"
-
 
 def keep_read(aln):
     global global_args
@@ -66,7 +64,8 @@ def scan_centroids(centroid_file, species_id):
 
 
 def marker_to_centroid_mapping(species_id):
-    """ Build mapping between marker_genes and centroid_genes """
+    """ Identify which cluster the marker_genes belong to """
+    # TODO: rebuild the marker genes database and skip this part: find marker genes from the centroid_99 genes
     global sample
 
     # Get the gene_id - marker_id map
@@ -132,6 +131,7 @@ def compute_and_write_chunks_per_species(species_id):
     total_nz_gene_depth = 0
     # Write current species's gene coverage to file
     #TODO: current linear writing takes too long
+    print(f"========================= START long time write to {gene_coverage_path}")
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
         for chunk_id, chunk_of_genes in all_chunks.items():
@@ -150,7 +150,7 @@ def compute_and_write_chunks_per_species(species_id):
                 # second infer gene copy counts
                 if median_marker_depth > 0:
                     gd["copies"] = gd["depth"] / median_marker_depth
-                
+
                 vals = [gid, gd["length"], gd["aligned_reads"], gd["mapped_reads"], gd["depth"], gd["copies"]]
                 stream.write("\t".join(map(format_data, vals)) + "\n")
 
@@ -274,8 +274,6 @@ def midas_run_genes(args):
     sample = Sample(args.sample_name, args.midas_outdir, "genes")
     sample.create_output_dir(args.debug)
 
-    global global_sample
-    global_sample = sample
     global global_args
     global_args = args
 
@@ -314,6 +312,7 @@ def midas_run_genes(args):
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
+
     sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
     # Map reads to pan-genes bowtie2 database
