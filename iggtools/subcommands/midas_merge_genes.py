@@ -52,7 +52,7 @@ def collect(accumulator, my_args):
     genes_map_dict = species_sliced_coverage_path[species_id]["genes_map"]
 
     with InputStream(midas_genes_dir) as stream:
-        for r in select_from_tsv(stream, selected_columns=genes_info_schema, result_structure=dict):
+        for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
             gene_id = genes_map_dict[r["gene_id"]]
 
             acc_copynum = accumulator["copynum"].get(gene_id)
