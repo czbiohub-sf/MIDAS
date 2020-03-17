@@ -107,7 +107,7 @@ def write_one_chunk(packed_args):
     all_chunks = species_sliced_genes_path[species_id][chunk_id]
     chunk_of_genes = all_chunks[chunk_id]
 
-    headerless_gene_coverage_path = id-ed by (species_id, chunk_id)
+    #headerless_gene_coverage_path = id-ed by (species_id, chunk_id)
     gene_coverage_path = species_sliced_genes_path[species_id][-1]["genes_coverage"]
     marker_to_centroid_path = species_sliced_genes_path[species_id][-1]["marker_genes_mapping"]
 
