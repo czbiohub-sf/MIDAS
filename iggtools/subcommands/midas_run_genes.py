@@ -131,7 +131,6 @@ def design_chunks(species_ids_of_interest, chunk_size):
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the genne_length
-                    species_sliced_genes_path[species_id][chunk_id]["genes_dict"] = curr_chunk_genes_dict
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
                     arguments_list.append((species_id, chunk_id))
                     species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
@@ -143,7 +142,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                 curr_chunk_genes_dict[centroid.id] = len(centroid.seq)
                 gene_count += 1
 
-            species_sliced_genes_path[species_id][chunk_id]["genes_dict"] = curr_chunk_genes_dict
+            species_sliced_genes_path[species_id][chunk_id] = curr_chunk_genes_dict
             headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
             arguments_list.append((species_id, chunk_id))
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
