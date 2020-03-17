@@ -166,7 +166,7 @@ def fetch_schema_by_dbtype(dbtype):
     if dbtype == "snps":
         schema = snps_profile_schema
     if dbtype == "genes":
-        schema = genes_profile_schema
+        schema = genes_coverage_schema
     return schema
 
 def format_data(x):
