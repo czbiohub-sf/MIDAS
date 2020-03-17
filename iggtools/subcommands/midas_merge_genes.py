@@ -131,7 +131,7 @@ def midas_merge_genes(args):
         genes_info_path = genes_info_files[species_index]
         args_list.append((genes_info_path, args.cluster_pid))
     list_of_species_genes_map = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
-    print(list_of_species_genes_map)
+
     for species_index, species_id in enumerate(species_ids_of_interest):
         species_sliced_coverage_path[species_id]["genes_map"] = list_of_species_genes_map[species_index]
 
@@ -153,7 +153,7 @@ def midas_merge_genes(args):
 
         argument_list.append(species_id)
 
-    multithreading_map(per_species_worker, argument_list, num_threads=num_physical_cores)
+    multiprocessing_map(per_species_worker, argument_list, num_threads=num_physical_cores)
 
 
 def register_args(main_func):
