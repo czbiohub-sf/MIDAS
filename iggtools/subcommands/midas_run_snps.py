@@ -170,7 +170,7 @@ def pileup_one_chunk(packed_args):
             aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
             mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
-        # aln_stats need to be passed from child process back to parents by writing to temp files
+        # aln_stats need to be passed from child process back to parents
         aln_stats = {
             "species_id": species_id,
             "contig_id": contig_id,
@@ -221,8 +221,10 @@ def process_chunk_of_sites(packed_args):
 
 def write_species_pileup_summary(chunks_pileup_summary, outfile):
     """ Collect species pileup aln stats from all chunks and write to file """
+
     species_pileup_summary = defaultdict(dict)
     prev_species_id = None
+
     for record in chunks_pileup_summary:
         if record is True:
             continue
@@ -258,7 +260,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
             prev_species_id = species_id
 
     if curr_species_pileup["genome_length"] > 0:
-        curr_species_pileup["fraction_covered"] = curr_species_pileup["covered_bases"] / curr_species_pileup["covered_bases"]
+        curr_species_pileup["fraction_covered"] = curr_species_pileup["covered_bases"] / curr_species_pileup["genome_length"]
     if curr_species_pileup["covered_bases"] > 0:
         curr_species_pileup["mean_coverage"] = curr_species_pileup["total_depth"] / curr_species_pileup["covered_bases"]
 
