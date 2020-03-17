@@ -111,7 +111,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
     global species_sliced_genes_path
 
     semaphore_for_species = dict()
-    species_sliced_genes_path = defaultdict(dict)
+    species_sliced_genes_path = defaultdict(list)
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
 
     arguments_list = []
