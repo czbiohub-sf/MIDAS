@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
+from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.sample import Sample
 
@@ -111,15 +111,15 @@ class Species:
     def fetch_samples_depth(self):
         return [sample.profile[self.id]["mean_coverage"] for sample in self.samples]
 
-    def write_summary(self, dbtype, outdir):
+    def write_summary(self, dbtype, summary_dir):
         """ Write snps/genes summary files for current samples pool """
-        summary_dir = f"{outdir}/{self.id}/{dbtype}_summary.tsv"
+        #summary_dir = f"{outdir}/{self.id}/{dbtype}_summary.tsv"
         with OutputStream(summary_dir) as stream:
             header = ["species_id", "sample_name"] + list(fetch_schema_by_dbtype(dbtype).keys())[1:]
             stream.write("\t".join(header) + "\n")
             for sample in self.samples:
                 record = [self.id, sample.sample_name] + list(sample.profile[self.id].values())[1:]
-                stream.write("\t".join(map(str, record)) + "\n")
+                stream.write("\t".join(map(format_data, record)) + "\n")
 
     def fetch_samples_name(self):
         list_of_sample_objects = list(self.samples)
