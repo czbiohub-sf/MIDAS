@@ -1,13 +1,13 @@
 import json
-import os
 from collections import defaultdict
 
 from iggtools.models.pool import Pool, select_species
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multithreading_hashmap, multithreading_map, num_physical_cores, download_reference
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
 from iggtools.params import outputs
-from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, DECIMALS
+from iggtools.models.uhgg import UHGG
+from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data
 
 
 DEFAULT_GENOME_DEPTH = 1.0
@@ -46,10 +46,13 @@ def write_per_species(accumulator, species_id):
 
 def collect(accumulator, my_args):
 
-    sample_index, midas_genes_dir, genes_map_dict, total_sample_counts = my_args
+    species_id, sample_index, midas_genes_dir, total_sample_counts = my_args
+
+    global species_sliced_coverage_path
+    genes_map_dict = species_sliced_coverage_path[species_id]["genes_map"]
 
     with InputStream(midas_genes_dir) as stream:
-        for r in select_from_tsv(stream, selected_columns=genes_schema, result_structure=dict):
+        for r in select_from_tsv(stream, selected_columns=genes_info_schema, result_structure=dict):
             gene_id = genes_map_dict[r["gene_id"]]
 
             acc_copynum = accumulator["copynum"].get(gene_id)
@@ -78,16 +81,17 @@ def per_species_worker(species_id):
     global species_sliced_coverage_path
 
     # Read in genes_info for each species
-    genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
-    genes_map_dict = read_cluster_map(genes_info_path, global_args.cluster_pid)
+    #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
+    #genes_map_dict = read_cluster_map(genes_info_path, global_args.cluster_pid)
 
+    genes_map_dict = species_sliced_coverage_path[species_id]["genes_map"]
     species_samples = species_sliced_coverage_path[species_id]["species_samples"]
     sample_names = list(species_samples.keys())
 
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
-        my_args = (sample_index, midas_genes_dir, genes_map_dict, len(species_samples))
+        my_args = (species_id, sample_index, midas_genes_path, genes_map_dict, len(species_samples))
         collect(accumulator, my_args)
 
     for gene_id, copynum in accumulator["copynum"].items():
@@ -99,7 +103,6 @@ def per_species_worker(species_id):
 def midas_merge_genes(args):
 
     global pool_of_samples
-    global list_of_species
 
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
     list_of_species = select_species(pool_of_samples, "genes", args)
@@ -123,12 +126,13 @@ def midas_merge_genes(args):
     genes_info_files = db.fetch_genes_info(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
 
     args_list = []
-    for species_id in species_ids_of_interest:
-        genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
+    for species_index, species_id in enumerate(species_ids_of_interest):
+        #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
+        genes_info_path = genes_info_files[species_index]
         args_list.append((genes_info_path, args.cluster_pid))
     list_of_species_genes_map = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
     print(list_of_species_genes_map)
-    for species_index in range(len(list_of_species_genes_map)):
+    for species_index, species_id in enumerate(species_ids_of_interest):
         species_sliced_coverage_path[species_id]["genes_map"] = list_of_species_genes_map[species_index]
 
     # Collect copy_number, coverage and read counts across ALl the samples
@@ -141,6 +145,7 @@ def midas_merge_genes(args):
 
         species_samples = dict()
         for sample in species.samples:
+            sample_name = sample.sample_name
             midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
             assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
             species_samples[sample.sample_name] = midas_genes_path
@@ -157,8 +162,8 @@ def register_args(main_func):
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Subdirectory will be created for each species.""")
-    subparser.add_argument('--sample_list',
-                           dest='sample_list',
+    subparser.add_argument('--samples_list',
+                           dest='samples_list',
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to midas_run_species.py output directories")

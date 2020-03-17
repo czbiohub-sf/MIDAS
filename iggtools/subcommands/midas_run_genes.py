@@ -160,7 +160,7 @@ def compute_and_write_chunks_per_species(species_id):
     species_vals = [species_id, pangenome_size, num_covered_genes, fraction_covered, \
                     mean_gene_depth, aligned_reads, mapped_reads, \
                     median_marker_depth, mean_marker_depth]
-    with OutputStream(species_genes_summary_path) as stream:
+    with open(species_genes_summary_path, "a") as stream:
         stream.write("\t".join(map(format_data, species_vals)) + "\n")
 
     return "worked"
