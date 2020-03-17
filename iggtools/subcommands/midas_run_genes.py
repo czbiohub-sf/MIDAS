@@ -150,6 +150,7 @@ def compute_and_write_chunks_per_species(species_id):
                 # second infer gene copy counts
                 if median_marker_depth > 0:
                     gd["copies"] = gd["depth"] / median_marker_depth
+                
                 vals = [gid, gd["length"], gd["aligned_reads"], gd["mapped_reads"], gd["depth"], gd["copies"]]
                 stream.write("\t".join(map(format_data, vals)) + "\n")
 

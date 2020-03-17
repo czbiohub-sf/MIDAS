@@ -65,13 +65,13 @@ def collect(accumulator, my_args):
             if not acc_depth:
                 acc_depth = [0.0] * total_sample_counts
                 accumulator["depth"][gene_id] = acc_depth
-            acc_depth[sample_index] += r["coverage"]
+            acc_depth[sample_index] += r["total_depth"]
 
             acc_reads = accumulator["reads"].get(gene_id)
             if not acc_reads:
                 acc_reads = [0.0] * total_sample_counts
                 accumulator["reads"][gene_id] = acc_reads
-            acc_reads[sample_index] += r["count_reads"]
+            acc_reads[sample_index] += r["mapped_reads"]
 
 
 def per_species_worker(species_id):
