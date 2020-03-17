@@ -8,7 +8,7 @@ import Bio.SeqIO
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, download_reference, num_physical_cores
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, multithreading_map, download_reference, num_physical_cores
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
 from iggtools.models.uhgg import UHGG, get_uhgg_layout
@@ -99,6 +99,44 @@ def marker_to_centroid_mapping(species_id):
             stream.write("\t".join([k, v]) + "\n")
 
 
+def write_one_chunk(packed_args):
+    species_id, chunk_id, median_marker_depth = packed_args
+
+    global species_sliced_genes_path
+
+    all_chunks = species_sliced_genes_path[species_id][chunk_id]
+    chunk_of_genes = all_chunks[chunk_id]
+
+    headerless_gene_coverage_path = id-ed by (species_id, chunk_id)
+    gene_coverage_path = species_sliced_genes_path[species_id][-1]["genes_coverage"]
+    marker_to_centroid_path = species_sliced_genes_path[species_id][-1]["marker_genes_mapping"]
+
+    aligned_reads = 0
+    mapped_reads = 0
+    pangenome_size = 0
+    num_covered_genes = 0
+    total_nz_gene_depth = 0
+
+    with OutputStream(headerless_gene_coverage_path) as stream:
+        for gid, gd in chunk_of_genes.items():
+            pangenome_size += 1
+            if gd["depth"] == 0: # Sparse by default.
+                continue
+            num_covered_genes += 1
+            total_nz_gene_depth += gd["depth"]
+            aligned_reads += gd["aligned_reads"]
+            mapped_reads += gd["mapped_reads"]
+
+            # second infer gene copy counts
+            if median_marker_depth > 0:
+                gd["copies"] = gd["depth"] / median_marker_depth
+
+            vals = [gid, gd["length"], gd["aligned_reads"], gd["mapped_reads"], gd["depth"], gd["copies"]]
+            stream.write("\t".join(map(format_data, vals)) + "\n")
+
+    return (pangenome_size, aligned_reads, mapped_reads, num_covered_genes, total_nz_gene_depth)
+
+
 def compute_and_write_chunks_per_species(species_id):
     """ Compute coverage of pangenome for given species_id and write results to disk """
 
@@ -122,6 +160,8 @@ def compute_and_write_chunks_per_species(species_id):
                 marker_genes_depth.append(gd["depth"])
     mean_marker_depth = np.mean(marker_genes_depth)
     median_marker_depth = np.median(marker_genes_depth)
+    # TODO: all we need to know is the list_centroids that are marker genes. then we can accumulate the marker_gene_depth over the time
+    # across species_id, genes_id. then we can simply
 
     # Collect species-level data
     aligned_reads = 0
@@ -130,10 +170,10 @@ def compute_and_write_chunks_per_species(species_id):
     num_covered_genes = 0
     total_nz_gene_depth = 0
     # Write current species's gene coverage to file
-    #TODO: current linear writing takes too long
     print(f"========================= START long time write to {gene_coverage_path}")
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
+    # multi
         for chunk_id, chunk_of_genes in all_chunks.items():
             if chunk_id == -1: # for merge task
                 continue
@@ -176,6 +216,7 @@ def compute_chunk_of_genes_coverage(packed_args):
     try:
         species_id, chunk_id, genelist_file = packed_args
         pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
+        centroid99_marker = species_sliced_genes_path[species_id]["marker_genes"]
 
         with InputStream(genelist_file) as stream:
             for line in stream:
@@ -188,6 +229,9 @@ def compute_chunk_of_genes_coverage(packed_args):
                 genes_acc[gene_id]["aligned_reads"] = bamfile.count(gene_id)
                 genes_acc[gene_id]["mapped_reads"] = bamfile.count(gene_id, read_callback=keep_read)
                 genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+                if gene_id in centroid99_marker:
+                    genes_acc[gene_id]["marker_depth"].append(genes_acc[gene_id]["depth"])
+
         return "worked"
     finally:
         semaphore_for_species[species_id].release()
@@ -257,9 +301,13 @@ def design_chunks(species_ids_of_interest, chunk_size):
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
+        with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
+            marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
+        c_markers = list(marker_to_centroid.values()) #<= all we care is the list of centroid genes corresponds to marker genes
+
         species_sliced_genes_path[species_id][-1] = {
             "genes_coverage": sample.get_target_layout("genes_coverage", species_id),
-            "marker_genes_mapping": sample.get_target_layout("marker_genes_mapping", species_id)
+            "marker_genes": c_markers
         }
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
