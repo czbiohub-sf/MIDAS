@@ -153,7 +153,7 @@ def midas_merge_genes(args):
 
         argument_list.append(species_id)
 
-    multiprocessing_map(per_species_worker, argument_list, num_threads=num_physical_cores)
+    multiprocessing_map(per_species_worker, argument_list, num_physical_cores)
 
 
 def register_args(main_func):
