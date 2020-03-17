@@ -92,6 +92,7 @@ def marker_to_centroid_mapping(species_id):
             if gene_id in markers.keys():
                 gene_info[gene_id] = centroids_gene_id
 
+    print("================= convert")
     marker_to_centroid_dict = dict()
     for gene_id, marker_id in markers.items():
         centroid_gene_id = gene_info[gene_id]
