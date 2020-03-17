@@ -231,7 +231,7 @@ def compute_chunk_of_genes_coverage(packed_args):
                 genes_acc[gene_id]["depth"] = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
                 if gene_id in centroid99_marker:
                     genes_acc[gene_id]["marker_depth"].append(genes_acc[gene_id]["depth"])
-
+        print(genes_acc[gene_id]["marker_depth"])
         return "worked"
     finally:
         semaphore_for_species[species_id].release()
