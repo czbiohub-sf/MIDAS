@@ -6,12 +6,11 @@ from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference
-from iggtools.models.uhgg import UHGG
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference
+from iggtools.models.uhgg import UHGG, get_uhgg_layout
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_prevalence_schema, format_data
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
 from iggtools.params.inputs import marker_genes_hmm_cutoffs
-from iggtools.params.outputs import marker_genes
 from iggtools.params import outputs
 
 DEFAULT_WORD_SIZE = 28
@@ -19,47 +18,6 @@ DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
 
 DECIMALS = ".6f"
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
-    subparser.add_argument('-1',
-                           dest='r1',
-                           required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-
-    subparser.add_argument('--word_size',
-                           dest='word_size',
-                           default=DEFAULT_WORD_SIZE,
-                           type=int,
-                           metavar="INT",
-                           help=f"Word size for BLAST search ({DEFAULT_WORD_SIZE}).  Use word sizes > 16 for greatest efficiency.")
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    return main_func
 
 
 def readfq(fp):
@@ -139,8 +97,9 @@ def query_coverage(aln):
     return aln['aln'] / qlen
 
 
-def find_best_hits(args, marker_info, m8_file, marker_cutoffs):
+def find_best_hits(marker_info, m8_file, marker_cutoffs, args):
     """ Find top scoring alignment for each read """
+
     best_hits = {}
     i = 0
     with InputStream(m8_file) as m8_stream:
@@ -251,19 +210,19 @@ def midas_run_species(args):
 
     local_toc = download_reference(outputs.genomes, sample.dbsdir)
     db = UHGG(local_toc)
-    markers_db_files = db.fetch_marker_genes(sample.dbsdir)
+    db.fetch_marker_genes(sample.dbsdir)
 
     # Align reads to marker-genes database
     m8_file = sample.get_target_layout("species_alignments_m8")
-    map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+    map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, get_uhgg_layout()["marker_genes_fasta"], args.max_reads)
 
     with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
     # Classify reads
     species_info = db.species
-    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
-    best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
+    marker_info = read_marker_info_repgenomes(get_uhgg_layout()["marker_genes_mapfile"])
+    best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
     unique_alns = assign_unique(best_hits, species_info, marker_info)
     species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
 
@@ -272,6 +231,48 @@ def midas_run_species(args):
     species_abundance = normalize_counts(species_alns, total_gene_length)
 
     write_abundance(sample.get_target_layout("species_profile"), species_abundance)
+
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+    subparser.add_argument('-1',
+                           dest='r1',
+                           required=True,
+                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
+    subparser.add_argument('-2',
+                           dest='r2',
+                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
+    subparser.add_argument('--word_size',
+                           dest='word_size',
+                           default=DEFAULT_WORD_SIZE,
+                           type=int,
+                           metavar="INT",
+                           help=f"Word size for BLAST search ({DEFAULT_WORD_SIZE}).  Use word sizes > 16 for greatest efficiency.")
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
+    return main_func
 
 
 @register_args
