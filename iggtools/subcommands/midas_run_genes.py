@@ -123,7 +123,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
             marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
         c_markers = list(marker_to_centroid.values()) #<= all we care is the list of centroid genes corresponds to marker genes
-        species_sliced_genes_path["marker_genes"][species_id] = dict(zip(c_markers, [0.0]*len(c_markers)))
+        species_sliced_genes_path["marker_genes"][species_index] = dict(zip(c_markers, [0.0]*len(c_markers)))
 
         gene_count = 0
         chunk_id = 0
@@ -148,7 +148,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
             headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
             arguments_list.append((species_id, chunk_id))
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
-            species_sliced_genes_path["gene_length"][species_id][chunk_id] = curr_chunk_genes_dict
+            species_sliced_genes_path["gene_length"][species_index].append(curr_chunk_genes_dict)
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
