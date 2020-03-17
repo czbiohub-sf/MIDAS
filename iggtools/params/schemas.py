@@ -131,8 +131,7 @@ genes_summary_schema = {
     "mean_coverage": float,
     "aligned_reads": int,
     "mapped_reads": int,
-    "median_marker_depth": float,
-    "mean_marker_depth": float,
+    "median_marker_depth": float
 }
 
 
@@ -150,7 +149,7 @@ genes_coverage_schema = {
     "aligned_reads": int,
     "mapped_reads": int,
     "total_depth": float,
-    "copy_numbers": float,
+    "copy_number": float,
 }
 
 

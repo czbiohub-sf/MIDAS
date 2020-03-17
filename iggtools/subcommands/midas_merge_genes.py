@@ -59,7 +59,7 @@ def collect(accumulator, my_args):
             if not acc_copynum:
                 acc_copynum = [0.0] * total_sample_counts
                 accumulator["copynum"][gene_id] = acc_copynum
-            acc_copynum[sample_index] += r["copy_numbers"]
+            acc_copynum[sample_index] += r["copy_number"]
 
             acc_depth = accumulator["depth"].get(gene_id)
             if not acc_depth:
