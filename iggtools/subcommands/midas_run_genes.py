@@ -117,6 +117,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
 
     arguments_list = []
     for species_id in species_ids_of_interest:
+        species_index = species_ids_of_interest.index(species_id)
         centroid_file = sample.get_target_layout("centroid_file", species_id)
 
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
@@ -135,7 +136,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
                     arguments_list.append((species_id, chunk_id))
                     species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
-                    species_sliced_genes_path["gene_length"][species_id][chunk_id] = curr_chunk_genes_dict
+                    species_sliced_genes_path["gene_length"][species_index].append(curr_chunk_genes_dict)
 
                     chunk_id += 1
                     curr_chunk_genes_dict = defaultdict()
