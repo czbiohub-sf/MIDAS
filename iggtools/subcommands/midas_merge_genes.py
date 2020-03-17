@@ -34,7 +34,7 @@ def write_per_species(accumulator, species_id):
     global species_sliced_coverage_path
     global pool_of_samples
 
-    sample_names = species_sliced_coverage_path[species_id]["species_samples"].keys()
+    sample_names = list(species_sliced_coverage_path[species_id]["species_samples"].keys())
 
     for file_type in genes_info_schema.keys():
         outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
