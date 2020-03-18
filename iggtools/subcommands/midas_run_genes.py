@@ -147,13 +147,13 @@ def design_chunks(species_ids_of_interest, chunk_size):
                 curr_chunk_genes_dict[centroid.id] = len(centroid.seq)
                 gene_count += 1
 
-            print(f"arguments_list {arguments_list} chunk_id {chunk_id}")
-            print(species_sliced_genes_path[species_id])
-            chunk_id += 1
             headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
             arguments_list.append((species_id, chunk_id))
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
             species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
+            chunk_id += 1
+            print(f"arguments_list {arguments_list} chunk_id {chunk_id}")
+            print(species_sliced_genes_path[species_id])
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
