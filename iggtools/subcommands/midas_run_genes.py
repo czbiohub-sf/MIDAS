@@ -281,13 +281,15 @@ def merge_chunks_per_species(species_id):
     global global_args
     global species_marker_genes
 
+
     all_chunks = species_sliced_genes_path[species_id][:-1]
     gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
     marker_genes_depth = species_marker_genes[species_id]
-    median_marker_depth = np.median(list(marker_genes_depth.keys()))
+    median_marker_depth = np.median(list(marker_genes_depth.values()))
 
     print(f"median_marker_depth => {median_marker_depth}")
+    return "skip"
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
         args = []
