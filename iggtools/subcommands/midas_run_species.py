@@ -230,7 +230,7 @@ def midas_run_species(args):
     total_gene_length = sum_marker_gene_lengths(marker_info)
     species_abundance = normalize_counts(species_alns, total_gene_length)
 
-    write_abundance(sample.get_target_layout("species_profile"), species_abundance)
+    write_abundance(sample.get_target_layout("species_summary"), species_abundance)
 
 
 def register_args(main_func):

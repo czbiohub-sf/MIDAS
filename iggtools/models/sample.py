@@ -9,7 +9,7 @@ from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, co
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", contig_id=""):
         return {
-            "species_profile":        f"{sample_name}/species/species_profile.tsv",
+            "species_summary":        f"{sample_name}/species/species_profile.tsv",
             "snps_pileup":            f"{sample_name}/snps/output/{species_id}.snps.tsv.lz4",
             "snps_summary":           f"{sample_name}/snps/output/summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/output/{species_id}.genes.tsv.lz4",
@@ -82,14 +82,9 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"mkdir -p {species_subdir}")
 
 
-    def load_species_profile(self): # I think this is not used anywhere anymore
-        species_profile_path = self.get_target_layout("species_profile")
-        assert os.path.exists(species_profile_path), f"Sample::load_species_profile:: missing species profile {species_profile_path} for {self.sample_name}"
-
-
     def load_profile_by_dbtype(self, dbtype):
         summary_path = self.get_target_layout(f"{dbtype}_summary")
-        assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing summary {summary_path} for {self.sample_name}"
+        assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing {summary_path} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
         profile = {}

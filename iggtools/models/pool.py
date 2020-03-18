@@ -84,7 +84,7 @@ class Pool: # pylint: disable=too-few-public-methods
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
-                # Save per-sample profile summary into memory for easy access
+                # load profile_summary into memory for easy access
                 sample.load_profile_by_dbtype(dbtype)
                 samples.append(sample)
         return samples
@@ -96,9 +96,6 @@ class Pool: # pylint: disable=too-few-public-methods
     def fetch_merged_species_output_files(self):
         cols_to_write = list(species_profile_schema.keys())[1:]
         return {col: f"{self.outdir}/{col}.tsv" for col in cols_to_write}
-
-    def fetch_species_prevalence_path(self):
-        return f"{self.outdir}/species_prevalence.tsv"
 
 
 class Species:

@@ -14,13 +14,12 @@ from iggtools.params import outputs
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
 
-def transpose(columns):
+def transpose(list_of_samples, columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
-    global pool_of_samples
     transposed = defaultdict(dict)
-    total_samples_count = len(pool_of_samples.samples)
+    total_samples_count = len(list_of_samples.samples)
 
-    for sample_index, sample in enumerate(pool_of_samples.samples):
+    for sample_index, sample in enumerate(list_of_samples):
         for species_id, species_record in sample.profile.items():
             for col in columns:
                 acc = transposed[col].get(species_id)
@@ -73,7 +72,7 @@ def write_results(transposed, stats, sort_by="median_coverage"):
                     outfile.write("\t".join(map(format_data, values)) + "\n")
 
     # Sort species in stats by descending relative abundance
-    with OutputStream(pool_of_samples.fetch_species_prevalence_path()) as ostream:
+    with OutputStream(pool_of_samples.get_target_layout("species_prevalence")) as ostream:
         ostream.write("\t".join(list(species_prevalence_schema.keys())) + "\n")
 
         c_sort_by = list(species_prevalence_schema.keys()).index(sort_by)
@@ -92,12 +91,14 @@ def midas_merge_species(args):
 
     global pool_of_samples
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
-    list_of_species = select_species(pool_of_samples, "genes", args)
-
+    # load species_summary into sample.profile
+    pool_of_samples.init_samples("species")
+    # create output and temp directory
     pool_of_samples.create_output_dir()
 
     # Slice the across-samples species profile matrix by species_id
-    transposed = transpose(list(species_profile_schema.keys())[1:])
+    cols = list(species_profile_schema.keys())[1:]
+    transposed = transpose(pool_of_samples.samples, cols)
 
     # Calculate summary statistics for coverage and relative abundance
     stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])

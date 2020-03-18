@@ -261,7 +261,7 @@ def rewrite_chunk_coverage_file(my_args):
             vals = line.rstrip("\n").split("\t")
             print(vals)
             # infer gene copy counts
-            vals[c_copies] = int(vals[c_depth]) / median_marker_depth
+            vals[c_copies] = float(vals[c_depth]) / median_marker_depth
             add_cn_to_write.append(vals)
     # multithreading try to write to same file?
     with OutputStream(chunk_coverage_path) as stream:
