@@ -14,6 +14,10 @@ from iggtools.params import outputs
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
 
+def compute_prevalence(rowvector, threshold):
+    return sum(1 if val >= threshold else 0 for val in rowvector)
+
+
 def transpose(list_of_samples, columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
     transposed = defaultdict(dict)
@@ -30,18 +34,13 @@ def transpose(list_of_samples, columns):
     return transposed
 
 
-def compute_prevalence(rowvector, threshold):
-    return sum(1 if val >= threshold else 0 for val in rowvector)
-
-
-def compute_stats(tabundance, tcoverage):
+def compute_and_write_stats(tabundance, tcoverage):
     global global_args
     args = global_args
 
-    assert tabundance.keys() == tcoverage.keys(), f"midas_merge_species::compute_stats() merged abun and cov matrices have different species_id orders"
+    assert tabundance.keys() == tcoverage.keys(), f"compute_and_write_stats::merged abun and cov matrices have different species_id orders"
     species_ids = tabundance.keys()
 
-    stats = defaultdict()
     for species_id in species_ids:
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
@@ -49,12 +48,30 @@ def compute_stats(tabundance, tcoverage):
         values = [species_id, np.median(species_abun), np.mean(species_abun), \
               np.median(species_cov), np.mean(species_cov), \
               compute_prevalence(species_cov, args.genome_depth)]
+
         stats[species_id] = values
+    return stats
+
+
+def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
+
+
+    # Sort species in stats by descending relative abundance
+    with OutputStream(pool_of_samples.get_target_layout("species_prevalence")) as ostream:
+        ostream.write("\t".join(list(species_prevalence_schema.keys())) + "\n")
+
+        c_sort_by = list(species_prevalence_schema.keys()).index(sort_by)
+        sorted_species = sorted(((row[c_sort_by], species_id) for species_id, row in stats.items()), reverse = True)
+
+        for species_tuple in sorted_species:
+            species_id = species_tuple[1]
+            values = map(format_data, stats[species_id])
+            ostream.write("\t".join(values) + "\n")
 
     return stats
 
 
-def write_results(transposed, stats, sort_by="median_coverage"):
+def write_results(transposed, stats, ):
     """ Write the transposed tables into separate files """
     global pool_of_samples
 
@@ -71,17 +88,7 @@ def write_results(transposed, stats, sort_by="median_coverage"):
                 if values[-1] > 0:
                     outfile.write("\t".join(map(format_data, values)) + "\n")
 
-    # Sort species in stats by descending relative abundance
-    with OutputStream(pool_of_samples.get_target_layout("species_prevalence")) as ostream:
-        ostream.write("\t".join(list(species_prevalence_schema.keys())) + "\n")
 
-        c_sort_by = list(species_prevalence_schema.keys()).index(sort_by)
-        sorted_species = sorted(((row[c_sort_by], species_id) for species_id, row in stats.items()), reverse = True)
-
-        for species_tuple in sorted_species:
-            species_id = species_tuple[1]
-            values = map(format_data, stats[species_id])
-            ostream.write("\t".join(values) + "\n")
 
 
 def midas_merge_species(args):
@@ -89,7 +96,6 @@ def midas_merge_species(args):
     global global_args
     global_args = args
 
-    global pool_of_samples
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
     # load species_summary into sample.profile
     pool_of_samples.init_samples("species")

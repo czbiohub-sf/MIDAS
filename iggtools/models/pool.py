@@ -9,6 +9,10 @@ def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
             "species_prevalence":    f"species/species_prevalence.tsv",
+            "species_read_counts":   f"",
+            "species_coverage":      f"",
+            "species_rel_abundance": f"",
+
 
             "snps_summary":          f"snps/output/snps_summary.tsv",
             "snps_info":             f"snps/output/{species_id}/{species_id}.snps_info.tsv",
@@ -68,7 +72,6 @@ class Pool: # pylint: disable=too-few-public-methods
             command(f"rm -rf {self.dbsdir}", quiet)
             command(f"mkdir -p {self.dbsdir}", quiet)
 
-
     def create_species_subdir(self, species_ids, dir_name, debug=False, quiet=True):
         dir_to_create = self.get_target_layout(dir_name)
         for species_id in species_ids:
@@ -76,7 +79,6 @@ class Pool: # pylint: disable=too-few-public-methods
                 continue
             command(f"rm -rf {dir_to_create}/{species_id}", quiet)
             command(f"mkdir -p {dir_to_create}/{species_id}", quiet)
-
 
     def init_samples(self, dbtype):
         """ read in table-of-content: sample_name\tpath/to/midas_output """

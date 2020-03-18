@@ -244,7 +244,6 @@ def compute_chunk_of_genes_coverage(packed_args):
 
     finally:
         semaphore_for_species[species_id].release()
-        #print(f"release for {packed_args}")
 
 
 def rewrite_chunk_coverage_file(my_args):
@@ -304,16 +303,42 @@ def merge_chunks_per_species(species_id):
     return True
 
 
-def write_species_coverage_summary(chunks_gene_coverage, gene_coverage_path):
-    # Append species gene mapping summary to file
-    if False:
-        species_genes_summary_path = sample.get_target_layout("genes_summary")
-        mean_gene_depth = total_nz_gene_depth / num_covered_genes # average gene depth
-        fraction_covered = num_covered_genes / pangenome_size
-        species_vals = [species_id, pangenome_size, num_covered_genes, fraction_covered, \
-                        mean_gene_depth, aligned_reads, mapped_reads, median_marker_depth]
-        with open(species_genes_summary_path, "a") as stream:
-            stream.write("\t".join(map(format_data, species_vals)) + "\n")
+def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_path):
+
+    global species_marker_genes
+
+    species_coverage_summary = defaultdict(dict)
+    for record in chunks_gene_coverage:
+        if record is True:
+            continue
+
+        species_id = record["species_id"]
+        if species_id not in species_coverage_summary:
+            species_coverage_summary[species_id] = {
+                "species_id": species_id,
+                "pangenome_size": 0,
+                "num_covered_genes": 0,
+                "total_nz_gene_depth": 0.0,
+                "aligned_reads": 0,
+                "mapped_reads": 0,
+            }
+
+        species_coverage_summary[species_id]["pangenome_size"] += record["chunk_genome_size"]
+        species_coverage_summary[species_id]["num_covered_genes"] += record["chunk_num_covered_genes"]
+        species_coverage_summary[species_id]["total_nz_gene_depth"] += record["chunk_nz_gene_depth"]
+        species_coverage_summary[species_id]["aligned_reads"] += record["chunk_aligned_reads"]
+        species_coverage_summary[species_id]["mapped_reads"] += record["chunk_mapped_reads"]
+
+    with OutputStream(species_genes_coverage_path) as stream:
+        stream.write("\t".join(genes_summary_schema.keys()) + "\n")
+        for record in species_coverage_summary.values():
+            mean_coverage = record["total_nz_gene_depth"] / record["num_covered_genes"]
+            fraction_covered = record["num_covered_genes"] / record["pangenome_size"]
+            median_marker_depth = np.median(list(species_marker_genes[species_id].values()))
+
+            vals = [record["species_id"], record["pangenome_size"], record["num_covered_genes"], \
+                    fraction_covered, mean_coverage, record["aligned_reads"], record["mapped_reads"], median_marker_depth]
+            stream.write("\t".join(map(format_data, vals)) + "\n")
 
 
 def midas_run_genes(args):
@@ -380,8 +405,6 @@ def midas_run_genes(args):
     print(arguments_list)
     print(f"-------------------- start process chunks")
     chunks_gene_coverage = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
-    print(chunks_gene_coverage)
-    exit(0)
     write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
 
     #except:
