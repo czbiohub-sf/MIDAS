@@ -153,7 +153,6 @@ def design_chunks(species_ids_of_interest, chunk_size):
             species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
             chunk_id += 1
             print(f"arguments_list {arguments_list} chunk_id {chunk_id}")
-            print(species_sliced_genes_path[species_id])
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
