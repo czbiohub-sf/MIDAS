@@ -18,12 +18,13 @@ def compute_prevalence(rowvector, threshold):
     return sum(1 if val >= threshold else 0 for val in rowvector)
 
 
-def transpose(list_of_samples, columns):
+def transpose(pool_of_samples, columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
     transposed = defaultdict(dict)
-    total_samples_count = len(list_of_samples.samples)
 
-    for sample_index, sample in enumerate(list_of_samples):
+    total_samples_count = len(pool_of_samples.samples)
+
+    for sample_index, sample in enumerate(pool_of_samples.samples):
         for species_id, species_record in sample.profile.items():
             for col in columns:
                 acc = transposed[col].get(species_id)
@@ -81,10 +82,11 @@ def write_species_results(pool_of_samples, transposed):
         with OutputStream(outpath) as outfile:
             outfile.write("\t".join(["species_id"] + sample_names) + "\n")
             for values in transposed[col].values():
+                print(values)
                 # double check me
-                print("I want to double check values[-1] is the count_samples")
-                if values[-1] > 0:
-                    outfile.write("\t".join(map(format_data, values)) + "\n")
+                print("??I want to double check values[-1] is the count_samples")
+                #if values[-1] > 0:
+                outfile.write("\t".join(map(format_data, values)) + "\n")
 
 
 def midas_merge_species(args):
@@ -100,7 +102,7 @@ def midas_merge_species(args):
 
     # Slice the across-samples species profile matrix by species_id
     cols = list(species_profile_schema.keys())[1:]
-    transposed = transpose(pool_of_samples.samples, cols)
+    transposed = transpose(pool_of_samples, cols)
     write_species_results(pool_of_samples, transposed)
 
     # Calculate summary statistics for coverage and relative abundance

@@ -351,7 +351,6 @@ def midas_merge_snps(args):
 
 def register_args(main_func):
     subparser = add_subcommand('midas_merge_snps', main_func, help='pooled-samples SNPs calling')
-
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Subdirectory will be created for each species.""")
