@@ -92,7 +92,6 @@ def marker_to_centroid_mapping(species_id):
             if gene_id in markers.keys():
                 gene_info[gene_id] = centroids_gene_id
 
-    print("================= convert")
     marker_to_centroid_dict = dict()
     for gene_id, marker_id in markers.items():
         centroid_gene_id = gene_info[gene_id]
@@ -359,7 +358,6 @@ def midas_run_genes(args):
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
-    print(centroids_files)
     sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
 
     # Map reads to pan-genes bowtie2 database
@@ -376,6 +374,7 @@ def midas_run_genes(args):
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
 
     arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
+    print(arguments_list)
     exit(0)
     print(f"-------------------- start process chunks")
     chunks_gene_coverage = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
