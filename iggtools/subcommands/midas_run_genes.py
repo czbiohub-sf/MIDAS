@@ -152,7 +152,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
             species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
             chunk_id += 1
-            print(f"arguments_list {arguments_list} chunk_id {chunk_id}")
+            #print(f"arguments_list {arguments_list} chunk_id {chunk_id}")
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
@@ -162,7 +162,6 @@ def design_chunks(species_ids_of_interest, chunk_size):
         assert chunk_id == len(species_sliced_genes_path[species_id]) - 1, f"wrong semaphore locks {chunk_id} {actual_size}"
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
-
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
 
@@ -246,6 +245,7 @@ def compute_chunk_of_genes_coverage(packed_args):
 
     finally:
         semaphore_for_species[species_id].release()
+        print(f"release for {species_id}")
 
 
 def rewrite_chunk_coverage_file(my_args):
