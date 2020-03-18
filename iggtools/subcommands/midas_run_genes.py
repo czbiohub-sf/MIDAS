@@ -247,11 +247,13 @@ def compute_chunk_of_genes_coverage(packed_args):
 
     finally:
         semaphore_for_species[species_id].release()
-        print(f"release for {species_id}")
+        print(f"release for {packed_args}")
 
 
 def rewrite_chunk_coverage_file(my_args):
+
     chunk_coverage_path, median_marker_depth = my_args
+    print(f"===========start rewrite {chunk_coverage_path}")
 
     c_copies = list(genes_coverage_schema.keys()).index("copy_number")
     c_depth = list(genes_coverage_schema.keys()).index("total_depth")
@@ -260,10 +262,11 @@ def rewrite_chunk_coverage_file(my_args):
     with InputStream(chunk_coverage_path) as stream:
         for line in stream:
             vals = line.rstrip("\n").split("\t")
+            print(vals)
             # infer gene copy counts
             vals[c_copies] = vals[c_depth] / median_marker_depth
             add_cn_to_write.append(vals)
-
+    # multithreading try to write to same file?
     with OutputStream(chunk_coverage_path) as stream:
         for vals in add_cn_to_write:
             stream.write("\t".join(map(format_data, vals)) + "\n")
@@ -272,8 +275,6 @@ def rewrite_chunk_coverage_file(my_args):
 def merge_chunks_per_species(species_id):
     """ Compute coverage of pangenome for given species_id and write results to disk """
 
-    return "skip"
-    
     global semaphore_for_species
     global species_sliced_genes_path
     global global_args
@@ -285,12 +286,14 @@ def merge_chunks_per_species(species_id):
     marker_genes_depth = species_marker_genes[species_id]
     median_marker_depth = np.median(list(marker_genes_depth.keys()))
 
+    print(f"median_marker_depth => {median_marker_depth}")
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
         args = []
         for chunk_file in all_chunks:
             args.append((chunk_file, median_marker_depth))
         multithreading_map(rewrite_chunk_coverage_file, args, 4)
+    print("start simple cat")
     # Write current species's gene coverage to file
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
