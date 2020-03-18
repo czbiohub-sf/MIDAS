@@ -157,8 +157,11 @@ def design_chunks(species_ids_of_interest, chunk_size):
         arguments_list.append((species_id, -1))
         species_sliced_genes_path[species_id].append(sample.get_target_layout("genes_coverage", species_id))
 
+        actual_size = len(species_sliced_genes_path[species_id]) - 1
+        assert chunk_id == len(species_sliced_genes_path[species_id]) - 1, f"wrong semaphore locks {chunk_id} {actual_size}"
+
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
-        assert chunk_id == len(species_sliced_genes_path[species_id]) - 1, f"wrong semaphore locks"
+
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
 
