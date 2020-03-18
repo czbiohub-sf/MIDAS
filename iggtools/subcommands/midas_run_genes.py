@@ -134,6 +134,8 @@ def design_chunks(species_ids_of_interest, chunk_size):
         with InputStream(centroid_file) as file:
             # TODO: update database build replace centroid file with TSV metadatafile
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
+                if chunk_id > 4:
+                    break
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the genne_length
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
