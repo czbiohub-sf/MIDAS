@@ -376,6 +376,7 @@ def midas_run_genes(args):
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
 
     arguments_list = design_chunks(species_ids_of_interest, args.chunk_size)
+    exit(0)
     print(f"-------------------- start process chunks")
     chunks_gene_coverage = multiprocessing_map(process_chunk, arguments_list, num_physical_cores)
     print(chunks_gene_coverage)
