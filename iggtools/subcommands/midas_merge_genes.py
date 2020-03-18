@@ -7,7 +7,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
-from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data
+from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
