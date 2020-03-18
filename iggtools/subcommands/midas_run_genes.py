@@ -110,20 +110,24 @@ def design_chunks(species_ids_of_interest, chunk_size):
     global sample
     global semaphore_for_species
     global species_sliced_genes_path
+    global species_gene_length
+    global species_marker_genes
 
     semaphore_for_species = dict()
     species_sliced_genes_path = defaultdict(list)
+    species_gene_length = defaultdict(dict)
+    species_marker_genes = defaultdict(dict)
+
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
 
     arguments_list = []
     for species_id in species_ids_of_interest:
-        species_index = species_ids_of_interest.index(species_id)
         centroid_file = sample.get_target_layout("centroid_file", species_id)
 
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
             marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
         c_markers = list(marker_to_centroid.values()) #<= all we care is the list of centroid genes corresponds to marker genes
-        species_sliced_genes_path["marker_genes"][species_index] = dict(zip(c_markers, [0.0]*len(c_markers)))
+        species_marker_genes[species_id] = dict(zip(c_markers, [0.0]*len(c_markers)))
 
         gene_count = 0
         chunk_id = 0
@@ -136,7 +140,7 @@ def design_chunks(species_ids_of_interest, chunk_size):
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
                     arguments_list.append((species_id, chunk_id))
                     species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
-                    species_sliced_genes_path["gene_length"][species_index].append(curr_chunk_genes_dict)
+                    species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
 
                     chunk_id += 1
                     curr_chunk_genes_dict = defaultdict()
@@ -148,11 +152,10 @@ def design_chunks(species_ids_of_interest, chunk_size):
             headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
             arguments_list.append((species_id, chunk_id))
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
-            species_sliced_genes_path["gene_length"][species_index].append(curr_chunk_genes_dict)
+            species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
 
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
-
         species_sliced_genes_path[species_id].append(sample.get_target_layout("genes_coverage", species_id))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
@@ -166,6 +169,7 @@ def process_chunk(packed_args):
 
     global semaphore_for_species
     global species_sliced_genes_path
+
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
@@ -184,16 +188,18 @@ def compute_chunk_of_genes_coverage(packed_args):
 
     global semaphore_for_species
     global species_sliced_genes_path
+    global species_gene_length
+    global species_marker_genes
 
     try:
         species_id, chunk_id = packed_args
         pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
-        marker_genes = species_sliced_genes_path["marker_genes"][species_id]
+        marker_genes = species_marker_genes[species_id]
 
         headerless_gene_coverage_path = species_sliced_genes_path[species_id][chunk_id]
-        gene_length_dict = species_sliced_genes_path["gene_length"][species_id][chunk_id]
-        chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
+        gene_length_dict = species_gene_length[species_id][chunk_id]
 
+        chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
         chunk_genome_size = 0
         chunk_num_covered_genes = 0
         chunk_nz_gene_depth = 0
