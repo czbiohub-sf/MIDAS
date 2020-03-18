@@ -14,8 +14,9 @@ from iggtools.params import outputs
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
 
-def transpose(pool_of_samples, columns):
+def transpose(columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
+    global pool_of_samples
     transposed = defaultdict(dict)
     total_samples_count = len(pool_of_samples.samples)
 
@@ -34,11 +35,9 @@ def compute_prevalence(rowvector, threshold):
     return sum(1 if val >= threshold else 0 for val in rowvector)
 
 
-def format_data(x):
-    return format(x, DECIMALS) if isinstance(x, float) else str(x)
-
-
-def compute_stats(tabundance, tcoverage, args):
+def compute_stats(tabundance, tcoverage):
+    global global_args
+    args = global_args
 
     assert tabundance.keys() == tcoverage.keys(), f"midas_merge_species::compute_stats() merged abun and cov matrices have different species_id orders"
     species_ids = tabundance.keys()
@@ -56,8 +55,9 @@ def compute_stats(tabundance, tcoverage, args):
     return stats
 
 
-def write_results(pool_of_samples, transposed, stats, sort_by="median_coverage"):
+def write_results(transposed, stats, sort_by="median_coverage"):
     """ Write the transposed tables into separate files """
+    global pool_of_samples
 
     sample_names = pool_of_samples.fetch_sample_names()
     output_files = pool_of_samples.fetch_merged_species_output_files()
@@ -86,19 +86,24 @@ def write_results(pool_of_samples, transposed, stats, sort_by="median_coverage")
 
 
 def midas_merge_species(args):
-    # I think merge_species don't need tempdir ...
-    # where should I put this in the layout map
 
-    paramstr = f"gd{args.genome_depth}"
-    pool_of_samples = Pool(args.samples_list, args.outdir, paramstr, "species")
+    global global_args
+    global_args = args
+
+    global pool_of_samples
+    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
+    list_of_species = select_species(pool_of_samples, "genes", args)
+
+    pool_of_samples.create_output_dir()
 
     # Slice the across-samples species profile matrix by species_id
-    transposed = transpose(pool_of_samples, list(species_profile_schema.keys())[1:])
+    transposed = transpose(list(species_profile_schema.keys())[1:])
 
     # Calculate summary statistics for coverage and relative abundance
-    stats = compute_stats(transposed["relative_abundance"], transposed["coverage"], args)
-    write_results(pool_of_samples, transposed, stats, "median_coverage")
+    stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])
+    write_results(transposed, stats, "median_coverage")
 
+    # TO move to another subcommand
     if args.build_bowtie2_db:
         species_ids = list(stats.keys())
 

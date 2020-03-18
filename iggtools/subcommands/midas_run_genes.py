@@ -23,7 +23,6 @@ DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
 DEFAULT_CHUNK_SIZE = 5000
 
-
 def keep_read(aln):
     global global_args
     args = global_args
@@ -72,6 +71,7 @@ def marker_to_centroid_mapping(species_id):
     """ Identify which cluster the marker_genes belong to """
     # TODO: rebuild the marker genes database and can then simplify this part:
     # find marker genes from the centroid_99 genes
+    # We also have the marker genes for all the genomes phyeco/temp/genome/genome.marker.map/fa
     global sample
 
     # Get the gene_id - marker_id map
@@ -261,7 +261,7 @@ def rewrite_chunk_coverage_file(my_args):
             vals = line.rstrip("\n").split("\t")
             print(vals)
             # infer gene copy counts
-            vals[c_copies] = vals[c_depth] / median_marker_depth
+            vals[c_copies] = int(vals[c_depth]) / median_marker_depth
             add_cn_to_write.append(vals)
     # multithreading try to write to same file?
     with OutputStream(chunk_coverage_path) as stream:
@@ -290,7 +290,7 @@ def merge_chunks_per_species(species_id):
         for chunk_file in all_chunks:
             args.append((chunk_file, median_marker_depth))
         multithreading_map(rewrite_chunk_coverage_file, args, 4)
-    print("start simple cat")
+    print("==========================start simple cat")
     # Write current species's gene coverage to file
     with OutputStream(gene_coverage_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
