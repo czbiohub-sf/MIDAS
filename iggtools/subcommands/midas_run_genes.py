@@ -254,6 +254,7 @@ def rewrite_chunk_coverage_file(my_args):
 
     chunk_coverage_path, median_marker_depth = my_args
     print(f"===========start rewrite {chunk_coverage_path}")
+    return "skip"
 
     c_copies = list(genes_coverage_schema.keys()).index("copy_number")
     c_depth = list(genes_coverage_schema.keys()).index("total_depth")
