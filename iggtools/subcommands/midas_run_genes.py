@@ -190,59 +190,59 @@ def compute_chunk_of_genes_coverage(packed_args):
     global species_gene_length
     global species_marker_genes
 
-    try:
-        species_id, chunk_id = packed_args
-        pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
-        marker_genes = species_marker_genes[species_id]
+    #try:
+    species_id, chunk_id = packed_args
+    pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
+    marker_genes = species_marker_genes[species_id]
 
-        headerless_gene_coverage_path = species_sliced_genes_path[species_id][chunk_id]
-        gene_length_dict = species_gene_length[species_id][chunk_id]
+    headerless_gene_coverage_path = species_sliced_genes_path[species_id][chunk_id]
+    gene_length_dict = species_gene_length[species_id][chunk_id]
 
-        chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
-        chunk_genome_size = 0
-        chunk_num_covered_genes = 0
-        chunk_nz_gene_depth = 0
-        chunk_aligned_reads = 0
-        chunk_mapped_reads = 0
+    chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
+    chunk_genome_size = 0
+    chunk_num_covered_genes = 0
+    chunk_nz_gene_depth = 0
+    chunk_aligned_reads = 0
+    chunk_mapped_reads = 0
 
-        with OutputStream(headerless_gene_coverage_path) as stream:
-            with AlignmentFile(pangenome_bamfile) as bamfile:
-                for gene_id in chunk_of_gene_ids:
-                    # core compute per gene
-                    gene_length = gene_length_dict[gene_id]
-                    aligned_reads = bamfile.count(gene_id)
-                    mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
-                    gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+    with OutputStream(headerless_gene_coverage_path) as stream:
+        with AlignmentFile(pangenome_bamfile) as bamfile:
+            for gene_id in chunk_of_gene_ids:
+                # core compute per gene
+                gene_length = gene_length_dict[gene_id]
+                aligned_reads = bamfile.count(gene_id)
+                mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
+                gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
 
-                    if gene_id in marker_genes.keys():
-                        marker_genes[gene_id] += gene_depth
+                if gene_id in marker_genes.keys():
+                    marker_genes[gene_id] += gene_depth
 
-                    chunk_genome_size += 1
-                    if gene_depth == 0: # Sparse by default.
-                        continue
+                chunk_genome_size += 1
+                if gene_depth == 0: # Sparse by default.
+                    continue
 
-                    chunk_num_covered_genes += 1
-                    chunk_nz_gene_depth += gene_depth
-                    chunk_aligned_reads += aligned_reads
-                    chunk_mapped_reads += mapped_reads
+                chunk_num_covered_genes += 1
+                chunk_nz_gene_depth += gene_depth
+                chunk_aligned_reads += aligned_reads
+                chunk_mapped_reads += mapped_reads
 
-                    vals = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
-                    stream.write("\t".join(map(format_data, vals)) + "\n")
+                vals = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
+                stream.write("\t".join(map(format_data, vals)) + "\n")
 
-        return {
-            "species_id": species_id,
-            "chunk_id": chunk_id,
-            "chunk_genome_size": chunk_genome_size,
-            "chunk_num_covered_genes": chunk_num_covered_genes,
-            "chunk_nz_gene_depth": chunk_nz_gene_depth,
-            "chunk_aligned_reads": chunk_aligned_reads,
-            "chunk_mapped_reads": chunk_mapped_reads
-        }
+    return {
+        "species_id": species_id,
+        "chunk_id": chunk_id,
+        "chunk_genome_size": chunk_genome_size,
+        "chunk_num_covered_genes": chunk_num_covered_genes,
+        "chunk_nz_gene_depth": chunk_nz_gene_depth,
+        "chunk_aligned_reads": chunk_aligned_reads,
+        "chunk_mapped_reads": chunk_mapped_reads
+    }
 
-    finally:
-        print(f"compute_chunk_of_genes_coverage error for {species_id}-{chunk_id}")
-        semaphore_for_species[species_id].release()
-        raise
+    #inally:
+    #    print(f"compute_chunk_of_genes_coverage error for {species_id}-{chunk_id}")
+    #    semaphore_for_species[species_id].release()
+
 
 
 def rewrite_chunk_coverage_file(my_args):
