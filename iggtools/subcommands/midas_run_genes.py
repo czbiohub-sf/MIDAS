@@ -147,9 +147,10 @@ def design_chunks(species_ids_of_interest, chunk_size):
 
                 curr_chunk_genes_dict[centroid.id] = len(centroid.seq)
                 gene_count += 1
-            a = len(arguments_list)
+
             print(f"arguments_list {arguments_list}")
-            print(f"last chunk {chunk_id} {a}")
+            print(species_sliced_genes_path[species_id])
+
             headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
             arguments_list.append((species_id, chunk_id))
             species_sliced_genes_path[species_id].append(headerless_gene_coverage_path)
