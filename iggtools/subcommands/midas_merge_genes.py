@@ -10,7 +10,7 @@ from iggtools.models.uhgg import UHGG
 from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data
 
 
-DEFAULT_GENOME_DEPTH = 1.0
+DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35

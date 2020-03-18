@@ -173,15 +173,13 @@ def process_chunk(packed_args):
     global semaphore_for_species
     global species_sliced_genes_path
 
-    print(f"======================{packed_args}")
-
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_genes_path[species_id]) - 1
         tsprint(f"================= wait {species_id}")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"================= merge {species_id}")
+        tsprint(f"======================================== merge {species_id}")
         return merge_chunks_per_species(species_id)
 
     return compute_chunk_of_genes_coverage(packed_args)
@@ -246,14 +244,13 @@ def compute_chunk_of_genes_coverage(packed_args):
 
     finally:
         semaphore_for_species[species_id].release()
-        print(f"release for {packed_args}")
+        #print(f"release for {packed_args}")
 
 
 def rewrite_chunk_coverage_file(my_args):
 
     chunk_coverage_path, median_marker_depth = my_args
-    print(f"===========start rewrite {chunk_coverage_path}")
-    return "skip"
+    print(f"============================start rewrite {chunk_coverage_path}")
 
     c_copies = list(genes_coverage_schema.keys()).index("copy_number")
     c_depth = list(genes_coverage_schema.keys()).index("total_depth")
@@ -280,7 +277,6 @@ def merge_chunks_per_species(species_id):
     global global_args
     global species_marker_genes
 
-
     all_chunks = species_sliced_genes_path[species_id][:-1]
     gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
@@ -288,7 +284,6 @@ def merge_chunks_per_species(species_id):
     median_marker_depth = np.median(list(marker_genes_depth.values()))
 
     print(f"median_marker_depth => {median_marker_depth}")
-    return "skip"
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
         args = []

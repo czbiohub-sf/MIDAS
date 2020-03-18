@@ -13,28 +13,6 @@ from iggtools.params import outputs
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
-def register_args(main_func):
-    subparser = add_subcommand('midas_merge_species', main_func, help='merge MIDAS species abundance results across metagenomic samples')
-    subparser.add_argument('outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--samples_list',
-                           dest='samples_list',
-                           type=str,
-                           required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
-    subparser.add_argument('--genome_depth',
-                           dest='genome_depth',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_GENOME_DEPTH})")
-    subparser.add_argument('--build_bowtie2_db',
-                           action='store_true',
-                           default=False,
-                           help=f"Omit zero rows from output.")
-    return main_func
-
 
 def transpose(pool_of_samples, columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
@@ -137,6 +115,34 @@ def midas_merge_species(args):
         contigs_files = db.fetch_contigs(species_ids, bt2_db_dir)
 
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_merge_species', main_func, help='merge MIDAS species abundance results across metagenomic samples')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--samples_list',
+                           dest='samples_list',
+                           type=str,
+                           required=True,
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--genome_depth',
+                           dest='genome_depth',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_GENOME_DEPTH,
+                           help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_GENOME_DEPTH})")
+    subparser.add_argument('--build_bowtie2_db',
+                           action='store_true',
+                           default=False,
+                           help=f"Omit zero rows from output.")
+    return main_func
 
 
 @register_args

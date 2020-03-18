@@ -3,6 +3,7 @@
 ## midas_merge_species
 DECIMALS = ".3f"
 
+
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
