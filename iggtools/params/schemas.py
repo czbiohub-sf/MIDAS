@@ -42,9 +42,9 @@ def fetch_default_genome_depth(dbtype):
 
 species_profile_schema = {
     "species_id": str,
-    "count_reads": int,
+    "read_counts": int,
     "coverage": float,
-    "relative_abundance": float
+    "rel_abundance": float
 }
 
 

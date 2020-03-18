@@ -9,9 +9,9 @@ def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
             "species_prevalence":    f"species/species_prevalence.tsv",
-            "species_read_counts":   f"",
-            "species_coverage":      f"",
-            "species_rel_abundance": f"",
+            "species_read_counts":   f"species/species_read_counts.tsv",
+            "species_coverage":      f"species/species_coverage.tsv",
+            "species_rel_abundance": f"species/species_rel_abundance.tsv",
 
 
             "snps_summary":          f"snps/output/snps_summary.tsv",
@@ -94,10 +94,6 @@ class Pool: # pylint: disable=too-few-public-methods
     def fetch_sample_names(self):
         sample_names = [sample.sample_name for sample in self.samples]
         return sample_names
-
-    def fetch_merged_species_output_files(self):
-        cols_to_write = list(species_profile_schema.keys())[1:]
-        return {col: f"{self.outdir}/{col}.tsv" for col in cols_to_write}
 
 
 class Species:

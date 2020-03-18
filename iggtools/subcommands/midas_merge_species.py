@@ -34,7 +34,7 @@ def transpose(list_of_samples, columns):
     return transposed
 
 
-def compute_and_write_stats(tabundance, tcoverage):
+def compute_stats(tabundance, tcoverage):
     global global_args
     args = global_args
 
@@ -54,41 +54,37 @@ def compute_and_write_stats(tabundance, tcoverage):
 
 
 def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
-
-
     # Sort species in stats by descending relative abundance
-    with OutputStream(pool_of_samples.get_target_layout("species_prevalence")) as ostream:
-        ostream.write("\t".join(list(species_prevalence_schema.keys())) + "\n")
+    with OutputStream(species_prevalence_filepath) as ostream:
 
-        c_sort_by = list(species_prevalence_schema.keys()).index(sort_by)
-        sorted_species = sorted(((row[c_sort_by], species_id) for species_id, row in stats.items()), reverse = True)
+        colnames = list(species_prevalence_schema.keys())
+        ostream.write("\t".join(colnames) + "\n")
+
+        c_sort_by = colnames.index(sort_by)
+        sorted_species = sorted(((row[c_sort_by], species_id) for species_id, row in stats.items()), reverse=True)
 
         for species_tuple in sorted_species:
             species_id = species_tuple[1]
-            values = map(format_data, stats[species_id])
-            ostream.write("\t".join(values) + "\n")
-
-    return stats
+            ostream.write("\t".join(map(format_data, stats[species_id])) + "\n")
 
 
-def write_results(transposed, stats, ):
+def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
-    global pool_of_samples
 
     sample_names = pool_of_samples.fetch_sample_names()
-    output_files = pool_of_samples.fetch_merged_species_output_files()
 
-    for col, path in output_files.items():
-        data = transposed[col]
-        with OutputStream(path) as outfile:
+    col_names = list(species_profile_schema.keys())[1:]
+
+    for col in col_names:
+        outpath = pool_of_samples.get_target_layout(f"species_{col}")
+
+        with OutputStream(outpath) as outfile:
             outfile.write("\t".join(["species_id"] + sample_names) + "\n")
-            for values in data.values():
+            for values in transposed[col].values():
                 # double check me
                 print("I want to double check values[-1] is the count_samples")
                 if values[-1] > 0:
                     outfile.write("\t".join(map(format_data, values)) + "\n")
-
-
 
 
 def midas_merge_species(args):
@@ -105,10 +101,11 @@ def midas_merge_species(args):
     # Slice the across-samples species profile matrix by species_id
     cols = list(species_profile_schema.keys())[1:]
     transposed = transpose(pool_of_samples.samples, cols)
+    write_species_results(pool_of_samples, transposed)
 
     # Calculate summary statistics for coverage and relative abundance
     stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])
-    write_results(transposed, stats, "median_coverage")
+    write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
 
     # TO move to another subcommand
     if args.build_bowtie2_db:
@@ -127,6 +124,8 @@ def midas_merge_species(args):
         contigs_files = db.fetch_contigs(species_ids, bt2_db_dir)
 
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+        # TODO: also need to build the pangenomes
+
 
 
 def register_args(main_func):
