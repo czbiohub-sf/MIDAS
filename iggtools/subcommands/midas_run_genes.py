@@ -174,6 +174,8 @@ def process_chunk(packed_args):
     global semaphore_for_species
     global species_sliced_genes_path
 
+    print(f"======================{packed_args}")
+
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_genes_path[species_id]) - 1
@@ -270,6 +272,8 @@ def rewrite_chunk_coverage_file(my_args):
 def merge_chunks_per_species(species_id):
     """ Compute coverage of pangenome for given species_id and write results to disk """
 
+    return "skip"
+    
     global semaphore_for_species
     global species_sliced_genes_path
     global global_args
