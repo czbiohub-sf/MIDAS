@@ -97,7 +97,7 @@ class Sample: # pylint: disable=too-few-public-methods
         "Return map of species_id to coverage for the species present in the sample."
         schema = fetch_schema_by_dbtype("species")
         profile = defaultdict()
-        with InputStream(self.get_target_layout("species_profile")) as stream:
+        with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if species_list and record["species_id"] not in args.species_list.split(","):
                     continue
