@@ -242,6 +242,7 @@ def compute_chunk_of_genes_coverage(packed_args):
     finally:
         print(f"compute_chunk_of_genes_coverage error for {species_id}-{chunk_id}")
         semaphore_for_species[species_id].release()
+        raise
 
 
 def rewrite_chunk_coverage_file(my_args):
