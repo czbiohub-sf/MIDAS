@@ -306,14 +306,13 @@ def process_chunk_of_sites(packed_args):
     # For each process, scan over all the samples
     species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
 
-    snps_pileup_dir = species_samples_dict["samples_snps_pileup"][species_id]
-    samples_depth = species_samples_dict["samples_depth"][species_id]
-
     try:
+        snps_pileup_dir = species_samples_dict["samples_snps_pileup"][species_id]
+        samples_depth = species_samples_dict["samples_depth"][species_id]
+
         accumulator = dict()
         for sample_index in range(total_samples_count):
             genome_coverage = samples_depth[sample_index]
-            snps_pileup_dir = samples_snps_pileup[sample_index]
             proc_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
             accumulate(accumulator, proc_args)
 
