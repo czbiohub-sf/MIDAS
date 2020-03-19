@@ -306,26 +306,20 @@ def process_chunk_of_sites(packed_args):
 
     # For each process, scan over all the samples
     species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
+    list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
+    list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
 
     try:
-        list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
-        list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
-
         accumulator = dict()
         for sample_index in range(total_samples_count):
             proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
 
         # Compute and write pooled SNPs for each chunk of genomic sites
-        global global_counter
-        global_counter += 1
         compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
-        number_of_chunks = len(species_sliced_pileup_path[packed_args[0]])
-        print(f"--------------------finish compute_and_write_pooled_snps: {species_id} - {chunk_id} out of {number_of_chunks}")
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
-        print(f"----------------release global counter {global_counter}")
 
 
 def midas_merge_snps(args):
