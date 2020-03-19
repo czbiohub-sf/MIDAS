@@ -76,6 +76,7 @@ def design_chunks(contigs_files, chunk_size):
 
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
+
         species_samples_dict["samples_depth"][species_id] = samples_depth
         species_samples_dict["samples_snps_pileup"][species_id] = samples_snps_pileup
 
@@ -172,7 +173,6 @@ def accumulate(accumulator, proc_args):
 
     # Alternative way is to read once to memory
     awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 <= {contig_end}\'"
-    print(f"================={snps_pileup_path}")
     with InputStream(snps_pileup_path, awk_command) as stream:
         for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
             # Unpack frequently accessed columns
@@ -308,13 +308,12 @@ def process_chunk_of_sites(packed_args):
     species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
 
     try:
-        snps_pileup_dir = species_samples_dict["samples_snps_pileup"][species_id]
-        samples_depth = species_samples_dict["samples_depth"][species_id]
+        list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
+        list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
 
         accumulator = dict()
         for sample_index in range(total_samples_count):
-            genome_coverage = samples_depth[sample_index]
-            proc_args = (contig_id, contig_start, contig_end, sample_index, snps_pileup_dir, total_samples_count, genome_coverage)
+            proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_inndex], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
 
         # Compute and write pooled SNPs for each chunk of genomic sites
