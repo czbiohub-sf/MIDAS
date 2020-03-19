@@ -65,7 +65,7 @@ def design_chunks(contigs_files, chunk_size):
     global dict_of_species
 
     semaphore_for_species = dict()
-    species_sliced_pileup_path = defaultdict(list)
+    species_sliced_pileup_path = defaultdict(dict)
     species_samples_dict = defaultdict(dict)
 
     # TODO: can we parallel this? write simultaneouly to the same global variable?
@@ -298,7 +298,7 @@ def process_chunk_of_sites(packed_args):
     if packed_args[1] == -1:
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
-        number_of_chunks = len(species_sliced_pileup_path[species_id]) - 1
+        number_of_chunks = len(species_sliced_pileup_path[species_id])
 
         print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ wait {species_id}")
         for _ in range(number_of_chunks):
