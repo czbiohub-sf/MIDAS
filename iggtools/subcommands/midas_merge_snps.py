@@ -59,11 +59,14 @@ def design_chunks(contigs_files, chunk_size):
     # dict of semaphore and acquire before
     global semaphore_for_species
     global species_sliced_pileup_path
+    global species_samples_dict
+
     global pool_of_samples
     global dict_of_species
 
     semaphore_for_species = dict()
-    species_sliced_pileup_path = defaultdict(dict)
+    species_sliced_pileup_path = defaultdict(list)
+    species_samples_dict = defaultdict(dict)
 
     # TODO: can we parallel this? write simultaneouly to the same global variable?
     argument_list = []
@@ -73,10 +76,10 @@ def design_chunks(contigs_files, chunk_size):
 
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
-        total_samples_count = len(species.samples)
+        species_samples_dict["samples_depth"][species_id] = samples_depth
+        species_samples_dict["samples_snps_pileup"][species_id] = samples_snps_pileup
 
-        species_sliced_pileup_path[species_id]["samples_depth"] = samples_depth
-        species_sliced_pileup_path[species_id]["samples_snps_pileup"] = samples_snps_pileup
+        total_samples_count = len(species.samples)
 
         chunk_id = 0
         for contig_id, contig in contigs.items():
@@ -84,7 +87,7 @@ def design_chunks(contigs_files, chunk_size):
 
             # pileup is 1-based index
             if contig_length <= chunk_size:
-                my_args = (species_id, chunk_id, contig_id, 1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
+                my_args = (species_id, chunk_id, contig_id, 1, contig_length, total_samples_count)
                 argument_list.append(my_args)
 
                 snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
@@ -96,9 +99,9 @@ def design_chunks(contigs_files, chunk_size):
                 number_of_chunks = ceil(contig_length/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, chunk_size)):
                     if ni == number_of_chunks:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, samples_depth, samples_snps_pileup, total_samples_count)
+                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, total_samples_count)
                     else:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, samples_depth, samples_snps_pileup, total_samples_count)
+                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, total_samples_count)
                     argument_list.append(my_args)
 
                     snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
@@ -290,11 +293,12 @@ def process_chunk_of_sites(packed_args):
 
     global semaphore_for_species
     global species_sliced_pileup_path
+    global species_samples_dict
 
     if packed_args[1] == -1:
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
-        number_of_chunks = len(species_sliced_pileup_path[species_id])
+        number_of_chunks = len(species_sliced_pileup_path[species_id]) - 1
 
         print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ wait {species_id}")
         for _ in range(number_of_chunks):
@@ -304,7 +308,11 @@ def process_chunk_of_sites(packed_args):
         return "worked"
 
     # For each process, scan over all the samples
-    species_id, chunk_id, contig_id, contig_start, contig_end, samples_depth, samples_snps_pileup, total_samples_count = packed_args
+    species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
+
+    snps_pileup_dir = species_samples_dict["samples_snps_pileup"][species_id]
+    samples_depth = species_samples_dict["samples_depth"][species_id]
+
     try:
         accumulator = dict()
         for sample_index in range(total_samples_count):
