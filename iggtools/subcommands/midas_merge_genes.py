@@ -107,7 +107,7 @@ def midas_merge_genes(args):
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
     list_of_species = select_species(pool_of_samples, "genes", args)
 
-    # Create the output/temp (species) directory when we know what species to process
+    # Create species-subdir at one place given the list of species_of_interest
     species_ids_of_interest = [sp.id for sp in list_of_species]
     pool_of_samples.create_output_dir()
     pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
@@ -119,11 +119,11 @@ def midas_merge_genes(args):
     global species_sliced_coverage_path
     species_sliced_coverage_path = defaultdict(dict)
 
-    # Create species-to-process lookup table for each species
+    # Download pan-genes-info for every species in the restricted species profile.
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
-    # Download pan-genes-info for every species in the restricted species profile.
-    genes_info_files = db.fetch_genes_info(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
+    genes_info_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"), filetype="genes_info")
+
 
     args_list = []
     for species_index, species_id in enumerate(species_ids_of_interest):

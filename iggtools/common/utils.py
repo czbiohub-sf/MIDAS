@@ -646,5 +646,11 @@ def download_reference(ref_path, local_dir="."):
     return local_path
 
 
+def cat_files(files_of_chunks, one_file, number_of_chunks=20):
+    for temp_files in split(files_of_chunks, number_of_chunks):
+        command("cat " + " ".join(temp_files) + f" >> {one_file}", quiet=True)
+
+
+
 if __name__ == "__main__":
     tsprint(f"Hello from {backtick('pwd')}.  Put tests here.")

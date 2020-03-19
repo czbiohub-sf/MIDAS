@@ -1,18 +1,35 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
-import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, multiprocessing_map
 from iggtools.params import inputs, outputs
 
 
-def get_uhgg_layout(species_id="", component=""):
+def _uhgg_layout(species_id="", component="", genome_id=""):
     return {
-        "marker_genes_fasta": f"{outputs.marker_genes}/phyeco.fa.lz4",
-        "marker_genes_mapfile": f"{outputs.marker_genes}/phyeco.map.lz4",
-        # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
-        "pangenome_file": f"{outputs.pangenomes}/{species_id}/{component}",
+        # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
+        "raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.fna.lz4",
+        "imported_genome_file":       f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}",
+        # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
+        "pangenome_file":             f"{outputs.pangenomes}/{species_id}/{component}",
+        "marker_genes_file":          f"{outputs.marker_genes}/phyeco.fa{component}.lz4",
+        "marker_genes_mapfile":       f"{outputs.marker_genes}/phyeco.map.lz4",
     }
+### old codes, improve the readibility
+def raw_genome_file(genome_id, representative_id):
+    return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
+
+def get_uhgg_layout(filename, species_id="", component="", genome_id=""):
+    return _uhgg_layout(species_id, component, genome_id)[filename]
+
+
+def fetch_marker_genes(dbs_dir):
+    s3_marker_files = []
+    for ext in ["", ".bwt", ".header", ".sa", ".sequence"]:
+        s3_marker_files.append(get_uhgg_layout("marker_genes_file", species_id="", component=ext))
+    s3_marker_files.append(get_uhgg_layout("marker_genes_mapfile"))
+    return multithreading_map(fetch_file_from_s3, ((s3file, dbs_dir) for s3file in s3_marker_files))
+
 
 class UHGG:  # pylint: disable=too-few-public-methods
 
@@ -22,41 +39,24 @@ class UHGG:  # pylint: disable=too-few-public-methods
         self.toc_tsv = table_of_contents_tsv
         self.species, self.representatives, self.genomes = _UHGG_load(table_of_contents_tsv)
 
+    def fetch_files(self, list_of_species_ids, dbs_tempdir, filetype=None):
+        arguments_list = []
+        for species_id in list_of_species_ids:
+            local_dir = f"{dbs_tempdir}/{species_id}"
+            if filetype == "contigs":
+                s3_file = get_uhgg_layout("imported_genome_file", species_id, "fna.lz4", self.representatives[species_id])
+            if filetype == "centroids":
+                s3_file = get_uhgg_layout("pangenome_file", species_id, "centroids.ffn.lz4")
+            if filetype == "genes_info":
+                s3_file = get_uhgg_layout("pangenome_file", species_id, "gene_info.txt.lz4")
+            arguments_list.append((s3_file, local_dir))
+        return multiprocessing_map(fetch_file_from_s3, arguments_list, 20)
+
+
     def fetch_representative_genome_id(self, species_id):
         return self.representatives[species_id]
 
-    def fetch_marker_genes(self, dbs_dir):
-        target_markers_db_files = [
-            f"{outputs.marker_genes}/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]
-            ] + \
-            [f"{outputs.marker_genes}/phyeco.map.lz4"]
-        argument_list = ((mfile, dbs_dir) for mfile in target_markers_db_files)
-        markers_db_files = multithreading_map(fetch_file_from_s3, argument_list)
-        return markers_db_files
 
-    def fetch_contigs(self, species_ids, bt2_db_dir):
-        argument_list = []
-        for species_id in species_ids:
-            assert os.path.exists(f"{bt2_db_dir}/{species_id}"), "Fail to create {bt2_db_dir}/{species_id} in create_species_subdir()"
-            argument_list.append((imported_genome_file(self.representatives[species_id], species_id, "fna.lz4"), f"{bt2_db_dir}/{species_id}"))
-        contigs_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return contigs_files
-
-    def fetch_centroids(self, species_ids, dbs_tempdir):
-        argument_list = []
-        for species_id in species_ids:
-            centroid_file = get_uhgg_layout(species_id, "centroids.ffn.lz4")["pangenome_file"]
-            argument_list.append((centroid_file, f"{dbs_tempdir}/{species_id}"))
-        centroids_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return centroids_files
-
-    def fetch_genes_info(self, species_ids, dbs_tempdir):
-        argument_list = []
-        for species_id in species_ids:
-            genes_info_file = get_uhgg_layout(species_id, "gene_info.txt.lz4")["pangenome_file"]
-            argument_list.append((genes_info_file, f"{dbs_tempdir}/{species_id}"))
-        genes_info_files = multithreading_map(fetch_file_from_s3, argument_list, num_threads=20)
-        return genes_info_files
 
 
 def _UHGG_load(toc_tsv, deep_sort=False):
@@ -75,16 +75,6 @@ def _UHGG_load(toc_tsv, deep_sort=False):
         species = sorted_dict(species)
     return species, representatives, genomes
 
-
-def imported_genome_file(genome_id, species_id, component):
-    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-def raw_genome_file(genome_id, representative_id):
-    return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
-
-def pangenome_file(species_id, component):
-    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
-    return f"{outputs.pangenomes}/{species_id}/{component}"
 
 def fetch_file_from_s3(packed_args):
     s3_path, local_path = packed_args

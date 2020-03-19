@@ -319,11 +319,14 @@ def midas_merge_snps(args):
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
     list_of_species = select_species(pool_of_samples, "snps", args)
 
-    # Create the output/temp (species) directory when we know what species to process
+    # Create species-subdir at one place given the list of species_of_interest
     species_ids_of_interest = [sp.id for sp in list_of_species]
     pool_of_samples.create_output_dir()
     pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
     pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
+
+    global global_args
+    global_args = args
 
     # Write snps_summary.tsv
     with OutputStream(pool_of_samples.get_target_layout("snps_summary")) as stream:
@@ -334,14 +337,10 @@ def midas_merge_snps(args):
                 row.insert(1, sample.sample_name)
                 stream.write("\t".join(map(format_data, row)) + "\n")
 
-    global global_args
-    global_args = args
-
-    # Create species-to-process lookup table for each species
+    # Download representative genomes for every species into dbs/temp/{species}/
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
-    # Download representative genomes for every species into dbs/temp/{species}/
-    contigs_files = db.fetch_contigs(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"))
+    contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"), filetype="contigs")
 
     # Compute pooled SNPs by the unit of chunks_of_sites
     argument_list = design_chunks(list_of_species, contigs_files, args.chunk_size)

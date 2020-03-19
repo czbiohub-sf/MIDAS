@@ -7,7 +7,7 @@ import numpy as np
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference
-from iggtools.models.uhgg import UHGG, get_uhgg_layout
+from iggtools.models.uhgg import UHGG, fetch_marker_genes
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
 from iggtools.params.inputs import marker_genes_hmm_cutoffs
@@ -16,7 +16,6 @@ from iggtools.params import outputs
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
-
 DECIMALS = ".6f"
 
 
@@ -75,8 +74,6 @@ def parse_reads(filename, max_reads=None):
 
 def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
     assert os.path.exists(os.path.dirname(m8_file)), f"map_reads_hsblast::m8_file: the temp directory doesn't exit {m8_file}."
-    print(f"what is {markers_db}")
-    assert os.path.exists(markers_db), f"markers db is wrong"
 
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
@@ -210,11 +207,8 @@ def midas_run_species(args):
     sample = Sample(args.sample_name, args.midas_outdir, "species")
     sample.create_output_dir(args.debug)
 
-    local_toc = download_reference(outputs.genomes, sample.dbsdir)
-    db = UHGG(local_toc)
-    markers_db_files = db.fetch_marker_genes(sample.dbsdir)
-
     # Align reads to marker-genes database
+    markers_db_files = fetch_marker_genes(sample.dbsdir)
     m8_file = sample.get_target_layout("species_alignments_m8")
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
@@ -222,6 +216,8 @@ def midas_run_species(args):
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
     # Classify reads
+    local_toc = download_reference(outputs.genomes, sample.dbsdir)
+    db = UHGG(local_toc)
     species_info = db.species
     marker_info = read_marker_info_repgenomes(markers_db_files[-1])
     best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
