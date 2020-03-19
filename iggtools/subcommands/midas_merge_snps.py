@@ -28,6 +28,8 @@ DEFAULT_SNP_POOLED_METHOD = "prevalence"
 DEFAULT_SNP_MAF = 0.05
 DEFAULT_SNP_TYPE = "mono, bi"
 
+global global_counter
+global_counter = 0
 
 def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
@@ -309,10 +311,15 @@ def process_chunk_of_sites(packed_args):
 
         # Compute and write pooled SNPs for each chunk of genomic sites
         compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
-        print(f"finish compute_and_write_pooled_snps: {species_id} - {chunk_id}")
+        number_of_chunks = len(species_sliced_pileup_path[packed_args[1]])
+        print(f"finish compute_and_write_pooled_snps: {species_id} - {chunk_id} out of {number_of_chunks}")
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
+        global global_counter
+        number_of_chunks = len(species_sliced_pileup_path[packed_args[1]])
+        global_counter += 1
+        print(f"release global counter {global_counter} - {number_of_chunks}")
 
 
 def midas_merge_snps(args):
