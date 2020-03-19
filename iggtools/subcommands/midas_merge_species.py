@@ -8,6 +8,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, command, download_reference
 from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, DECIMALS, fetch_default_genome_depth, format_data
 from iggtools.params import outputs
+from iggtools.models.uhgg import UHGG
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
@@ -124,7 +125,7 @@ def midas_merge_species(args):
         pan_bt2_db_name = "pangenomes"
 
         #
-        local_toc = download_reference(outputs.genomes, bt2_db_dir)
+        local_toc = download_reference(outputs.genomes, bt2_db_temp_dir)
         db = UHGG(local_toc)
 
         # Fetch the files per genomes
