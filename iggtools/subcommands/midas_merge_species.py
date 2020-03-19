@@ -40,7 +40,7 @@ def compute_stats(tabundance, tcoverage):
 
     assert tabundance.keys() == tcoverage.keys(), f"compute_and_write_stats::merged abun and cov matrices have different species_id orders"
     species_ids = tabundance.keys()
-
+    stats = defaultdict()
     for species_id in species_ids:
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
