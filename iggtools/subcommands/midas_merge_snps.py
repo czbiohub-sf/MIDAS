@@ -114,6 +114,9 @@ def design_chunks(contigs_files, chunk_size):
         snps_depth_fp = pool_of_samples.get_target_layout("snps_depth", species_id)
         species_sliced_pileup_path[-1][species_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
 
+        print(argument_list)
+        print(chunk_id)
+        print(species_sliced_pileup_path[species_id])
         # Create a semaphore with number_of_chunks for current species
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
