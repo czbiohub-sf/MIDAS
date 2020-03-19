@@ -264,8 +264,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
     with OutputStream(outfile) as stream:
         stream.write("\t".join(snps_profile_schema.keys()) + "\n")
         for record in species_pileup_summary.values():
-            print(record)
-            stream.write("\t".join(map(format_data, record)) + "\n")
+            stream.write("\t".join(map(format_data, record.values())) + "\n")
 
 
 def midas_run_snps(args):
