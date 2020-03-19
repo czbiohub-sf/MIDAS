@@ -113,9 +113,7 @@ def design_chunks(contigs_files, chunk_size):
         snps_freq_fp = pool_of_samples.get_target_layout("snps_freq", species_id)
         snps_depth_fp = pool_of_samples.get_target_layout("snps_depth", species_id)
         species_sliced_pileup_path[-1][species_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
-        print(argument_list)
-        print(chunk_id)
-        exit(0)
+
         # Create a semaphore with number_of_chunks for current species
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
@@ -294,10 +292,10 @@ def process_chunk_of_sites(packed_args):
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_pileup_path[species_id])
 
-        print(f"++++++++++++++++++++ wait {species_id}")
+        print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ wait {species_id}")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        print(f"++++++++++++++++++++ start {species_id}")
+        print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ start {species_id}")
         merge_chunks_by_species(species_id)
         return "worked"
 
@@ -321,7 +319,7 @@ def process_chunk_of_sites(packed_args):
     finally:
         semaphore_for_species[species_id].release() # no deadlock
 
-        print(f"----------------release global counter {packed_args}")
+        print(f"----------------release global counter {global_counter}")
 
 
 def midas_merge_snps(args):
