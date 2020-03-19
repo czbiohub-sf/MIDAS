@@ -81,6 +81,7 @@ def write_species_results(pool_of_samples, transposed):
         with OutputStream(outpath) as outfile:
             outfile.write("\t".join(["species_id"] + sample_names) + "\n")
             for values in transposed[col].values():
+                print(values)
                 outfile.write("\t".join(map(format_data, values)) + "\n")
 
 
