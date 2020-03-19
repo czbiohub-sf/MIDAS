@@ -172,6 +172,7 @@ def accumulate(accumulator, proc_args):
 
     # Alternative way is to read once to memory
     awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 <= {contig_end}\'"
+    print(f"================={snps_pileup_path}")
     with InputStream(snps_pileup_path, awk_command) as stream:
         for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
             # Unpack frequently accessed columns
@@ -325,7 +326,6 @@ def process_chunk_of_sites(packed_args):
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
-
         print(f"----------------release global counter {global_counter}")
 
 
