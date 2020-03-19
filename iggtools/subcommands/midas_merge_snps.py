@@ -313,7 +313,7 @@ def process_chunk_of_sites(packed_args):
 
         accumulator = dict()
         for sample_index in range(total_samples_count):
-            proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_inndex], total_samples_count, list_of_sample_depths[sample_index])
+            proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
 
         # Compute and write pooled SNPs for each chunk of genomic sites
