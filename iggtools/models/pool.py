@@ -25,11 +25,17 @@ def get_pool_layout(dbtype=""):
 
             "outdir":                f"{dbtype}/output",
             "tempdir":               f"{dbtype}/temp",
-            "dbsdir":                f"{dbtype}/dbs",
+            # this is the old dbs
+            "dbsdir_old":            f"{dbtype}/dbs",
+
+            "dbsdir":                f"dbs",
+            "dbs_tempdir":           f"dbs/temp",
+            "snps_repgenomes_bam":   f"dbs/repgenomes.bam",
+            "genes_pangenomes_bam":  f"dbs/pangenomes.bam",
 
             "outdir_by_species":     f"{dbtype}/output/{species_id}",
             "tempdir_by_species":    f"{dbtype}/temp/{species_id}",
-            "genes_info_file":        f"{dbtype}/temp/{species_id}/gene_info.txt",
+            "genes_info_file":       f"{dbtype}/temp/{species_id}/gene_info.txt",
 
             "lookup_table_by_chunk": f"{dbtype}/temp/{species_id}/cid_lookup.tsv",
             "snps_info_by_chunk":    f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_info.tsv",
