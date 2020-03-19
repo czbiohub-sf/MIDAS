@@ -71,7 +71,7 @@ def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
 def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
 
-    sample_names = pool_of_samples.fetch_sample_names()
+    sample_names = pool_of_samples.fetch_samples_names()
 
     col_names = list(species_profile_schema.keys())[1:]
 
