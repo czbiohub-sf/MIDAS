@@ -117,6 +117,7 @@ def design_chunks(contigs_files, chunk_size):
         print(argument_list)
         print(chunk_id)
         print(species_sliced_pileup_path[species_id])
+        exit(0)
         # Create a semaphore with number_of_chunks for current species
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
