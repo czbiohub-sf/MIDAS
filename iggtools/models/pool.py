@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.sample import Sample
@@ -80,8 +79,37 @@ class Pool: # pylint: disable=too-few-public-methods
             command(f"rm -rf {dir_to_create}/{species_id}", quiet)
             command(f"mkdir -p {dir_to_create}/{species_id}", quiet)
 
+    def select_species(self, dbtype, args):
+        schema = fetch_schema_by_dbtype(dbtype)
+        species = {}
+        for sample in self.samples:
+            with InputStream(sample.get_target_layout(f"{dbtype}_summary")) as stream:
+                for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+                    species_id = record["species_id"]
+                    # Skip unspeficied species
+                    if (args.species_list and species_id not in args.species_list.split(",")):
+                        continue
+                    # Read in all the species_id in the species profile
+                    if species_id not in species:
+                        species[species_id] = Species(species_id)
+                    # Skip low-coverage <species, sample>
+                    if record['mean_coverage'] < args.genome_depth:
+                        continue
+                    # Skip low prevalent <species, sample>
+                    if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):
+                        continue
+                    # Select high quality sample-species pairs
+                    species[species_id].samples.append(sample)
+
+        list_of_species = list(species.values())
+        # Sort list_of_species by samples_count in descending order
+        list_of_species = _sort_species(list_of_species)
+        # Second round of filters based on prevalence
+        list_of_species = _filter_species(list_of_species, args)
+        return {species.id:species for species in list_of_species}
+
     def init_samples(self, dbtype):
-        """ read in table-of-content: sample_name\tpath/to/midas_output """
+        """ read in table-of-content: samples_list """
         samples = []
         with InputStream(self.list_of_samples) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
@@ -91,9 +119,22 @@ class Pool: # pylint: disable=too-few-public-methods
                 samples.append(sample)
         return samples
 
-    def fetch_sample_names(self):
-        sample_names = [sample.sample_name for sample in self.samples]
-        return sample_names
+    def fetch_samples_names(self):
+        return [sample.sample_name for sample in self.samples]
+
+    def write_summary_files(self, dict_of_species, dbtype):
+        """ Write snps/genes summary files for current samples pool """
+
+        summary_file = self.get_target_layout(f"{dbtype}_summary")
+        summary_header = list(fetch_schema_by_dbtype(dbtype).keys())[1:]
+
+        with OutputStream(summary_file) as stream:
+            stream.write("\t".join(["species_id", "sample_name"] + summary_header) + "\n")
+            for species in dict_of_species.values():
+                for sample in species.samples:
+                    row = list(sample.profile[species.id].values())
+                    row.insert(1, sample.sample_name)
+                    stream.write("\t".join(map(format_data, row)) + "\n")
 
 
 class Species:
@@ -106,54 +147,17 @@ class Species:
     def fetch_samples_depth(self):
         return [sample.profile[self.id]["mean_coverage"] for sample in self.samples]
 
-    def write_summary(self, dbtype, summary_dir):
-        """ Write snps/genes summary files for current samples pool """
-        #summary_dir = f"{outdir}/{self.id}/{dbtype}_summary.tsv"
-        with OutputStream(summary_dir) as stream:
-            header = ["species_id", "sample_name"] + list(fetch_schema_by_dbtype(dbtype).keys())[1:]
-            stream.write("\t".join(header) + "\n")
-            for sample in self.samples:
-                record = [self.id, sample.sample_name] + list(sample.profile[self.id].values())[1:]
-                stream.write("\t".join(map(format_data, record)) + "\n")
-
-    def fetch_samples_name(self):
+    def fetch_samples_names(self):
         list_of_sample_objects = list(self.samples)
-        samples_names = [sample.sample_name for sample in list_of_sample_objects]
-        return samples_names
+        return [sample.sample_name for sample in list_of_sample_objects]
 
 
-def init_species(pool_of_samples, dbtype, args):
-    schema = fetch_schema_by_dbtype(dbtype)
-    species = {}
-    for sample in pool_of_samples.samples:
-        with InputStream(sample.get_target_layout(f"{dbtype}_summary")) as stream:
-            for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
-                species_id = record["species_id"]
-                # Skip unspeficied species
-                if (args.species_list and species_id not in args.species_list.split(",")):
-                    continue
-                # Read in all the species_id in the species profile
-                if species_id not in species:
-                    species[species_id] = Species(species_id)
-                # Skip low-coverage <species, sample>
-                if record['mean_coverage'] < args.genome_depth:
-                    continue
-                # Skip low prevalent <species, sample>
-                if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):
-                    continue
-                # Select high quality sample-species pairs
-                species[species_id].samples.append(sample)
-
-    return list(species.values())
-
-
-def sort_species(species):
-    """ Sort list_of_Species by samples_count in descending order """
+def _sort_species(species):
+    """ Sort list_of_species by samples_count in descending order """
     species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
     return [sp[0] for sp in species_sorted]
 
-
-def filter_species(species, args):
+def _filter_species(species, args):
     """ Filter out low prevalent species using samples_count cutoff """
     species_keep = []
     for sp in species:
@@ -164,16 +168,3 @@ def filter_species(species, args):
         sp.samples_depth = sp.fetch_samples_depth()
         species_keep.append(sp)
     return species_keep
-
-
-def select_species(pool_of_samples, dbtype, args):
-    species = init_species(pool_of_samples, dbtype, args)
-    species = sort_species(species)
-    species = filter_species(species, args)
-    return species
-
-
-def search_species(list_of_species, species_id):
-    curr_species = [species for species in list_of_species if species.id == species_id]
-    assert len(curr_species) == 1, f"pool::search_species duplicated Species in list_of_species"
-    return curr_species[0]

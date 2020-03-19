@@ -1,10 +1,10 @@
 import json
 from collections import defaultdict
 
-from iggtools.models.pool import Pool, select_species
+from iggtools.models.pool import Pool
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
@@ -19,6 +19,7 @@ DEFAULT_CHUNK_SIZE = 5000
 
 
 def read_cluster_map(packed_args):
+    """ convert centroid99_gene to centroin_{pid}_gene """
     gene_info_path, pid = packed_args
 
     genes_map_dict = {}
@@ -29,7 +30,43 @@ def read_cluster_map(packed_args):
     return genes_map_dict
 
 
-def write_per_species(accumulator, species_id):
+def prepare_chunks(dict_of_species, genes_info_files):
+
+    global pool_of_samples
+    global global_args
+
+    global species_sliced_coverage_path
+    species_sliced_coverage_path = defaultdict(dict)
+
+    # Parse the centroid_genes_mapping
+    args_list = []
+    for species_index, species_id in enumerate(dict_of_species.keys()):
+        #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
+        genes_info_path = genes_info_files[species_index]
+        args_list.append((genes_info_path, global_args.cluster_pid))
+    list_of_genes_map_dict = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
+
+    for species_index, species_id in enumerate(dict_of_species.keys()):
+        species_sliced_coverage_path[species_id]["genes_map"] = list_of_genes_map_dict[species_index]
+
+
+    arguments_list = []
+    for species in dict_of_species.values():
+        species_id = species.id
+
+        species_samples = dict()
+        for sample in species.samples:
+            sample_name = sample.sample_name
+            midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
+            assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
+            species_samples[sample_name] = midas_genes_path
+
+        species_sliced_coverage_path[species_id]["species_samples"] = species_samples
+        arguments_list.append(species_id)
+    return arguments_list
+
+
+def write_matrices_per_species(accumulator, species_id):
 
     global species_sliced_coverage_path
     global pool_of_samples
@@ -84,7 +121,6 @@ def per_species_worker(species_id):
     #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
     #genes_map_dict = read_cluster_map(genes_info_path, global_args.cluster_pid)
 
-    genes_map_dict = species_sliced_coverage_path[species_id]["genes_map"]
     species_samples = species_sliced_coverage_path[species_id]["species_samples"]
     sample_names = list(species_samples.keys())
 
@@ -97,7 +133,7 @@ def per_species_worker(species_id):
     for gene_id, copynum in accumulator["copynum"].items():
         accumulator["presabs"][gene_id] = [1 if cn > global_args.min_copy else 0 for cn in copynum]
 
-    write_per_species(accumulator, species_id)
+    write_matrices_per_species(accumulator, species_id)
 
 
 def midas_merge_genes(args):
@@ -105,10 +141,10 @@ def midas_merge_genes(args):
     global pool_of_samples
 
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
-    list_of_species = select_species(pool_of_samples, "genes", args)
+    dict_of_species = pool_of_samples.select_species("genes", args)
 
     # Create species-subdir at one place given the list of species_of_interest
-    species_ids_of_interest = [sp.id for sp in list_of_species]
+    species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
     pool_of_samples.create_output_dir()
     pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
     pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
@@ -116,44 +152,17 @@ def midas_merge_genes(args):
     global global_args
     global_args = args
 
-    global species_sliced_coverage_path
-    species_sliced_coverage_path = defaultdict(dict)
+    # Write genes_summary.tsv
+    pool_of_samples.write_summary_files(dict_of_species, "genes")
 
     # Download pan-genes-info for every species in the restricted species profile.
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
     genes_info_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"), filetype="genes_info")
 
-
-    args_list = []
-    for species_index, species_id in enumerate(species_ids_of_interest):
-        #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
-        genes_info_path = genes_info_files[species_index]
-        args_list.append((genes_info_path, args.cluster_pid))
-    list_of_species_genes_map = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
-
-    for species_index, species_id in enumerate(species_ids_of_interest):
-        species_sliced_coverage_path[species_id]["genes_map"] = list_of_species_genes_map[species_index]
-
     # Collect copy_numbers, coverage and read counts across ALl the samples
-    argument_list = []
-    for species in list_of_species:
-        species_id = species.id
-
-        # What is this? write_summary??
-        species.write_summary("genes", pool_of_samples.get_target_layout("genes_summary", species_id))
-
-        species_samples = dict()
-        for sample in species.samples:
-            sample_name = sample.sample_name
-            midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
-            assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
-            species_samples[sample.sample_name] = midas_genes_path
-        species_sliced_coverage_path[species_id]["species_samples"] = species_samples
-
-        argument_list.append(species_id)
-
-    multiprocessing_map(per_species_worker, argument_list, num_physical_cores)
+    arguments_list = prepare_chunks(dict_of_species, genes_info_files)
+    multiprocessing_map(per_species_worker, arguments_list, num_physical_cores)
 
 
 def register_args(main_func):
