@@ -309,6 +309,7 @@ def process_chunk_of_sites(packed_args):
 
         # Compute and write pooled SNPs for each chunk of genomic sites
         compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
+        print(f"finish compute_and_write_pooled_snps: {species_id} - {chunk_id}")
         return "worked"
     finally:
         semaphore_for_species[species_id].release() # no deadlock
