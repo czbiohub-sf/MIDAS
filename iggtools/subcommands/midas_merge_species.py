@@ -104,15 +104,13 @@ def midas_merge_species(args):
     stats = compute_stats(transposed["rel_abundance"], transposed["coverage"])
     write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
 
-    species_ids_of_interest = []
-    for species_id, record in stats.items():
-        if record[-1] > 0:
-            species_ids_of_interest.append(species_id)
-    print(species_ids_of_interest)
     # TO move to another subcommand
     if args.build_bowtie2_db:
-
-        species_ids_of_interest = list(stats.keys())
+        # The input for this section is species_prevalance.tsv
+        species_ids_of_interest = []
+        for species_id, record in stats.items():
+            if record[-1] > 0:
+                species_ids_of_interest.append(species_id)
 
         # Create the dbs/species
         pool_of_samples.create_species_subdir(species_ids_of_interest, "dbsdir", args.debug)
