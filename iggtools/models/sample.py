@@ -77,6 +77,14 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"rm -rf {self.dbsdir}")
             command(f"mkdir -p {self.dbsdir}")
 
+    def create_dbsdir(self, debug=False):
+        if debug and os.path.exists(self.dbsdir):
+            tsprint(f"Reusing existing temp data in {self.dbsdir} according to --debug flag.")
+        else:
+            tsprint(f"Create database directory for sample {self.sample_name}.")
+            command(f"rm -rf {self.dbsdir}")
+            command(f"mkdir -p {self.dbsdir}")
+
     def create_species_subdir(self, species_ids, debug=False, dirtype=None):
         assert dirtype is not None, f"Need to specify which step the species subdir are built"
 

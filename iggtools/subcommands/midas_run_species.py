@@ -215,6 +215,7 @@ def midas_run_species(args):
         print(markers_db_files)
         exit(0)
     else:
+        sample.create_dbsdir()
         markers_db_files = fetch_marker_genes(sample.dbsdir)
         local_toc = download_reference(outputs.genomes, sample.dbsdir)
 
