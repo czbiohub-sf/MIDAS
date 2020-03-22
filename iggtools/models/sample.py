@@ -58,7 +58,7 @@ class Sample: # pylint: disable=too-few-public-methods
     def get_target_layout(self, filename, species_id="", contig_id=""):
         if isinstance(filename, list):
             print(filename)
-            returnn [ os.path.join(self.midas_outdir, self.layout(species_id, contig_id)[fn]) for fn in filename ]
+            returnn os.path.join(self.midas_outdir, self.layout(species_id, contig_id)[fn]) for fn in filename
 
         return os.path.join(self.midas_outdir, self.layout(species_id, contig_id)[filename])
 
