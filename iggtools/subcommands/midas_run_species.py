@@ -6,7 +6,7 @@ from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference, command
 from iggtools.models.uhgg import UHGG, fetch_marker_genes
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
@@ -207,8 +207,16 @@ def midas_run_species(args):
     sample = Sample(args.sample_name, args.midas_outdir, "species")
     sample.create_output_dir(args.debug)
 
+    if args.local_dbsdir:
+        curr_dbsdir = args.local_dbsdir
+        sample_dbsdir = sample.dbsdir
+        command(f"ln -rs {curr_dbsdir} {sample_dbsdir}")
+    else:
+        markers_db_files = fetch_marker_genes(sample.dbsdir)
+        local_toc = download_reference(outputs.genomes, sample.dbsdir)
+
+
     # Align reads to marker-genes database
-    markers_db_files = fetch_marker_genes(sample.dbsdir)
     m8_file = sample.get_target_layout("species_alignments_m8")
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
@@ -216,7 +224,6 @@ def midas_run_species(args):
         marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
     # Classify reads
-    local_toc = download_reference(outputs.genomes, sample.dbsdir)
     db = UHGG(local_toc)
     species_info = db.species
     marker_info = read_marker_info_repgenomes(markers_db_files[-1])
@@ -229,11 +236,7 @@ def midas_run_species(args):
     species_abundance = normalize_counts(species_alns, total_gene_length)
 
     write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-
-    if args.debug is False:
-        tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-        sample.remove_tempdir_dir()
-
+    
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
@@ -274,6 +277,11 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--local_dbsdir',
+                           dest='local_dbsdir',
+                           type=str,
+                           metavar="STR",
+                           help=f"Provide local path of the dbs instead of sample-specific")
     return main_func
 
 
