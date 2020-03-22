@@ -73,9 +73,6 @@ class Sample: # pylint: disable=too-few-public-methods
             tsprint(f"Create temp directory for sample {self.sample_name}.")
             command(f"rm -rf {self.tempdir}")
             command(f"mkdir -p {self.tempdir}")
-            tsprint(f"Create database directory for sample {self.sample_name}.")
-            command(f"rm -rf {self.dbsdir}")
-            command(f"mkdir -p {self.dbsdir}")
 
     def create_dbsdir(self, debug=False):
         if debug and os.path.exists(self.dbsdir):
