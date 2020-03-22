@@ -211,6 +211,9 @@ def midas_run_species(args):
         curr_dbsdir = args.local_dbsdir
         sample_dbsdir = sample.dbsdir
         command(f"ln -rs {curr_dbsdir} {sample_dbsdir}")
+        markers_db_files = sample.marker_genes_file()
+        print(markers_db_files)
+        exit(0)
     else:
         markers_db_files = fetch_marker_genes(sample.dbsdir)
         local_toc = download_reference(outputs.genomes, sample.dbsdir)
@@ -236,7 +239,7 @@ def midas_run_species(args):
     species_abundance = normalize_counts(species_alns, total_gene_length)
 
     write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-    
+
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
