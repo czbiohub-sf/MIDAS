@@ -209,8 +209,8 @@ def midas_run_species(args):
 
     if args.local_dbsdir:
         curr_dbsdir = args.local_dbsdir
-        sample_dbsdir = sample.dbsdir
-        command(f"ln -rs {curr_dbsdir} {args.midas_outdir}")
+        sample_dbsdir = args.midas_outdir
+        command(f"ln -rs {curr_dbsdir} {sample_dbsdir}")
         markers_db_files = sample.get_target_layout("marker_genes_file")
         print(markers_db_files)
         exit(0)
