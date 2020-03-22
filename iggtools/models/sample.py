@@ -56,6 +56,9 @@ class Sample: # pylint: disable=too-few-public-methods
         self.dbsdir = self.get_target_layout("dbsdir")
 
     def get_target_layout(self, filename, species_id="", contig_id=""):
+        if isinstance(filename, list):
+            returnn [ os.path.join(self.midas_outdir, self.layout(species_id, contig_id)[fn]) for fn in filename ]
+
         return os.path.join(self.midas_outdir, self.layout(species_id, contig_id)[filename])
 
     def create_output_dir(self, debug=False):
