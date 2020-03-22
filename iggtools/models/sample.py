@@ -25,7 +25,7 @@ def get_single_layout(sample_name, dbtype=""):
 
             "marker_genes_file":      [f"{sample_name}/dbs/phyeco.fa{ext}" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + \
                                         [f"", f"{sample_name}/dbs/phyeco.map"],
-            "local_toc":              f"{sample_name}/dbs/genomes.tsv"  
+            "local_toc":              f"{sample_name}/dbs/genomes.tsv",
 
             "species_alignments_m8":  f"{sample_name}/{dbtype}/temp/alignments.m8",
             "snps_repgenomes_bam":    f"{sample_name}/{dbtype}/repgenomes.bam",
