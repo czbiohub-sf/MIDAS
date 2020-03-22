@@ -212,12 +212,13 @@ def midas_run_species(args):
         sample_dbsdir = os.path.dirname(sample.get_target_layout("dbsdir"))
         command(f"ln -s -f {curr_dbsdir} {sample_dbsdir}")
         markers_db_files = sample.get_target_layout("marker_genes_file")
+        local_toc = sample.get_target_layout("local_toc")
     else:
         sample.create_dbsdir()
         markers_db_files = fetch_marker_genes(sample.dbsdir)
         local_toc = download_reference(outputs.genomes, sample.dbsdir)
-
-
+    print(local_toc)
+    exit(0)
     # Align reads to marker-genes database
     m8_file = sample.get_target_layout("species_alignments_m8")
     map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)

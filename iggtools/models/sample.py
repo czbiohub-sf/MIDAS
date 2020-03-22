@@ -23,7 +23,9 @@ def get_single_layout(sample_name, dbtype=""):
             "centroid_file":          f"{sample_name}/dbs/temp/{species_id}/centroids.ffn",
             "genes_info_file":        f"{sample_name}/dbs/temp/{species_id}/gene_info.txt",
 
-            "marker_genes_file":      [f"{sample_name}/dbs/phyeco.fa{ext}" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + [f"{sample_name}/dbs/phyeco.map"],
+            "marker_genes_file":      [f"{sample_name}/dbs/phyeco.fa{ext}" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + \
+                                        [f"", f"{sample_name}/dbs/phyeco.map"],
+            "local_toc":              f"{sample_name}/dbs/genomes.tsv"  
 
             "species_alignments_m8":  f"{sample_name}/{dbtype}/temp/alignments.m8",
             "snps_repgenomes_bam":    f"{sample_name}/{dbtype}/repgenomes.bam",
