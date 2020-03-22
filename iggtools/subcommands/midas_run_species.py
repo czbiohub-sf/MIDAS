@@ -204,41 +204,46 @@ def write_abundance(species_profile_path, species_abundance):
 
 def midas_run_species(args):
 
-    sample = Sample(args.sample_name, args.midas_outdir, "species")
-    sample.create_output_dir(args.debug)
+    try:
+        sample = Sample(args.sample_name, args.midas_outdir, "species")
+        sample.create_output_dir(args.debug)
 
-    if args.local_dbsdir:
-        curr_dbsdir = args.local_dbsdir
-        sample_dbsdir = os.path.dirname(sample.get_target_layout("dbsdir"))
-        command(f"ln -s -f -n {curr_dbsdir} {sample_dbsdir}")
-        markers_db_files = sample.get_target_layout("marker_genes_file")
-        local_toc = sample.get_target_layout("local_toc")
-    else:
-        sample.create_dbsdir()
-        markers_db_files = fetch_marker_genes(sample.dbsdir)
-        local_toc = download_reference(outputs.genomes, sample.dbsdir)
+        if args.local_dbsdir:
+            curr_dbsdir = args.local_dbsdir
+            sample_dbsdir = os.path.dirname(sample.get_target_layout("dbsdir"))
+            command(f"ln -s -f -n {curr_dbsdir} {sample_dbsdir}")
+            markers_db_files = sample.get_target_layout("marker_genes_file")
+            local_toc = sample.get_target_layout("local_toc")
+        else:
+            sample.create_dbsdir()
+            markers_db_files = fetch_marker_genes(sample.dbsdir)
+            local_toc = download_reference(outputs.genomes, sample.dbsdir)
 
-    # Align reads to marker-genes database
-    m8_file = sample.get_target_layout("species_alignments_m8")
-    map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+        # Align reads to marker-genes database
+        m8_file = sample.get_target_layout("species_alignments_m8")
+        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
-    with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
-        marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
+        with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
+            marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
-    # Classify reads
-    db = UHGG(local_toc)
-    species_info = db.species
-    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
-    best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
-    unique_alns = assign_unique(best_hits, species_info, marker_info)
-    species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
+        # Classify reads
+        db = UHGG(local_toc)
+        species_info = db.species
+        marker_info = read_marker_info_repgenomes(markers_db_files[-1])
+        best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
+        unique_alns = assign_unique(best_hits, species_info, marker_info)
+        species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
 
-    # Estimate species abundance
-    total_gene_length = sum_marker_gene_lengths(marker_info)
-    species_abundance = normalize_counts(species_alns, total_gene_length)
+        # Estimate species abundance
+        total_gene_length = sum_marker_gene_lengths(marker_info)
+        species_abundance = normalize_counts(species_alns, total_gene_length)
 
-    write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-
+        write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            sample.remove_output_dir()
+        raise
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
