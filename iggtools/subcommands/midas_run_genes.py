@@ -341,10 +341,11 @@ def midas_run_genes(args):
 
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
-                for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
-                    species_profile[species_id] = coverage
-
+                for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
+                    if sample_counts > 0:
+                        species_profile[species_id] = sample_counts
             species_ids_of_interest = list(species_profile.keys())
+
             sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
@@ -355,8 +356,8 @@ def midas_run_genes(args):
                 species_profile = sample.select_species(args.genome_coverage, args.species_list)
             else:
                 species_profile = sample.select_species(args.genome_coverage)
-
             species_ids_of_interest = list(species_profile.keys())
+
             sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
             # Download centroid_files every species into dbs/temp/{species}/

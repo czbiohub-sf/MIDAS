@@ -41,7 +41,11 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     bamfile_prefix = f"{bt2_db_dir}/{bt2_db_name}"
 
     if args.debug and os.path.exists(bamfile_path):
-        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {bamfile_path}")
+        tsprint(f"Use existing per-sample bowtie2 db {bamfile_path} in debug mode")
+        return
+
+    if args.bt2_db_indexes and os.path.exists(bamfile_path):
+        tsprint(f"Use provided bowtie2 db {bamfile_path}")
         return
 
     # Construct bowtie2 align input arguments

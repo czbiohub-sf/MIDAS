@@ -230,6 +230,10 @@ def midas_run_species(args):
 
     write_abundance(sample.get_target_layout("species_summary"), species_abundance)
 
+    if args.debug is False:
+        tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+        sample.remove_tempdir_dir()
+
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')

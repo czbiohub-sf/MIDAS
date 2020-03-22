@@ -108,3 +108,6 @@ class Sample: # pylint: disable=too-few-public-methods
     def remove_output_dir(self):
         command(f"rm -rf {self.tempdir}", check=False)
         command(f"rm -rf {self.outdir}", check=False)
+
+    def remove_tempdir_dir(self):
+        command(f"rm -rf {self.tempdir}", check=False)

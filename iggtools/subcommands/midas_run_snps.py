@@ -289,10 +289,11 @@ def midas_run_snps(args):
             # TODO: a better way to handel the list_of_species in the index file
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
-                for species_id, coverage in select_from_tsv(stream, ["species_id", "coverage"]):
-                    species_profile[species_id] = coverage
-
+                for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
+                    if sample_counts > 0:
+                        species_profile[species_id] = sample_counts
             species_ids_of_interest = species_profile.keys()
+
             sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
 
         else:
