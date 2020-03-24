@@ -446,7 +446,7 @@ def midas_run_snps(args):
         # Use mpileup to call SNPs
         sample.create_species_subdirs(species_ids_of_interest, "output", args.debug)
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, 2*num_physical_cores)
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
     except:
