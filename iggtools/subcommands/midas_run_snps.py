@@ -414,9 +414,9 @@ def midas_run_snps(args):
             # TODO: a more accurate way to handle the list_of_species in the index file
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
-                for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
-                    if sample_counts > 0:
-                        species_profile[species_id] = sample_counts
+                for species_id, dirname in select_from_tsv(stream, ["species_id", "sample_counts"]):
+                    if int(sample_counts) > 0:
+                        species_profile[species_id] = int(sample_counts)
             # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
