@@ -44,10 +44,6 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
         tsprint(f"Use existing per-sample bowtie2 db {bamfile_path} in debug mode")
         return
 
-    if args.bt2_db_indexes and os.path.exists(bamfile_path):
-        tsprint(f"Use provided bowtie2 db {bamfile_path}")
-        return
-
     # Construct bowtie2 align input arguments
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
     aln_mode = "local" if args.aln_mode == "local" else "end-to-end"

@@ -9,7 +9,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, split, command, cat_files
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, command, cat_files
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
@@ -24,7 +24,135 @@ DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
-DEFAULT_CHUNK_SIZE = 20000
+DEFAULT_CHUNK_SIZE = 40000
+
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+    subparser.add_argument('-1',
+                           dest='r1',
+                           required=True,
+                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
+    subparser.add_argument('-2',
+                           dest='r2',
+                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+    # Species related
+    subparser.add_argument('--genome_coverage',
+                           type=float,
+                           dest='genome_coverage',
+                           metavar='FLOAT',
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--local_bowtie2_indexes',
+                           dest='local_bowtie2_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--species_profile_path',
+                           dest='species_profile_path',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Species profile path for the prebuild bowtie2 index")
+    # Alignment flags
+    subparser.add_argument('--aln_speed',
+                           type=str,
+                           dest='aln_speed',
+                           default='very-sensitive',
+                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
+                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
+    subparser.add_argument('--aln_mode',
+                           type=str,
+                           dest='aln_mode',
+                           default='global',
+                           choices=['local', 'global'],
+                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 default --end-to-end).')
+    subparser.add_argument('--aln_interleaved',
+                           action='store_true',
+                           default=False,
+                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
+    #  Pileup flags (samtools, or postprocessing)
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_ALN_MAPID,
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+    subparser.add_argument('--aln_mapq',
+                           dest='aln_mapq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_MAPQ,
+                           help=f"Discard reads with mapping quality < MAPQ. ({DEFAULT_ALN_MAPQ})")
+    subparser.add_argument('--aln_readq',
+                           dest='aln_readq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_READQ,
+                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+    subparser.add_argument('--aln_baseq',
+                           dest='aln_baseq',
+                           default=DEFAULT_ALN_BASEQ,
+                           type=int,
+                           metavar="INT",
+                           help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
+    subparser.add_argument('--aln_trim',
+                           dest='aln_trim',
+                           default=DEFAULT_ALN_TRIM,
+                           type=int,
+                           metavar="INT",
+                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
+    # File related
+    subparser.add_argument('--sparse',
+                           action='store_true',
+                           default=False,
+                           help=f"Omit zero rows from output.")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
+    if False: # This is unused.
+        subparser.add_argument('--aln_discard',
+                               dest='aln_baq',
+                               default=False,
+                               help='Discard discordant read-pairs (False)')
+        subparser.add_argument('--aln_baq',
+                               dest='aln_baq',
+                               default=False,
+                               help='Enable BAQ: per-base alignment quality (False)')
+        subparser.add_argument('--aln_adjust_mq',
+                               dest='aln_adjust_mq',
+                               default=False,
+                               help='Adjust MAPQ (False)')
+    return main_func
 
 
 def keep_read(aln):
@@ -49,7 +177,7 @@ def keep_read(aln):
 
 
 def scan_contigs(contig_file, species_id):
-    # TODO: we do need the contig_seq which can only be read from fasta file
+    # TODO: we DO need the contig_seq which can only be read from fasta file
     contigs = {}
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
@@ -70,7 +198,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
     global species_sliced_snps_path
 
     semaphore_for_species = dict()
-    # Design: per species list of headerless_sliced_output_path indexed by chunk_id.
+    # design per species list of headerless_sliced_output_path indexed by chunk_id.
     species_sliced_snps_path = defaultdict(list)
     species_sliced_snps_path["input_bamfile"] = sample.get_target_layout("snps_repgenomes_bam")
 
@@ -87,7 +215,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
             contig_length = contig["contig_len"]
 
             if contig_length <= chunk_size:
-                headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, chunk_id)
+                headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
                 # TODO: instead contig as the last argument, just pass the contig_seq.
@@ -97,7 +225,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
             else:
                 number_of_chunks = ceil(contig_length/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, chunk_size)):
-                    headerless_sliced_path = sample.get_target_layout("contigs_pileup", species_id, chunk_id)
+                    headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
                     if ni == number_of_chunks:
@@ -269,62 +397,54 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
 
 def midas_run_snps(args):
 
-    global sample
-    sample = Sample(args.sample_name, args.midas_outdir, "snps")
-    # Create output directory
-    sample.create_output_dir(args.debug)
-
-    global global_args
-    global_args = args
-
     try:
-        if args.bt2_db_indexes:
-            # Already-built bowtie2 indexes
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(args.bt2_db_indexes)
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided bt2_db_indexes {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
-            tsprint("Use provided bowtie2 indexes and species_profile_path for reads mapping.")
+        global sample
+        sample = Sample(args.sample_name, args.midas_outdir, "snps")
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-            # TODO: a better way to handel the list_of_species in the index file
+        global global_args
+        global_args = args
+
+        if args.local_bowtie2_indexes:
+            bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
+            assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
+
+            # TODO: a more accurate way to handle the list_of_species in the index file
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
                 for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
                     if sample_counts > 0:
                         species_profile[species_id] = sample_counts
-            species_ids_of_interest = species_profile.keys()
-
-            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
-
+            # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "repgenomes"
-            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
-
             if args.species_list:
                 species_profile = sample.select_species(args.genome_coverage, args.species_list)
             else:
                 species_profile = sample.select_species(args.genome_coverage)
 
-            species_ids_of_interest = species_profile.keys()
-            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
+        species_ids_of_interest = species_profile.keys()
+        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
-            # Download representative genomes for every species into dbs/temp/{species}/
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
-            contigs_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="contigs")
-            # Build one bowtie database for species in the restricted species profile
+        # Download representative genomes for every species into dbs/temp/{species}/
+        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
+        contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="contigs")
+
+        # Build one bowtie database for species in the restricted species profile
+        if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
 
-        # Create per-species subdirectories in temp/{species}
-        sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
-
         # Map reads to the existing bowtie2 indexes
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug)
 
         # Use mpileup to call SNPs
+        sample.create_species_subdirs(species_ids_of_interest, "output", args.debug)
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
 
@@ -332,136 +452,8 @@ def midas_run_snps(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_output_dir()
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
         raise
-
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
-    subparser.add_argument('-1',
-                           dest='r1',
-                           required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    # Species related
-    subparser.add_argument('--genome_coverage',
-                           type=float,
-                           dest='genome_coverage',
-                           metavar='FLOAT',
-                           default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--bt2_db_indexes',
-                           dest='bt2_db_indexes',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--species_profile_path',
-                           dest='species_profile_path',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Species profile path for the prebuild bowtie2 index")
-    # Alignment flags
-    subparser.add_argument('--aln_speed',
-                           type=str,
-                           dest='aln_speed',
-                           default='very-sensitive',
-                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
-                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
-    subparser.add_argument('--aln_mode',
-                           type=str,
-                           dest='aln_mode',
-                           default='global',
-                           choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 default --end-to-end).')
-    subparser.add_argument('--aln_interleaved',
-                           action='store_true',
-                           default=False,
-                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-    subparser.add_argument('--aln_sort',
-                           action='store_true',
-                           default=True,
-                           help=f"Sort BAM file.")
-    #  Pileup flags (samtools, or postprocessing)
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
-    subparser.add_argument('--aln_mapq',
-                           dest='aln_mapq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_MAPQ,
-                           help=f"Discard reads with mapping quality < MAPQ. ({DEFAULT_ALN_MAPQ})")
-    subparser.add_argument('--aln_readq',
-                           dest='aln_readq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_READQ,
-                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--aln_baseq',
-                           dest='aln_baseq',
-                           default=DEFAULT_ALN_BASEQ,
-                           type=int,
-                           metavar="INT",
-                           help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
-    subparser.add_argument('--aln_trim',
-                           dest='aln_trim',
-                           default=DEFAULT_ALN_TRIM,
-                           type=int,
-                           metavar="INT",
-                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
-    # File related
-    subparser.add_argument('--sparse',
-                           action='store_true',
-                           default=False,
-                           help=f"Omit zero rows from output.")
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    if False: # This is unused.
-        subparser.add_argument('--aln_discard',
-                               dest='aln_baq',
-                               default=False,
-                               help='Discard discordant read-pairs (False)')
-        subparser.add_argument('--aln_baq',
-                               dest='aln_baq',
-                               default=False,
-                               help='Enable BAQ: per-base alignment quality (False)')
-        subparser.add_argument('--aln_adjust_mq',
-                               dest='aln_adjust_mq',
-                               default=False,
-                               help='Adjust MAPQ (False)')
-    return main_func
 
 
 @register_args

@@ -5,6 +5,8 @@ from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, dow
 from iggtools.params import inputs, outputs
 
 
+MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
+
 def _uhgg_layout(species_id="", component="", genome_id=""):
     return {
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
@@ -62,8 +64,6 @@ class UHGG:  # pylint: disable=too-few-public-methods
 
     def fetch_representative_genome_id(self, species_id):
         return self.representatives[species_id]
-
-
 
 
 def _UHGG_load(toc_tsv, deep_sort=False):

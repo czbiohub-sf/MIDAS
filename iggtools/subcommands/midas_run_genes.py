@@ -106,7 +106,6 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         species_marker_genes[species_id] = dict(zip(c_markers, [0.0]*len(c_markers)))
 
         centroid_file = centroids_files[species_index]
-        #centroid_file = sample.get_target_layout("centroid_file", species_id)
 
         gene_count = 0
         chunk_id = 0
@@ -325,7 +324,7 @@ def midas_run_genes(args):
 
     global sample
     sample = Sample(args.sample_name, args.midas_outdir, "genes")
-    sample.create_output_dir(args.debug)
+    sample.create_dirs(["outdir", "tempdir"], args.debug)
 
     global global_args
     global_args = args
@@ -345,8 +344,8 @@ def midas_run_genes(args):
                     if sample_counts > 0:
                         species_profile[species_id] = sample_counts
             species_ids_of_interest = list(species_profile.keys())
+            sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
-            sample.create_species_subdir(species_profile.keys(), args.debug, "dbs")
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "pangenomes"
@@ -358,19 +357,18 @@ def midas_run_genes(args):
                 species_profile = sample.select_species(args.genome_coverage)
             species_ids_of_interest = list(species_profile.keys())
 
-            sample.create_species_subdir(species_ids_of_interest, args.debug, "dbs")
+            sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
             # Download centroid_files every species into dbs/temp/{species}/
             local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            db = UHGG(local_toc)
-            centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
+            centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
             # Build one bowtie database for species in the restricted species profile
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
             # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
             # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
         # Create per-species subdirectories in temp/{species}
-        sample.create_species_subdir(species_ids_of_interest, args.debug, "temp")
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
 
         # Map reads to pan-genes bowtie2 database
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
@@ -388,7 +386,7 @@ def midas_run_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_output_dir()
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
         raise
 
 

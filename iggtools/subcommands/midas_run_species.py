@@ -19,6 +19,53 @@ DEFAULT_ALN_MAPID = 94.0
 DECIMALS = ".6f"
 
 
+def register_args(main_func):
+    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+    subparser.add_argument('-1',
+                           dest='r1',
+                           required=True,
+                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
+    subparser.add_argument('-2',
+                           dest='r2',
+                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
+    subparser.add_argument('--word_size',
+                           dest='word_size',
+                           default=DEFAULT_WORD_SIZE,
+                           type=int,
+                           metavar="INT",
+                           help=f"Word size for BLAST search ({DEFAULT_WORD_SIZE}).  Use word sizes > 16 for greatest efficiency.")
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--local_dbsdir',
+                           dest='local_dbsdir',
+                           type=str,
+                           metavar="STR",
+                           help=f"Provide local path of the dbs instead of sample-specific")
+    return main_func
+
+
 def readfq(fp):
     """ https://github.com/lh3/readfq/blob/master/readfq.py
         A generator function for parsing fasta/fastq records """
@@ -206,18 +253,19 @@ def midas_run_species(args):
 
     try:
         sample = Sample(args.sample_name, args.midas_outdir, "species")
-        sample.create_output_dir(args.debug)
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
+        # Fetch db-related file either from S3 or create symlink
+        sample.create_dirs(["dbsdir"], args.debug)
+        dbsdir = sample.get_target_layout("dbsdir")
         if args.local_dbsdir:
             curr_dbsdir = args.local_dbsdir
-            sample_dbsdir = os.path.dirname(sample.get_target_layout("dbsdir"))
-            command(f"ln -s -f -n {curr_dbsdir} {sample_dbsdir}")
+            command(f"ln -s {curr_dbsdir}/* {dbsdir}")
             markers_db_files = sample.get_target_layout("marker_genes_file")
             local_toc = sample.get_target_layout("local_toc")
         else:
-            sample.create_dbsdir()
-            markers_db_files = fetch_marker_genes(sample.dbsdir)
-            local_toc = download_reference(outputs.genomes, sample.dbsdir)
+            markers_db_files = fetch_marker_genes(dbsdir)
+            local_toc = download_reference(outputs.genomes, dbsdir)
 
         # Align reads to marker-genes database
         m8_file = sample.get_target_layout("species_alignments_m8")
@@ -239,57 +287,16 @@ def midas_run_species(args):
         species_abundance = normalize_counts(species_alns, total_gene_length)
 
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+        tsprint("Finished midas_run_species for %s" % sample.sample_name)
+
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_output_dir()
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])\
+        # TODO: find a more robust way to existing file for symlink L263
+        if args.local_dbsdir:
+            sample.remove_dirs(["dbsdir"])
         raise
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
-    subparser.add_argument('-1',
-                           dest='r1',
-                           required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-
-    subparser.add_argument('--word_size',
-                           dest='word_size',
-                           default=DEFAULT_WORD_SIZE,
-                           type=int,
-                           metavar="INT",
-                           help=f"Word size for BLAST search ({DEFAULT_WORD_SIZE}).  Use word sizes > 16 for greatest efficiency.")
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--local_dbsdir',
-                           dest='local_dbsdir',
-                           type=str,
-                           metavar="STR",
-                           help=f"Provide local path of the dbs instead of sample-specific")
-    return main_func
 
 
 @register_args
