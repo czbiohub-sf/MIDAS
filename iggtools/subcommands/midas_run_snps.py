@@ -378,7 +378,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
             if prev_species_id is not None:
                 previous_species_pileup = species_pileup_summary.get(prev_species_id)
                 if previous_species_pileup["genome_length"] > 0:
-                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["covered_bases"]
+                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["genome_length"]
                 if previous_species_pileup["covered_bases"] > 0:
                     previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
             prev_species_id = species_id
@@ -417,6 +417,8 @@ def midas_run_snps(args):
                 for species_id, mean_coverage in select_from_tsv(stream, ["species_id", "mean_coverage"]):
                     if float(mean_coverage) >= args.genome_coverage:
                         species_profile[species_id] = float(mean_coverage)
+            # The index was only for the purpose of same bowtie2 index
+            # We don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
             # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
