@@ -414,9 +414,9 @@ def midas_run_snps(args):
             # TODO: a more accurate way to handle the list_of_species in the index file
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
-                for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
-                    if int(sample_counts) > 0:
-                        species_profile[species_id] = int(sample_counts)
+                for species_id, mean_coverage in select_from_tsv(stream, ["species_id", "mean_coverage"]):
+                    if int(mean_coverage) >= args.genome_coverage:
+                        species_profile[species_id] = int(mean_coverage)
             # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
@@ -427,6 +427,7 @@ def midas_run_snps(args):
                 species_profile = sample.select_species(args.genome_coverage)
 
         species_ids_of_interest = species_profile.keys()
+        print(len(species_ids_of_interest))
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
         # Download representative genomes for every species into dbs/temp/{species}/

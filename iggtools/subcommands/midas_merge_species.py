@@ -12,6 +12,7 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_in
 from iggtools.models.uhgg import UHGG
 
 
+# TODO: species_prevalance.tsv dont have the sample ID ....
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
 
