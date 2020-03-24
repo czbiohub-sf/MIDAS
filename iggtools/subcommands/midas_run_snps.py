@@ -415,8 +415,8 @@ def midas_run_snps(args):
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
                 for species_id, mean_coverage in select_from_tsv(stream, ["species_id", "mean_coverage"]):
-                    if int(mean_coverage) >= args.genome_coverage:
-                        species_profile[species_id] = int(mean_coverage)
+                    if float(mean_coverage) >= args.genome_coverage:
+                        species_profile[species_id] = float(mean_coverage)
             # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
