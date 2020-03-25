@@ -69,7 +69,7 @@ class Pool: # pylint: disable=too-few-public-methods
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
-        dir_to_create = self.get_target_layout(dir_name)
+        dir_to_create = self.get_target_layout(dirname)
         for species_id in species_ids:
             _create_dir(f"{dir_to_create}/{species_id}", debug, quiet)
 
