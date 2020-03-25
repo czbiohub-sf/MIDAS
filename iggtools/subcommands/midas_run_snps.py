@@ -427,6 +427,7 @@ def midas_run_snps(args):
         print(species_list)
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
         print(species_ids_of_interest)
+        exit(0)
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
         # Download representative genomes for every species into temp/dbs/{species}/
