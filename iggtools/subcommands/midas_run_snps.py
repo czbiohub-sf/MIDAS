@@ -417,6 +417,7 @@ def midas_run_snps(args):
             bt2_species = []
             with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
+                    print(species_id)
                     bt2_species.append(species_id)
             print(bt2_species)
             species_list = list(set(species_list) & set(bt2_species))
