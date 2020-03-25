@@ -413,7 +413,7 @@ def midas_run_snps(args):
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
             bt2_species = []
-            with InputStream(args.species_profile_path):
+            with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
                     bt2_species.append(species_id)
             species_list = list(set(species_list) & set(bt2_species))
