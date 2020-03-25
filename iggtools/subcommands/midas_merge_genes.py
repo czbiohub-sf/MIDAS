@@ -203,8 +203,8 @@ def midas_merge_genes(args):
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
-        pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
-        pool_of_samples.create_species_subdir(species_ids_of_interest, "dbsdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
 
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
