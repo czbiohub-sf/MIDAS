@@ -405,6 +405,8 @@ def midas_run_snps(args):
         global global_args
         global_args = args
 
+        print(args.species_list)
+        print(args.species_list.split(","))
         species_list = args.species_list.split(",") if args.species_list else []
         if args.local_bowtie2_indexes:
             bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
