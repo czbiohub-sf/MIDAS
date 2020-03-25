@@ -87,6 +87,9 @@ class Sample: # pylint: disable=too-few-public-methods
                     continue
                 if record["coverage"] >= genome_coverage:
                     species_ids.append(record["species_id"])
+                elif record["species_id"] in species_list:
+                    tsprint("Warning: given species %s fail the genome_coverage filter" % (record["species_id"]))
+                    species_ids.append(record["species_id"])
         return species_ids
 
 

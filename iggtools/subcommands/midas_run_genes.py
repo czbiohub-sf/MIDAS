@@ -24,6 +24,106 @@ DEFAULT_ALN_MAPQ = 0
 DEFAULT_CHUNK_SIZE = 5000
 
 
+def register_args(main_func):
+    subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
+    subparser.add_argument('-1',
+                           dest='r1',
+                           required=True,
+                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
+    subparser.add_argument('-2',
+                           dest='r2',
+                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
+    subparser.add_argument('--genome_coverage',
+                           type=float,
+                           dest='genome_coverage',
+                           metavar='FLOAT',
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--local_bowtie2_indexes',
+                           dest='local_bowtie2_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--species_profile_path',
+                           dest='species_profile_path',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Species profile path for the prebuild bowtie2 index")
+
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    #  Alignment flags (bowtie, or postprocessing)
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+    subparser.add_argument('--aln_readq',
+                           dest='aln_readq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_READQ,
+                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_ALN_MAPID,
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+    subparser.add_argument('--aln_mapq',
+                           dest='aln_mapq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_MAPQ,
+                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
+    subparser.add_argument('--aln_speed',
+                           type=str,
+                           dest='aln_speed',
+                           default='very-sensitive',
+                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
+                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
+    subparser.add_argument('--aln_mode',
+                           type=str,
+                           dest='aln_mode',
+                           default='local',
+                           choices=['local', 'global'],
+                           help='Global/local read alignment (local, corresponds to the bowtie2 --local).  Global corresponds to the bowtie2 default --end-to-end.')
+    subparser.add_argument('--aln_interleaved',
+                           action='store_true',
+                           default=False,
+                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
+
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
+    return main_func
+
+
 def keep_read(aln):
     global global_args
     args = global_args
@@ -47,7 +147,7 @@ def keep_read(aln):
 
 def marker_to_centroid_mapping(species_id):
     """ Identify which cluster the marker_genes belong to """
-    # TODO: rebuild the marker genes database and can then simplify this part:
+    # TODO: pre-build this part for all species in the uhgg db
     # find marker genes from the centroid_99 genes
     # We also have the marker genes for all the genomes phyeco/temp/genome/genome.marker.map/fa
     global sample
@@ -322,14 +422,15 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
 
 def midas_run_genes(args):
 
-    global sample
-    sample = Sample(args.sample_name, args.midas_outdir, "genes")
-    sample.create_dirs(["outdir", "tempdir"], args.debug)
-
-    global global_args
-    global_args = args
-
     try:
+        global sample
+        sample = Sample(args.sample_name, args.midas_outdir, "genes")
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
+
+        global global_args
+        global_args = args
+
+        species_list = args.species_list.split(",") if args.species_list else []
         if args.bt2_db_indexes:
             # Already-built bowtie2 indexes
             bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
@@ -337,44 +438,34 @@ def midas_run_genes(args):
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
-            species_profile = {}
+            bt2_species = []
             with InputStream(args.species_profile_path) as stream:
-                for species_id, sample_counts in select_from_tsv(stream, ["species_id", "sample_counts"]):
-                    if sample_counts > 0:
-                        species_profile[species_id] = sample_counts
-            species_ids_of_interest = list(species_profile.keys())
-            sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
-
+                for species_id in select_from_tsv(stream, ["species_id"]):
+                    bt2_species.append(species_id[0])
+            species_list = list(set(species_list) & set(bt2_species))
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "pangenomes"
-            bt2_db_temp_dir = sample.get_target_layout("dbs_tempdir")
 
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
-            species_ids_of_interest = list(species_profile.keys())
+        species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
+        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
-            sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+        # Download centroid_files every species into dbs/temp/{species}/
+        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
+        centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="centroids")
 
-            # Download centroid_files every species into dbs/temp/{species}/
-            local_toc = download_reference(outputs.genomes, bt2_db_dir)
-            centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
-            # Build one bowtie database for species in the restricted species profile
+        # Build one bowtie database for species in the restricted species profile
+        if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
-            # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-            # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
-
-        # Create per-species subdirectories in temp/{species}
-        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
 
         # Map reads to pan-genes bowtie2 database
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
         # Convert marker_genes to centroid_genes for each species
+        # TODO: move this part go UHGG
         multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
 
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
@@ -387,106 +478,6 @@ def midas_run_genes(args):
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
             sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
         raise
-
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
-    subparser.add_argument('--sample_name',
-                           dest='sample_name',
-                           required=True,
-                           help="Unique sample identifier")
-    subparser.add_argument('-1',
-                           dest='r1',
-                           required=True,
-                           help="FASTA/FASTQ file containing 1st mate if using paired-end reads.  Otherwise FASTA/FASTQ containing unpaired reads.")
-    subparser.add_argument('-2',
-                           dest='r2',
-                           help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-
-    subparser.add_argument('--genome_coverage',
-                           type=float,
-                           dest='genome_coverage',
-                           metavar='FLOAT',
-                           default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--bt2_db_indexes',
-                           dest='bt2_db_indexes',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--species_profile_path',
-                           dest='species_profile_path',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Species profile path for the prebuild bowtie2 index")
-
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-
-    #  Alignment flags (bowtie, or postprocessing)
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--aln_readq',
-                           dest='aln_readq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_READQ,
-                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
-    subparser.add_argument('--aln_mapq',
-                           dest='aln_mapq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_MAPQ,
-                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
-    subparser.add_argument('--aln_speed',
-                           type=str,
-                           dest='aln_speed',
-                           default='very-sensitive',
-                           choices=['very-fast', 'fast', 'sensitive', 'very-sensitive'],
-                           help='Alignment speed/sensitivity (very-sensitive).  If aln_mode is local (default) this automatically issues the corresponding very-sensitive-local, etc flag to bowtie2.')
-    subparser.add_argument('--aln_mode',
-                           type=str,
-                           dest='aln_mode',
-                           default='local',
-                           choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local).  Global corresponds to the bowtie2 default --end-to-end.')
-    subparser.add_argument('--aln_interleaved',
-                           action='store_true',
-                           default=False,
-                           help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-    subparser.add_argument('--aln_sort',
-                           action='store_true',
-                           default=True,
-                           help=f"Sort BAM file.")
-
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    return main_func
 
 
 @register_args
