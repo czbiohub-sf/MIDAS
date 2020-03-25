@@ -133,11 +133,9 @@ def midas_merge_species(args):
             contigs_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="contigs")
             centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
 
-            if False:
-                build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
-                build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
+            build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
+            build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
 
-            # What do we need and what is actually we are doing?
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
