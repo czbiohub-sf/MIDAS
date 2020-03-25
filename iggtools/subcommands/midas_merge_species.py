@@ -96,7 +96,7 @@ def midas_merge_species(args):
         # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
         # create output and temp directory
-        pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
+        pool_of_samples.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
         # Slice the across-samples species profile matrix by species_id
         cols = list(species_profile_schema.keys())[1:]
@@ -116,7 +116,6 @@ def midas_merge_species(args):
                     species_ids_of_interest.append(species_id)
 
             # Create the dbs/species
-            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
             pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbs_tempdir", args.debug)
 
             # where to build the shared dbs for all the samples to merge
