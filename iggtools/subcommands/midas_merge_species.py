@@ -5,10 +5,10 @@ import numpy as np
 
 from iggtools.models.pool import Pool
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, command, download_reference
-from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, DECIMALS, fetch_default_genome_depth, format_data
+from iggtools.common.utils import tsprint, OutputStream, download_reference
+from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
 from iggtools.params import outputs
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
+from iggtools.common.bowtie2 import build_bowtie2_db
 from iggtools.models.uhgg import UHGG
 
 
