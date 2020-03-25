@@ -142,7 +142,7 @@ def midas_merge_species(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
+            pool_of_samples.remove_dirs(["outdir", "tempdir", "dbsdir"])
         raise
 
 
