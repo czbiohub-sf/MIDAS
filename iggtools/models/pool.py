@@ -7,41 +7,38 @@ from iggtools.models.sample import Sample
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
+            "outdir":                f"{dbtype}/output",
+            "outdir_by_species":     f"{dbtype}/{species_id}",
+
+            "tempdir":               f"temp/{dbtype}",
+            "tempdir_by_species":    f"temp/{dbtype}/{species_id}",
+
+            "dbsdir":                f"dbs/{dbtype}",
+            "dbs_tempdir":           f"temp/dbs",
+            "local_toc":             f"dbs/genomes.tsv",
+
+
+
+            # species
             "species_prevalence":    f"species/species_prevalence.tsv",
             "species_read_counts":   f"species/species_read_counts.tsv",
             "species_coverage":      f"species/species_coverage.tsv",
             "species_rel_abundance": f"species/species_rel_abundance.tsv",
 
+            # snps
+            "snps_summary":          f"snps/snps_summary.tsv",
+            "snps_info":             f"snps/{species_id}/{species_id}.snps_info.tsv",
+            "snps_freq":             f"snps/{species_id}/{species_id}.snps_freqs.tsv",
+            "snps_depth":            f"snps/{species_id}/{species_id}.snps_depth.tsv",
+            "snps_info_by_chunk":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv",
+            "snps_freq_by_chunk":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
+            "snps_depth_by_chunk":   f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv",
 
-            "snps_summary":          f"snps/output/snps_summary.tsv",
-            "snps_info":             f"snps/output/{species_id}/{species_id}.snps_info.tsv",
-            "snps_freq":             f"snps/output/{species_id}/{species_id}.snps_freqs.tsv",
-            "snps_depth":            f"snps/output/{species_id}/{species_id}.snps_depth.tsv",
-
-            "genes_summary":         f"genes/output/summary.tsv",
-            "genes_presabs":         f"genes/output/{species_id}/{species_id}.genes_presabs.tsv",
-            "genes_copynum":         f"genes/output/{species_id}/{species_id}.genes_copynum.tsv",
-            "genes_depth":           f"genes/output/{species_id}/{species_id}.genes_depth.tsv",
-
-            "outdir":                f"{dbtype}/output",
-            "tempdir":               f"{dbtype}/temp",
-            # this is the old dbs
-            "dbsdir_old":            f"{dbtype}/dbs",
-
-            "dbsdir":                f"dbs",
-            "dbs_tempdir":           f"dbs/temp",
-            "snps_repgenomes_bam":   f"dbs/repgenomes.bam",
-            "genes_pangenomes_bam":  f"dbs/pangenomes.bam",
-
-            "outdir_by_species":     f"{dbtype}/output/{species_id}",
-            "tempdir_by_species":    f"{dbtype}/temp/{species_id}",
-            "genes_info_file":       f"{dbtype}/temp/{species_id}/gene_info.txt",
-
-            "lookup_table_by_chunk": f"{dbtype}/temp/{species_id}/cid_lookup.tsv",
-            "snps_info_by_chunk":    f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_info.tsv",
-            "snps_freq_by_chunk":    f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
-            "snps_depth_by_chunk":   f"{dbtype}/temp/{species_id}/cid.{chunk_id}_snps_depth.tsv",
-
+            # genes
+            "genes_summary":         f"genes/summary.tsv",
+            "genes_presabs":         f"genes/{species_id}/{species_id}.genes_presabs.tsv",
+            "genes_copynum":         f"genes/{species_id}/{species_id}.genes_copynum.tsv",
+            "genes_depth":           f"genes/{species_id}/{species_id}.genes_depth.tsv",
         }
     return per_species
 
@@ -51,39 +48,31 @@ class Pool: # pylint: disable=too-few-public-methods
     def __init__(self, samples_list, midas_outdir, dbtype=None):
         self.list_of_samples = samples_list
         self.midas_outdir = midas_outdir
-
         self.layout = get_pool_layout(dbtype)
-        self.outdir = self.get_target_layout("outdir")
-        self.tempdir = self.get_target_layout("tempdir")
-        self.dbsdir = self.get_target_layout("dbsdir")
-
         self.samples = self.init_samples(dbtype)
+
 
     def get_target_layout(self, filename, species_id="", chunk_id=""):
         return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
-    def create_output_dir(self, debug=False, quiet=True):
-        tsprint(f"Create output directory for given pool of samples.")
-        command(f"rm -rf {self.outdir}", quiet)
-        command(f"mkdir -p {self.outdir}", quiet)
 
-        if debug and os.path.exists(self.tempdir):
-            tsprint(f"Reusing existing temp data in {self.tempdir} according to --debug flag.")
-        else:
-            tsprint(f"Create temp directory for given pool of samples.")
-            command(f"rm -rf {self.tempdir}", quiet)
-            command(f"mkdir -p {self.tempdir}", quiet)
-            tsprint(f"Create database directory for given pool of samples.")
-            command(f"rm -rf {self.dbsdir}", quiet)
-            command(f"mkdir -p {self.dbsdir}", quiet)
+    def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
+        for dirname in list_of_dirnames:
+            if dirname == "outdir":
+                tsprint(f"Create output directory for given pool of samples.")
+                _create_dir(self.get_target_layout(dirname), debug, quiet)
+            if dirname == "tempdir":
+                tsprint(f"Create temp directory for given pool of samples.")
+                _create_dir(self.get_target_layout(dirname), debug, quiet)
+            if dirname == "dbsdir":
+                _create_dir(self.get_target_layout(dirname), debug, quiet)
 
-    def create_species_subdir(self, species_ids, dir_name, debug=False, quiet=True):
+
+    def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         dir_to_create = self.get_target_layout(dir_name)
         for species_id in species_ids:
-            if debug and os.path.exists(f"{dir_to_create}/{species_id}"):
-                continue
-            command(f"rm -rf {dir_to_create}/{species_id}", quiet)
-            command(f"mkdir -p {dir_to_create}/{species_id}", quiet)
+            _create_dir(f"{dir_to_create}/{species_id}", debug, quiet)
+
 
     def select_species(self, dbtype, args):
         schema = fetch_schema_by_dbtype(dbtype)
@@ -114,6 +103,7 @@ class Pool: # pylint: disable=too-few-public-methods
         list_of_species = _filter_species(list_of_species, args)
         return {species.id:species for species in list_of_species}
 
+
     def init_samples(self, dbtype):
         """ read in table-of-content: samples_list """
         samples = []
@@ -125,15 +115,16 @@ class Pool: # pylint: disable=too-few-public-methods
                 samples.append(sample)
         return samples
 
+
     def fetch_samples_names(self):
         return [sample.sample_name for sample in self.samples]
+
 
     def write_summary_files(self, dict_of_species, dbtype):
         """ Write snps/genes summary files for current samples pool """
 
         summary_file = self.get_target_layout(f"{dbtype}_summary")
         summary_header = list(fetch_schema_by_dbtype(dbtype).keys())[1:]
-
         with OutputStream(summary_file) as stream:
             stream.write("\t".join(["species_id", "sample_name"] + summary_header) + "\n")
             for species in dict_of_species.values():
@@ -141,6 +132,11 @@ class Pool: # pylint: disable=too-few-public-methods
                     row = list(sample.profile[species.id].values())
                     row.insert(1, sample.sample_name)
                     stream.write("\t".join(map(format_data, row)) + "\n")
+
+    def remove_dirs(self, list_of_dirnames):
+        for dirname in list_of_dirnames:
+            dirpath = self.get_target_layout(dirname)
+            command(f"rm -rf {dirpath}", check=False)
 
 
 class Species:
@@ -150,8 +146,10 @@ class Species:
         self.samples = []
         self.samples_depth = []
 
+
     def fetch_samples_depth(self):
         return [sample.profile[self.id]["mean_coverage"] for sample in self.samples]
+
 
     def fetch_samples_names(self):
         list_of_sample_objects = list(self.samples)
@@ -162,6 +160,7 @@ def _sort_species(species):
     """ Sort list_of_species by samples_count in descending order """
     species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
     return [sp[0] for sp in species_sorted]
+
 
 def _filter_species(species, args):
     """ Filter out low prevalent species using samples_count cutoff """
@@ -174,3 +173,11 @@ def _filter_species(species, args):
         sp.samples_depth = sp.fetch_samples_depth()
         species_keep.append(sp)
     return species_keep
+
+
+def _create_dir(dirname, debug, quiet=False):
+    if debug and os.path.exists(dirname):
+        tsprint(f"Use existing {dirname} according to --debug flag.")
+    else:
+        command(f"rm -rf {dirname}", quiet)
+        command(f"mkdir -p {dirname}", quiet)

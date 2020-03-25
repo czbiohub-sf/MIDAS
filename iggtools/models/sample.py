@@ -71,10 +71,10 @@ class Sample: # pylint: disable=too-few-public-methods
                 _create_dir(self.get_target_layout(dirname), debug, quiet)
 
 
-    def create_species_subdirs(self, species_ids, dirname, debug=False):
+    def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         for species_id in species_ids:
             species_subdir = self.get_target_layout(f"species_{dirname}_subdir", species_id)
-            _create_dir(species_subdir, debug)
+            _create_dir(species_subdir, debug, quiet)
 
 
     def select_species(self, genome_coverage, species_list=[]):

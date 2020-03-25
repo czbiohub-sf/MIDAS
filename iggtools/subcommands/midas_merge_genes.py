@@ -18,6 +18,60 @@ DEFAULT_MIN_COPY = 0.35
 DEFAULT_CHUNK_SIZE = 5000
 
 
+def register_args(main_func):
+    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
+
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
+    subparser.add_argument('--samples_list',
+                           dest='samples_list',
+                           type=str,
+                           required=True,
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    # Species and sample filters
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--genome_depth',
+                           dest='genome_depth',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_GENOME_DEPTH,
+                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
+    subparser.add_argument('--sample_counts',
+                           dest='sample_counts', #min_samples
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SAMPLE_COUNTS,
+                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+
+    # Presence/Absence
+    subparser.add_argument('--min_copy',
+                           dest='min_copy',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_MIN_COPY,
+                           help=f"Genes >= MIN_COPY are classified as present ({DEFAULT_MIN_COPY})")
+    subparser.add_argument('--cluster_pid',
+                           dest='cluster_pid',
+                           type=str,
+                           default=DEFAULT_CLUSTER_ID,
+                           choices=['75', '80', '85', '90', '95', '99'],
+                           help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
+
+    return main_func
+
+
 def read_cluster_map(packed_args):
     """ convert centroid99_gene to centroin_{pid}_gene """
     gene_info_path, pid = packed_args
@@ -41,7 +95,6 @@ def prepare_chunks(dict_of_species, genes_info_files):
     # Parse the centroid_genes_mapping
     args_list = []
     for species_index, species_id in enumerate(dict_of_species.keys()):
-        #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
         genes_info_path = genes_info_files[species_index]
         args_list.append((genes_info_path, global_args.cluster_pid))
     list_of_genes_map_dict = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
@@ -138,86 +191,36 @@ def per_species_worker(species_id):
 
 def midas_merge_genes(args):
 
-    global pool_of_samples
+    try:
 
-    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
-    dict_of_species = pool_of_samples.select_species("genes", args)
+        global global_args
+        global_args = args
 
-    # Create species-subdir at one place given the list of species_of_interest
-    species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
-    pool_of_samples.create_output_dir()
-    pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
-    pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
+        global pool_of_samples
 
-    global global_args
-    global_args = args
+        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
+        dict_of_species = pool_of_samples.select_species("genes", args)
+        species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 
-    # Write genes_summary.tsv
-    pool_of_samples.write_summary_files(dict_of_species, "genes")
+        pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
+        pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
+        pool_of_samples.create_species_subdir(species_ids_of_interest, "dbsdir", args.debug)
 
-    # Download pan-genes-info for every species in the restricted species profile.
-    local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-    db = UHGG(local_toc)
-    genes_info_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"), filetype="genes_info")
+        pool_of_samples.write_summary_files(dict_of_species, "genes")
 
-    # Collect copy_numbers, coverage and read counts across ALl the samples
-    arguments_list = prepare_chunks(dict_of_species, genes_info_files)
-    multiprocessing_map(per_species_worker, arguments_list, num_physical_cores)
+        # Download genes_info for every species in the restricted species profile.
+        local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
+        db = UHGG(local_toc)
+        genes_info_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="genes_info")
 
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
-
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
-    subparser.add_argument('--samples_list',
-                           dest='samples_list',
-                           type=str,
-                           required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-
-    # Species and sample filters
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--genome_depth',
-                           dest='genome_depth',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
-    subparser.add_argument('--sample_counts',
-                           dest='sample_counts', #min_samples
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_SAMPLE_COUNTS,
-                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
-
-    # Presence/Absence
-    subparser.add_argument('--min_copy',
-                           dest='min_copy',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_MIN_COPY,
-                           help=f"Genes >= MIN_COPY are classified as present ({DEFAULT_MIN_COPY})")
-
-    subparser.add_argument('--cluster_pid',
-                           dest='cluster_pid',
-                           type=str,
-                           default=DEFAULT_CLUSTER_ID,
-                           choices=['75', '80', '85', '90', '95', '99'],
-                           help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
-
-    return main_func
+        # Collect copy_numbers, coverage and read counts across ALl the samples
+        arguments_list = prepare_chunks(dict_of_species, genes_info_files)
+        multiprocessing_map(per_species_worker, arguments_list, num_physical_cores)
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            pool_of_samples.remove_dirs(["outdir", "tempdir", "dbsdir"])
+        raise
 
 
 @register_args

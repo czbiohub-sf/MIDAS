@@ -21,7 +21,6 @@ def _uhgg_layout(species_id="", component="", genome_id=""):
 ### old codes, improve the readibility
 def raw_genome_file(genome_id, representative_id):
     return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
-
 ### old codes, improve the readibility
 def imported_genome_file(genome_id, species_id, component):
     return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"

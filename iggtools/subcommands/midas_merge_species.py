@@ -12,7 +12,6 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_in
 from iggtools.models.uhgg import UHGG
 
 
-# TODO: species_prevalance.tsv dont have the sample ID ....
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("species")
 
 
@@ -89,55 +88,62 @@ def write_species_results(pool_of_samples, transposed):
 
 def midas_merge_species(args):
 
-    global global_args
-    global_args = args
+    try:
+        global global_args
+        global_args = args
 
-    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
-    # load species_summary into sample.profile
-    pool_of_samples.init_samples("species")
-    # create output and temp directory
-    pool_of_samples.create_output_dir()
+        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
+        # load species_summary into sample.profile
+        pool_of_samples.init_samples("species")
+        # create output and temp directory
+        pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
 
-    # Slice the across-samples species profile matrix by species_id
-    cols = list(species_profile_schema.keys())[1:]
-    transposed = transpose(pool_of_samples, cols)
-    write_species_results(pool_of_samples, transposed)
+        # Slice the across-samples species profile matrix by species_id
+        cols = list(species_profile_schema.keys())[1:]
+        transposed = transpose(pool_of_samples, cols)
+        write_species_results(pool_of_samples, transposed)
 
-    # Calculate summary statistics for coverage and relative abundance
-    stats = compute_stats(transposed["rel_abundance"], transposed["coverage"])
-    write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
+        # Calculate summary statistics for coverage and relative abundance
+        stats = compute_stats(transposed["rel_abundance"], transposed["coverage"])
+        write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
 
-    # TO move to another subcommand
-    if args.build_bowtie2_db:
-        # The input for this section is species_prevalance.tsv
-        species_ids_of_interest = []
-        for species_id, record in stats.items():
-            if record[-1] > 0:
-                species_ids_of_interest.append(species_id)
+        # TO move to another subcommand
+        if args.build_bowtie2_db:
+            # The input for this section is species_prevalance.tsv
+            species_ids_of_interest = []
+            for species_id, record in stats.items():
+                if record[-1] > 0:
+                    species_ids_of_interest.append(species_id)
 
-        # Create the dbs/species
-        pool_of_samples.create_species_subdir(species_ids_of_interest, "dbsdir", args.debug)
-        pool_of_samples.create_species_subdir(species_ids_of_interest, "dbs_tempdir", args.debug)
+            # Create the dbs/species
+            pool_of_samples.create_species_subdir(species_ids_of_interest, "dbsdir", args.debug)
+            pool_of_samples.create_species_subdir(species_ids_of_interest, "dbs_tempdir", args.debug)
 
-        # where to build the shared dbs for all the samples to merge
-        bt2_db_dir = pool_of_samples.get_target_layout("dbsdir")
-        bt2_db_temp_dir = pool_of_samples.get_target_layout("dbs_tempdir")
+            # where to build the shared dbs for all the samples to merge
+            bt2_db_dir = pool_of_samples.get_target_layout("dbsdir")
+            bt2_db_temp_dir = pool_of_samples.get_target_layout("dbs_tempdir")
 
-        rep_bt2_db_name = "repgenomes"
-        pan_bt2_db_name = "pangenomes"
+            rep_bt2_db_name = "repgenomes"
+            pan_bt2_db_name = "pangenomes"
 
-        #
-        local_toc = download_reference(outputs.genomes, bt2_db_temp_dir)
-        db = UHGG(local_toc)
+            #
+            local_toc = download_reference(outputs.genomes, bt2_db_temp_dir)
+            db = UHGG(local_toc)
 
-        # Fetch the files per genomes
-        contigs_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="contigs")
-        centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
+            # Fetch the files per genomes
+            contigs_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="contigs")
+            centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
 
-        build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
-        build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
+            if False:
+                build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
+                build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
 
-        # What do we need and what is actually we are doing?
+            # What do we need and what is actually we are doing?
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
+        raise
 
 
 

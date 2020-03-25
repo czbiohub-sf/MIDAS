@@ -28,8 +28,107 @@ DEFAULT_SNP_POOLED_METHOD = "prevalence"
 DEFAULT_SNP_MAF = 0.05
 DEFAULT_SNP_TYPE = "mono, bi"
 
-global global_counter
-global_counter = 0
+
+def register_args(main_func):
+    subparser = add_subcommand('midas_merge_snps', main_func, help='pooled-samples SNPs calling')
+    subparser.add_argument('midas_outdir',
+                           type=str,
+                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
+    subparser.add_argument('--samples_list',
+                           dest='samples_list',
+                           type=str,
+                           required=True,
+                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    # Species and sample filters
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--genome_depth',
+                           dest='genome_depth',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_GENOME_DEPTH,
+                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
+    subparser.add_argument('--genome_coverage',
+                           dest='genome_coverage', #fract_cov
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Fraction of reference sites covered by at least 1 read ({DEFAULT_GENOME_COVERAGE})")
+    # Species filters
+    subparser.add_argument('--sample_counts',
+                           dest='sample_counts', #min_samples
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SAMPLE_COUNTS,
+                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+
+    # Per sample site filters
+    subparser.add_argument('--site_depth',
+                           dest='site_depth',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SITE_DEPTH,
+                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
+    subparser.add_argument('--site_ratio',
+                           dest='site_ratio',
+                           default=DEFAULT_SITE_RATIO,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Maximum ratio of site depth to genome depth ({DEFAULT_SITE_RATIO}).")
+
+    # Across samples site filters
+    subparser.add_argument('--site_prev',
+                           dest='site_prev',
+                           default=DEFAULT_SITE_PREV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Minimum fraction of sample where genomic site satifying the site filters ({DEFAULT_SITE_PREV})")
+    subparser.add_argument('--site_type',
+                           dest='site_type',
+                           type=str,
+                           default=DEFAULT_SITE_TYPE,
+                           choices=['common', 'rare'],
+                           help=f"Either core SNPs or rare SNPs ({DEFAULT_SITE_TYPE})")
+
+    # SNPs calling
+    subparser.add_argument('--snp_pooled_method',
+                           dest='snp_pooled_method',
+                           type=str,
+                           default=DEFAULT_SNP_POOLED_METHOD,
+                           choices=['prevalence', 'abundance'],
+                           help=f"Method of call across-samples-pooled-SNPs based on either prevalence or abundance (Default: {DEFAULT_SNP_POOLED_METHOD}).")
+    subparser.add_argument('--snp_maf',
+                           dest='snp_maf',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_SNP_MAF,
+                           help=f"Minimum pooled-minor-allele_frequency to call an allele present ({DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
+    subparser.add_argument('--snp_type',
+                           type=str,
+                           dest='snp_type',
+                           default=DEFAULT_SNP_TYPE,
+                           choices=['any', 'mono', 'bi', 'tri', 'quad'],
+                           nargs='+',
+                           help="""Specify one or more of the following:
+                                    mono: keep sites with 1 allele > DEFAULT_SNP_MAF
+                                    bi: keep sites with 2 alleles > DEFAULT_SNP_MAF
+                                    tri: keep sites with 3 alleles > DEFAULT_SNP_MAF
+                                    quad: keep sites with 4 alleles > DEFAULT_SNP_MAF
+                                    any: keep sites regardless of observed alleles
+                                    (Default: {DEFAULT_SNP_TYPE})""")
+
+    return main_func
+
 
 def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
@@ -324,134 +423,31 @@ def process_chunk_of_sites(packed_args):
 
 def midas_merge_snps(args):
 
+    global global_args
+    global_args = args
+
     global pool_of_samples
     global dict_of_species
 
     pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
     dict_of_species = pool_of_samples.select_species("snps", args)
-
-    # Create species-subdir at one place given the list of species_of_interest
     species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
-    pool_of_samples.create_output_dir()
+
+    pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
     pool_of_samples.create_species_subdir(species_ids_of_interest, "outdir", args.debug)
     pool_of_samples.create_species_subdir(species_ids_of_interest, "tempdir", args.debug)
 
-    global global_args
-    global_args = args
-
-    # Write snps_summary.tsv
     pool_of_samples.write_summary_files(dict_of_species, "snps")
 
     # Download representative genomes for every species into dbs/temp/{species}/
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
     db = UHGG(local_toc)
-    contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("tempdir"), filetype="contigs")
+    contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
 
     # Compute pooled SNPs by the unit of chunks_of_sites
     argument_list = design_chunks(contigs_files, args.chunk_size)
     proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
     assert all(s == "worked" for s in proc_flags)
-
-
-def register_args(main_func):
-    subparser = add_subcommand('midas_merge_snps', main_func, help='pooled-samples SNPs calling')
-    subparser.add_argument('midas_outdir',
-                           type=str,
-                           help="""Path to directory to store results.  Subdirectory will be created for each species.""")
-    subparser.add_argument('--samples_list',
-                           dest='samples_list',
-                           type=str,
-                           required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-
-    # Species and sample filters
-    subparser.add_argument('--species_list',
-                           dest='species_list',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--genome_depth',
-                           dest='genome_depth',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
-    subparser.add_argument('--genome_coverage',
-                           dest='genome_coverage', #fract_cov
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Fraction of reference sites covered by at least 1 read ({DEFAULT_GENOME_COVERAGE})")
-    # Species filters
-    subparser.add_argument('--sample_counts',
-                           dest='sample_counts', #min_samples
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_SAMPLE_COUNTS,
-                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
-
-    # Per sample site filters
-    subparser.add_argument('--site_depth',
-                           dest='site_depth',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_SITE_DEPTH,
-                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
-    subparser.add_argument('--site_ratio',
-                           dest='site_ratio',
-                           default=DEFAULT_SITE_RATIO,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Maximum ratio of site depth to genome depth ({DEFAULT_SITE_RATIO}).")
-
-    # Across samples site filters
-    subparser.add_argument('--site_prev',
-                           dest='site_prev',
-                           default=DEFAULT_SITE_PREV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Minimum fraction of sample where genomic site satifying the site filters ({DEFAULT_SITE_PREV})")
-    subparser.add_argument('--site_type',
-                           dest='site_type',
-                           type=str,
-                           default=DEFAULT_SITE_TYPE,
-                           choices=['common', 'rare'],
-                           help=f"Either core SNPs or rare SNPs ({DEFAULT_SITE_TYPE})")
-
-    # SNPs calling
-    subparser.add_argument('--snp_pooled_method',
-                           dest='snp_pooled_method',
-                           type=str,
-                           default=DEFAULT_SNP_POOLED_METHOD,
-                           choices=['prevalence', 'abundance'],
-                           help=f"Method of call across-samples-pooled-SNPs based on either prevalence or abundance (Default: {DEFAULT_SNP_POOLED_METHOD}).")
-    subparser.add_argument('--snp_maf',
-                           dest='snp_maf',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_SNP_MAF,
-                           help=f"Minimum pooled-minor-allele_frequency to call an allele present ({DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
-    subparser.add_argument('--snp_type',
-                           type=str,
-                           dest='snp_type',
-                           default=DEFAULT_SNP_TYPE,
-                           choices=['any', 'mono', 'bi', 'tri', 'quad'],
-                           nargs='+',
-                           help="""Specify one or more of the following:
-                                    mono: keep sites with 1 allele > DEFAULT_SNP_MAF
-                                    bi: keep sites with 2 alleles > DEFAULT_SNP_MAF
-                                    tri: keep sites with 3 alleles > DEFAULT_SNP_MAF
-                                    quad: keep sites with 4 alleles > DEFAULT_SNP_MAF
-                                    any: keep sites regardless of observed alleles
-                                    (Default: {DEFAULT_SNP_TYPE})""")
-
-    return main_func
 
 
 @register_args
