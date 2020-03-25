@@ -418,6 +418,7 @@ def midas_run_snps(args):
             with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
                     bt2_species.append(species_id)
+            print(bt2_species)
             species_list = list(set(species_list) & set(bt2_species))
             # The index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
             # can still be based on sample itself.
