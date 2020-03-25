@@ -3,6 +3,7 @@ from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
 from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, multiprocessing_map
 from iggtools.params import inputs, outputs
+import os
 
 
 MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
@@ -85,4 +86,5 @@ def _UHGG_load(toc_tsv, deep_sort=False):
 
 def fetch_file_from_s3(packed_args):
     s3_path, local_path = packed_args
+
     return download_reference(s3_path, local_path)

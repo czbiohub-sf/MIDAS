@@ -634,7 +634,8 @@ def download_reference(ref_path, local_dir="."):
     local_path = os.path.join(local_dir, os.path.basename(ref_path))
     local_path, uncompress_cmd = uncompressed(local_path)
     if os.path.exists(local_path):
-        tsprint(f"Overwriting pre-existing {local_path} with reference download.")  # TODO:  Reuse instead of re-download.  Requires versioning.
+        # TODO:  Reuse instead of re-download.  Requires versioning.
+        tsprint(f"Overwriting pre-existing {local_path} with reference download.")
         command(f"rm -f {local_path}")
     if not os.path.exists(local_dir):
         command(f"mkdir -p {local_dir}")
