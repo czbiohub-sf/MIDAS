@@ -405,34 +405,30 @@ def midas_run_snps(args):
         global global_args
         global_args = args
 
+        species_list = args.species_list.split(",") if args.species_list else []
         if args.local_bowtie2_indexes:
             bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
             bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
-            # TODO: a more accurate way to handle the list_of_species in the index file
-            species_profile = {}
-            with InputStream(args.species_profile_path) as stream:
-                for species_id, mean_coverage in select_from_tsv(stream, ["species_id", "mean_coverage"]):
-                    if float(mean_coverage) >= args.genome_coverage:
-                        species_profile[species_id] = float(mean_coverage)
-            # The index was only for the purpose of same bowtie2 index
-            # We don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
+            bt2_species = []
+            with InputStream(args.species_profile_path):
+                for species_id in select_from_tsv(stream, ["species_id"]):
+                    bt2_species.append(species_id)
+            species_list = list(set(species_list) & set(bt2_species))
+            # The index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
+            # can still be based on sample itself.
+            # We also don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
             # TODO: should we also provide symlink?
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "repgenomes"
-            if args.species_list:
-                species_profile = sample.select_species(args.genome_coverage, args.species_list)
-            else:
-                species_profile = sample.select_species(args.genome_coverage)
 
-        species_ids_of_interest = species_profile.keys()
-        print(len(species_ids_of_interest))
+        species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
-        # Download representative genomes for every species into dbs/temp/{species}/
+        # Download representative genomes for every species into temp/dbs/{species}/
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="contigs")
 
@@ -449,7 +445,7 @@ def midas_run_snps(args):
         # Use mpileup to call SNPs
         sample.create_species_subdirs(species_ids_of_interest, "output", args.debug)
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, 2*num_physical_cores)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
     except:

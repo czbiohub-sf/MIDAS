@@ -292,7 +292,7 @@ def midas_run_species(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])\
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
         # TODO: find a more robust way to existing file for symlink L263
         if args.local_dbsdir:
             sample.remove_dirs(["dbsdir"])

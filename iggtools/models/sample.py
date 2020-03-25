@@ -77,19 +77,17 @@ class Sample: # pylint: disable=too-few-public-methods
             _create_dir(species_subdir, debug)
 
 
-    def select_species(self, genome_coverage, species_list=""):
+    def select_species(self, genome_coverage, species_list=[]):
         """ Read in species_summary and filter species """
-        species_list = species_list.split(",")
-
         schema = fetch_schema_by_dbtype("species")
-        profile = defaultdict()
+        species_ids = []
         with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
                 if record["coverage"] >= genome_coverage:
-                    profile[record["species_id"]] = record["coverage"]
-        return profile
+                    species_ids.append(record["species_id"])
+        return species_ids
 
 
     def load_profile_by_dbtype(self, dbtype):

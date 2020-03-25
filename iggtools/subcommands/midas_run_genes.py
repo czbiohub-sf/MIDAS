@@ -334,9 +334,8 @@ def midas_run_genes(args):
             # Already-built bowtie2 indexes
             bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
             bt2_db_name = os.path.basename(args.bt2_db_indexes)
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name) and os.path.exists(args.species_profile), f"Check the path bt2_db_dir and exists of species_profile_path"
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
-            tsprint("Prebuild bowtie2 index and species_profile exit. Use them")
 
             species_profile = {}
             with InputStream(args.species_profile_path) as stream:
