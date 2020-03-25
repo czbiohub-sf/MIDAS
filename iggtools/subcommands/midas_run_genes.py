@@ -431,10 +431,10 @@ def midas_run_genes(args):
         global_args = args
 
         species_list = args.species_list.split(",") if args.species_list else []
-        if args.bt2_db_indexes:
+        if args.local_bowtie2_indexes:
             # Already-built bowtie2 indexes
-            bt2_db_dir = os.path.dirname(args.bt2_db_indexes)
-            bt2_db_name = os.path.basename(args.bt2_db_indexes)
+            bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
