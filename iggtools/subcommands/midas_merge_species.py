@@ -141,7 +141,7 @@ def midas_merge_species(args):
             species_ids_of_interest = []
             for species_id, record in stats.items():
                 # TODO: can also rely on genome_coverage
-                if record[-1] > 2:
+                if record[-1] > 0:
                     species_ids_of_interest.append(species_id)
 
             rep_bt2_db_name = "repgenomes"
