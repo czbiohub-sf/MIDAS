@@ -266,6 +266,7 @@ def compute_pileup_per_chunk(packed_args):
         zero_rows_allowed = not args.sparse
         current_chunk_size = contig_end - contig_start
 
+        print(packed_args)
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
@@ -332,8 +333,7 @@ def merge_chunks_per_species(species_id):
 
 def write_species_pileup_summary(chunks_pileup_summary, outfile):
     """ Collect species pileup aln stats from all chunks and write to file """
-    print(chunks_pileup_summary)
-    
+
     species_pileup_summary = defaultdict(dict)
     prev_species_id = None
 
