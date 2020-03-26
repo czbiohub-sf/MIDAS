@@ -156,7 +156,7 @@ def midas_merge_species(args):
             centroids_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="centroids")
 
             build_bowtie2_db(pool_of_samples.get_target_layout("bt2_indexes_dir"), rep_bt2_db_name, contigs_files)
-             #build_bowtie2_db(pool_of_samples.get_target_layout("bt2_indexes_dir"), pan_bt2_db_name, centroids_files)
+            build_bowtie2_db(pool_of_samples.get_target_layout("bt2_indexes_dir"), pan_bt2_db_name, centroids_files)
 
     except:
         if not args.debug:
