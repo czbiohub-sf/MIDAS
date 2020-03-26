@@ -20,14 +20,13 @@ def get_single_layout(sample_name, dbtype=""):
             "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             "dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
 
+            "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes/{dbtype}",
+
             "local_toc":              f"{sample_name}/dbs/genomes.tsv",
             "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
                                       [f"{sample_name}/dbs/species/phyeco.map"],
             "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
             "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
-
-            "dbs_tempdir":            f"{sample_name}/temp/dbs",
-            "dbstemp_subdir":            f"{sample_name}/temp/dbs/{species_id}",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",

@@ -15,6 +15,7 @@ def get_pool_layout(dbtype=""):
 
             "dbsdir":                f"dbs/{dbtype}",
             "dbsdir_by_species":     f"dbs/{dbtype}/{species_id}",
+
             "bt2_indexes_dir":       f"bowtie2_indexes",
 
             "local_toc":             f"dbs/genomes.tsv",

@@ -446,15 +446,15 @@ def midas_run_genes(args):
             species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
 
         else:
-            bt2_db_dir = sample.get_target_layout("dbsdir")
+            bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
             bt2_db_name = "pangenomes"
 
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
 
         # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
-        sample.create_species_subdirs(species_ids_of_interest, "dbstemp", args.debug)
-        centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="centroids")
+        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+        centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="centroids")
 
         # Build one bowtie database for species in the restricted species profile
         if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
@@ -478,7 +478,7 @@ def midas_run_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "dbs_tempdir"])
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
         raise
 
 
