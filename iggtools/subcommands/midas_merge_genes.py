@@ -202,7 +202,7 @@ def midas_merge_genes(args):
         dict_of_species = pool_of_samples.select_species("genes", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 
-        pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
+        pool_of_samples.create_dirs(["outdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
 
@@ -218,7 +218,7 @@ def midas_merge_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            pool_of_samples.remove_dirs(["outdir", "tempdir", "dbsdir"])
+            pool_of_samples.remove_dirs(["outdir", "dbsdir"])
         raise
 
 
