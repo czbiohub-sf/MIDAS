@@ -266,7 +266,6 @@ def compute_pileup_per_chunk(packed_args):
         zero_rows_allowed = not args.sparse
         current_chunk_size = contig_end - contig_start
 
-        print(packed_args[:4])
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
@@ -404,7 +403,8 @@ def midas_run_snps(args):
             with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
                     bt2_species.append(species_id[0])
-            species_list = list(set(species_list) & set(bt2_species))
+            species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
+
             # The index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
             # can still be based on sample itself.
             # We also don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
@@ -412,9 +412,10 @@ def midas_run_snps(args):
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "repgenomes"
-
+        print(bt2_species)
+        print(species_list)
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
-
+        print(species_ids_of_interest)
         # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbstemp", args.debug)
