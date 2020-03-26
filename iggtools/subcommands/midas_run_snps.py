@@ -412,10 +412,9 @@ def midas_run_snps(args):
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "repgenomes"
-        print(bt2_species)
-        print(species_list)
+
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
-        print(species_ids_of_interest)
+        
         # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbstemp", args.debug)
