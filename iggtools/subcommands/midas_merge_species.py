@@ -74,7 +74,8 @@ def compute_stats(tabundance, tcoverage):
     for species_id in species_ids:
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
-
+        if species_id == 102697:
+            print(species_cov, args.genome_depth)
         values = [species_id, np.median(species_abun), np.mean(species_abun), \
               np.median(species_cov), np.mean(species_cov), \
               compute_prevalence(species_cov, args.genome_depth)]

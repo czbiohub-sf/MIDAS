@@ -7,7 +7,7 @@ from iggtools.models.sample import Sample
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
-            "outdir":                f"{dbtype}/output",
+            "outdir":                f"{dbtype}",
             "outdir_by_species":     f"{dbtype}/{species_id}",
 
             "tempdir":               f"temp/{dbtype}",
