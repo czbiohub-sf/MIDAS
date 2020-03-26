@@ -123,7 +123,6 @@ def midas_merge_species(args):
         pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
         # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
-        # create output and temp directory
         pool_of_samples.create_dirs(["outdir"], args.debug)
 
         # Slice the across-samples species profile matrix by species_id
@@ -141,6 +140,7 @@ def midas_merge_species(args):
             pool_of_samples.create_dirs(["dbsdir", "bt2_indexes_dir"], args.debug)
             species_ids_of_interest = []
             for species_id, record in stats.items():
+                # TODO: can also rely on genome_coverage
                 if record[-1] > 2:
                     species_ids_of_interest.append(species_id)
 

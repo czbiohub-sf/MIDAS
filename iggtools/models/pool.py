@@ -25,7 +25,7 @@ def get_pool_layout(dbtype=""):
             "species_rel_abundance": f"species/species_rel_abundance.tsv",
 
             # snps
-            "snps_summary":          f"snps/snps_summary.tsv",
+            "snps_summary":          f"snps/summary.tsv",
             "snps_info":             f"snps/{species_id}/{species_id}.snps_info.tsv",
             "snps_freq":             f"snps/{species_id}/{species_id}.snps_freqs.tsv",
             "snps_depth":            f"snps/{species_id}/{species_id}.snps_depth.tsv",

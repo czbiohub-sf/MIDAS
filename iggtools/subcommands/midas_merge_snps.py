@@ -423,30 +423,37 @@ def process_chunk_of_sites(packed_args):
 
 def midas_merge_snps(args):
 
-    global global_args
-    global_args = args
+    try:
+        global global_args
+        global_args = args
 
-    global pool_of_samples
-    global dict_of_species
+        global pool_of_samples
+        global dict_of_species
 
-    pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
-    dict_of_species = pool_of_samples.select_species("snps", args)
-    species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
+        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
+        dict_of_species = pool_of_samples.select_species("snps", args)
+        species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 
-    pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
-    pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
-    pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
+        pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
 
-    pool_of_samples.write_summary_files(dict_of_species, "snps")
+        pool_of_samples.write_summary_files(dict_of_species, "snps")
 
-    # Download representative genomes for every species into dbs/temp/{species}/
-    local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-    contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
+        # Download representative genomes for every species into dbs/temp/{species}/
+        local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
+        contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
 
-    # Compute pooled SNPs by the unit of chunks_of_sites
-    argument_list = design_chunks(contigs_files, args.chunk_size)
-    proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
-    assert all(s == "worked" for s in proc_flags)
+        # Compute pooled SNPs by the unit of chunks_of_sites
+        argument_list = design_chunks(contigs_files, args.chunk_size)
+        proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
+        assert all(s == "worked" for s in proc_flags)
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            pool_of_samples.remove_dirs(["outdir", "tempdir", "dbsdir"])
+        raise
 
 
 @register_args
