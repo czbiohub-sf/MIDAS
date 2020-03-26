@@ -421,7 +421,7 @@ def midas_run_snps(args):
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
-        print(bt2_db_dir)
+        print(contigs_files)
         # Build one bowtie database for species in the restricted species profile
         if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
