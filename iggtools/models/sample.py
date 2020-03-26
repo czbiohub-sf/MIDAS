@@ -22,9 +22,9 @@ def get_single_layout(sample_name, dbtype=""):
 
             "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes/{dbtype}",
 
-            "local_toc":              f"{sample_name}/dbs/genomes.tsv",
             "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
                                       [f"{sample_name}/dbs/species/phyeco.map"],
+            "local_toc":              f"{sample_name}/dbs/genomes.tsv",
             "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
             "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
 

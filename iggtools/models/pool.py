@@ -18,8 +18,6 @@ def get_pool_layout(dbtype=""):
 
             "bt2_indexes_dir":       f"bowtie2_indexes",
 
-            "local_toc":             f"dbs/genomes.tsv",
-
             # species
             "species_prevalence":    f"species/species_prevalence.tsv",
             "species_read_counts":   f"species/species_read_counts.tsv",
