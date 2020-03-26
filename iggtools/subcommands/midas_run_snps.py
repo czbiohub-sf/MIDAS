@@ -266,7 +266,7 @@ def compute_pileup_per_chunk(packed_args):
         zero_rows_allowed = not args.sparse
         current_chunk_size = contig_end - contig_start
 
-        print(packed_args)
+        print(packed_args[:4])
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
