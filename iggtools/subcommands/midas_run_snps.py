@@ -423,8 +423,7 @@ def midas_run_snps(args):
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
 
         # Build one bowtie database for species in the restricted species profile
-        if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-            print("we need to build bowtie2 database")
+        if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
@@ -443,7 +442,7 @@ def midas_run_snps(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "bt2_indexes_dir"])
         raise
 
 

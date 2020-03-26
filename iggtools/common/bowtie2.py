@@ -16,7 +16,6 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
     if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-        print("haha")
         if cat:
             command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
             command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
