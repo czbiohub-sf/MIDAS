@@ -124,7 +124,7 @@ def midas_merge_species(args):
         # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
         # create output and temp directory
-        pool_of_samples.create_dirs(["outdir", "dbsdir"], args.debug)
+        pool_of_samples.create_dirs(["outdir"], args.debug)
 
         # Slice the across-samples species profile matrix by species_id
         cols = list(species_profile_schema.keys())[1:]
@@ -137,6 +137,7 @@ def midas_merge_species(args):
 
         # TO move to another subcommand
         if args.build_bowtie2_db:
+            #dbsdir
             # The input for this section is species_prevalance.tsv
             species_ids_of_interest = []
             for species_id, record in stats.items():
@@ -158,7 +159,7 @@ def midas_merge_species(args):
             centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
 
             build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
-            #build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
+             #build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
 
     except:
         if not args.debug:
