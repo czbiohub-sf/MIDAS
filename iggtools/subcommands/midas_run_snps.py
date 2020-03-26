@@ -421,8 +421,8 @@ def midas_run_snps(args):
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="contigs")
 
         # Build one bowtie database for species in the restricted species profile
-        #if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-        #    build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+        if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
@@ -434,7 +434,6 @@ def midas_run_snps(args):
 
         # Use mpileup to call SNPs
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        print(arguments_list)
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
