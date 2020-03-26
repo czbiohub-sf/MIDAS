@@ -425,7 +425,7 @@ def midas_run_genes(args):
     try:
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
-        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        sample.create_dirs(["outdir", "dbsdir"], args.debug)
 
         global global_args
         global_args = args
@@ -438,12 +438,13 @@ def midas_run_genes(args):
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
+            # Update species_list: either particular species of interest or species in the bowtie2 indexes
             bt2_species = []
             with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
                     bt2_species.append(species_id[0])
             species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
-        
+
         else:
             bt2_db_dir = sample.get_target_layout("dbsdir")
             bt2_db_name = "pangenomes"

@@ -441,8 +441,7 @@ def midas_merge_snps(args):
 
     # Download representative genomes for every species into dbs/temp/{species}/
     local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-    db = UHGG(local_toc)
-    contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
+    contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
 
     # Compute pooled SNPs by the unit of chunks_of_sites
     argument_list = design_chunks(contigs_files, args.chunk_size)

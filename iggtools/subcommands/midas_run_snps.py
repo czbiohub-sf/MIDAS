@@ -399,6 +399,7 @@ def midas_run_snps(args):
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
+            # Update species_list: either particular species of interest or species in the bowtie2 indexes
             bt2_species = []
             with InputStream(args.species_profile_path) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
@@ -414,7 +415,7 @@ def midas_run_snps(args):
             bt2_db_name = "repgenomes"
 
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
-        
+
         # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbstemp", args.debug)

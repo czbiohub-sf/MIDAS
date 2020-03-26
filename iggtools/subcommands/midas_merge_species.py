@@ -74,8 +74,7 @@ def compute_stats(tabundance, tcoverage):
     for species_id in species_ids:
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
-        if species_id == 102697:
-            print(species_cov, args.genome_depth)
+
         values = [species_id, np.median(species_abun), np.mean(species_abun), \
               np.median(species_cov), np.mean(species_cov), \
               compute_prevalence(species_cov, args.genome_depth)]
@@ -125,7 +124,7 @@ def midas_merge_species(args):
         # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
         # create output and temp directory
-        pool_of_samples.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        pool_of_samples.create_dirs(["outdir", "dbsdir"], args.debug)
 
         # Slice the across-samples species profile matrix by species_id
         cols = list(species_profile_schema.keys())[1:]

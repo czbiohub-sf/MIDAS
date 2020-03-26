@@ -210,8 +210,7 @@ def midas_merge_genes(args):
 
         # Download genes_info for every species in the restricted species profile.
         local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-        db = UHGG(local_toc)
-        genes_info_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="genes_info")
+        genes_info_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="genes_info")
 
         # Collect copy_numbers, coverage and read counts across ALl the samples
         arguments_list = prepare_chunks(dict_of_species, genes_info_files)
