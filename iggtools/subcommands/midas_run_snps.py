@@ -139,19 +139,6 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
-    if False: # This is unused.
-        subparser.add_argument('--aln_discard',
-                               dest='aln_baq',
-                               default=False,
-                               help='Discard discordant read-pairs (False)')
-        subparser.add_argument('--aln_baq',
-                               dest='aln_baq',
-                               default=False,
-                               help='Enable BAQ: per-base alignment quality (False)')
-        subparser.add_argument('--aln_adjust_mq',
-                               dest='aln_adjust_mq',
-                               default=False,
-                               help='Adjust MAPQ (False)')
     return main_func
 
 
@@ -345,7 +332,8 @@ def merge_chunks_per_species(species_id):
 
 def write_species_pileup_summary(chunks_pileup_summary, outfile):
     """ Collect species pileup aln stats from all chunks and write to file """
-
+    print(chunks_pileup_summary)
+    
     species_pileup_summary = defaultdict(dict)
     prev_species_id = None
 

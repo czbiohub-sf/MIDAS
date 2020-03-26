@@ -24,21 +24,21 @@ def get_single_layout(sample_name, dbtype=""):
             "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
             "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
 
-            "dbs_tempdir":            f"{sample_name}/temp/dbs/{dbtype}",
-            "dbstemp_subdir":         f"{sample_name}/temp/dbs/{dbtype}/{species_id}",
+            "dbs_tempdir":            f"{sample_name}/temp/dbs/",
+            "dbstemp_subdir":         f"{sample_name}/temp/dbs/{species_id}",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",
             "species_alignments_m8":  f"{sample_name}/temp/species/alignments.m8",
 
             # snps workflow output
-            "snps_summary":           f"{sample_name}/snps/summary.tsv",
+            "snps_summary":           f"{sample_name}/snps/snps_summary.tsv",
             "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
             "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
             "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
 
             # genes workflow output
-            "genes_summary":          f"{sample_name}/genes/summary.tsv",
+            "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
             "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
             "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
