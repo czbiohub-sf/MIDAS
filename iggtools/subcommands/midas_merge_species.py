@@ -36,7 +36,7 @@ def register_args(main_func):
                            metavar="FLOAT",
                            default=DEFAULT_GENOME_DEPTH,
                            help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_GENOME_DEPTH})")
-    subparser.add_argument('--build_bowtie2_db',
+    subparser.add_argument('--build_bowtie2_indexes',
                            action='store_true',
                            default=False,
                            help=f"Build Bowtie2 indexes for the merged species profile.")
@@ -136,12 +136,12 @@ def midas_merge_species(args):
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
 
         # TO move to another subcommand
-        if args.build_bowtie2_db:
+        if args.build_bowtie2_indexes:
             pool_of_samples.create_dirs(["dbsdir", "bt2_db_dir"], args.debug)
             # The input for this section is species_prevalance.tsv
             species_ids_of_interest = []
             for species_id, record in stats.items():
-                if record[-1] > 0:
+                if record[-1] > 1:
                     species_ids_of_interest.append(species_id)
 
             rep_bt2_db_name = "repgenomes"
