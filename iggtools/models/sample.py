@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema
+from iggtools.params.schemas import fetch_schema_by_dbtype, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.uhgg import MARKER_FILE_EXTS
 
@@ -16,11 +16,11 @@ def get_single_layout(sample_name, dbtype=""):
             "tempdir":                f"{sample_name}/temp/{dbtype}",
             "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            "bt2_db_dir":            f"{sample_name}/bt2_dbs",
+            "bt2_db_dir":             f"{sample_name}/bt2_dbs",
 
             # uhgg-related files
             "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
-            "dbs_subdir":                 f"{sample_name}/dbs/{dbtype}/{species_id}",
+            "dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
 
             "local_toc":              f"{sample_name}/dbs/genomes.tsv",
             "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
