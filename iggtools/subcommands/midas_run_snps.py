@@ -411,6 +411,7 @@ def midas_run_snps(args):
             # We also don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
             # TODO: should we also provide symlink?
         else:
+            sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
             bt2_db_name = "repgenomes"
 

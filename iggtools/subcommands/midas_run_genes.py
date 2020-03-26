@@ -446,6 +446,7 @@ def midas_run_genes(args):
             species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
 
         else:
+            sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
             bt2_db_name = "pangenomes"
 
