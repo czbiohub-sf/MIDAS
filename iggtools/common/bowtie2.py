@@ -15,6 +15,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
     """ Build Bowtie2 database for the collections of fasta files """
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
+    print(bt2_db_prefix)
     if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
         if cat:
             command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa")
