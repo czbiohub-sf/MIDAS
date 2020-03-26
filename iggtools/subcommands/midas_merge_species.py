@@ -137,29 +137,26 @@ def midas_merge_species(args):
 
         # TO move to another subcommand
         if args.build_bowtie2_db:
-            #dbsdir
+            pool_of_samples.create_dirs(["dbsdir", "bt2_db_dir"], args.debug)
             # The input for this section is species_prevalance.tsv
             species_ids_of_interest = []
             for species_id, record in stats.items():
                 if record[-1] > 0:
                     species_ids_of_interest.append(species_id)
 
-            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
-            bt2_db_dir = pool_of_samples.get_target_layout("dbsdir")
-            bt2_db_temp_dir = pool_of_samples.get_target_layout("dbsdir")
-
             rep_bt2_db_name = "repgenomes"
             pan_bt2_db_name = "pangenomes"
 
-            local_toc = download_reference(outputs.genomes, bt2_db_temp_dir)
+            local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
             db = UHGG(local_toc)
 
             # Fetch the files per genomes
-            contigs_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="contigs")
-            centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
+            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+            contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
+            centroids_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="centroids")
 
-            build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
-             #build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
+            build_bowtie2_db(pool_of_samples.get_target_layout("bt2_db_dir"), rep_bt2_db_name, contigs_files)
+             #build_bowtie2_db(pool_of_samples.get_target_layout("bt2_db_dir"), pan_bt2_db_name, centroids_files)
 
     except:
         if not args.debug:
