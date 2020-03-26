@@ -634,7 +634,8 @@ def download_reference(ref_path, local_dir="."):
     local_path = os.path.join(local_dir, os.path.basename(ref_path))
     local_path, uncompress_cmd = uncompressed(local_path)
     if os.path.exists(local_path):
-        tsprint(f"Overwriting pre-existing {local_path} with reference download.")  # TODO:  Reuse instead of re-download.  Requires versioning.
+        # TODO:  Reuse instead of re-download.  Requires versioning.
+        tsprint(f"Overwriting pre-existing {local_path} with reference download.")
         command(f"rm -f {local_path}")
     if not os.path.exists(local_dir):
         command(f"mkdir -p {local_dir}")
@@ -644,6 +645,12 @@ def download_reference(ref_path, local_dir="."):
         command(f"rm -f {local_path}")
         raise
     return local_path
+
+
+def cat_files(files_of_chunks, one_file, number_of_chunks=20):
+    for temp_files in split(files_of_chunks, number_of_chunks):
+        command("cat " + " ".join(temp_files) + f" >> {one_file}", quiet=True)
+
 
 
 if __name__ == "__main__":

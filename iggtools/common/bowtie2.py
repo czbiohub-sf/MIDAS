@@ -3,32 +3,44 @@ import os
 from iggtools.common.utils import tsprint, num_physical_cores, command, split
 
 
-def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
-    """
-    Build Bowtie2 database of representative genomes or centroid genes
-    for the species present in the sample, e.g. repgenomes OR pangenomes
-    """
+def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
     bt2_db_suffixes = ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]
     if all(os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.{ext}") for ext in bt2_db_suffixes):
-        tsprint("Skipping bowtie2-build as database files appear to exist.")
-        return
-    command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa")
-    command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
-
-    for files in split(downloaded_files.values(), 20):  # keep "cat" commands short
-        command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
-
-    command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_dir}/{bt2_db_name}.fa {bt2_db_dir}/{bt2_db_name} > {bt2_db_dir}/bowtie2-build.log")
+        tsprint(f"Bowtie2 index {bt2_db_dir}/{bt2_db_name} exist.")
+        return True
+    return False
 
 
-def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
-    """
-    Use Bowtie2 to map reads to specified representative genomes or
-    collections of centroids genes for the pangenome flow.
-    """
+def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
+    """ Build Bowtie2 database for the collections of fasta files """
 
-    if args.debug and os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.bam"):
-        tsprint(f"Skipping Bowtie2 alignment in debug mode as temporary data exists: {bt2_db_dir}/{bt2_db_name}.bam")
+    bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
+    if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
+        if cat:
+            command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
+            command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
+            for files in split(downloaded_files, 20):  # keep "cat" commands short
+                command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
+        else:
+            command(f"ln -rs {downloaded_files} {bt2_db_dir}/{bt2_db_name}.fa")
+
+        try:
+            command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bowtie2-build.log")
+        except:
+            tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
+            command(f"rm -f {bt2_db_prefix}.1.bt2")
+            raise
+
+    return bt2_db_prefix
+
+
+def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
+    """ Use Bowtie2 to map reads to prebuilt bowtie2 database """
+
+    bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
+
+    if os.path.exists(bamfile_path):
+        tsprint(f"Use existing per-sample bowtie2 db {bamfile_path}")
         return
 
     # Construct bowtie2 align input arguments
@@ -45,27 +57,29 @@ def bowtie2_align(args, bt2_db_dir, bt2_db_name, sort_aln=False):
         r1 = f"-U {args.r1}"
 
     try:
-        bt2_command = f"bowtie2 --no-unal -x {bt2_db_dir}/{bt2_db_name} {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2}"
-        if sort_aln:
+        bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2}"
+        if args.aln_sort:
             command(f"set -o pipefail; {bt2_command} | \
                     samtools view --threads {num_physical_cores} -b - | \
-                    samtools sort --threads {num_physical_cores} -o {bt2_db_dir}/{bt2_db_name}.bam")
+                    samtools sort --threads {num_physical_cores} -o {bamfile_path}")
         else:
             command(f"set -o pipefail; {bt2_command} | \
-                    samtools view --threads {num_physical_cores} -b - > {bt2_db_dir}/{bt2_db_name}.bam")
+                    samtools view --threads {num_physical_cores} -b - > {bamfile_path}")
     except:
-        tsprint(f"Bowtie2 align to {bt2_db_dir}/{bt2_db_name}.bam run into error")
-        command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam")
+        tsprint(f"Bowtie2 align to {bamfile_path} run into error")
+        command(f"rm -f {bamfile_path}")
         raise
 
 
-def samtools_index(args, bt2_db_dir, bt2_db_name):
-    if args.debug and os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.bam.bai"):
-        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bt2_db_dir}/{bt2_db_name}.bam")
+def samtools_index(bamfile_path, debug):
+
+    if debug and os.path.exists(f"{bamfile_path}.bai"):
+        tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_path}.bai")
         return
 
     try:
-        command(f"samtools index -@ {num_physical_cores} {bt2_db_dir}/{bt2_db_name}.bam")
+        command(f"samtools index -@ {num_physical_cores} {bamfile_path}")
     except:
-        command(f"rm -f {bt2_db_dir}/{bt2_db_name}.bam.bai")
+        tsprint(f"Samtools index {bamfile_path} run into error")
+        command(f"rm -f {bamfile_path}.bai")
         raise

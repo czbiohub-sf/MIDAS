@@ -4,19 +4,11 @@ from hashlib import md5
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
-from iggtools.models.uhgg import UHGG
+from iggtools.models.uhgg import UHGG, imported_genome_file, raw_genome_file
 from iggtools.params import inputs, outputs
 
 
 CONCURRENT_GENOME_IMPORTS = 20
-
-
-def imported_genome_file(genome_id, species_id, component):
-    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{component}"
-
-
-def raw_genome_file(genome_id, representative_id):
-    return f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
 
 
 # Move genome id parsing and name transformations in some central place that all commands can import

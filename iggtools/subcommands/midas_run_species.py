@@ -1,25 +1,33 @@
 import json
+import os
 import random
 from collections import defaultdict
 from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, select_from_tsv, multithreading_map, download_reference, TimedSection
-from iggtools.models.uhgg import UHGG
-from iggtools import params
-
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference, command
+from iggtools.models.uhgg import UHGG, fetch_marker_genes
+from iggtools.models.sample import Sample
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
+from iggtools.params.inputs import marker_genes_hmm_cutoffs
+from iggtools.params import outputs
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
+DECIMALS = ".6f"
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='compute species abundance profile for given sample(s)')
-    subparser.add_argument('outdir',
+    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
     subparser.add_argument('-1',
                            dest='r1',
                            required=True,
@@ -27,6 +35,7 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
     subparser.add_argument('--word_size',
                            dest='word_size',
                            default=DEFAULT_WORD_SIZE,
@@ -37,7 +46,7 @@ def register_args(main_func):
                            dest='aln_mapid',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {params.inputs.marker_genes_hmm_cutoffs}")
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
     subparser.add_argument('--aln_cov',
                            dest='aln_cov',
                            default=DEFAULT_ALN_COV,
@@ -49,13 +58,11 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
-    if False:
-        # This is not currently in use.
-        subparser.add_argument('--read_length',
-                               dest='read_length',
-                               type=int,
-                               metavar="INT",
-                               help=f"Trim reads to READ_LENGTH and discard reads with length < READ_LENGTH.  By default, reads are not trimmed or filtered")
+    subparser.add_argument('--local_dbsdir',
+                           dest='local_dbsdir',
+                           type=str,
+                           metavar="STR",
+                           help=f"Provide local path of the dbs instead of sample-specific")
     return main_func
 
 
@@ -109,32 +116,16 @@ def parse_reads(filename, max_reads=None):
             yield (new_name, seq)
         if read_count_filter:
             fp.ignore_errors()
-    tsprint(f"Parsed {read_count} reads from {filename}")
+    tsprint(f"parse_reads:: parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(tempdir, r1, r2, word_size, markers_db, max_reads):
-    m8_file = f"{tempdir}/alignments.m8"
+def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
+    assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit ."
+
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
-    return m8_file
-
-
-BLAST_M8_SCHEMA = {
-    'query': str,
-    'target': str,
-    'pid': float,
-    'aln': int,
-    'mis': float,
-    'gaps': float,
-    'qstart': float,
-    'qend': float,
-    'tstart': float,
-    'tend': float,
-    'evalue': float,
-    'score': float,
-}
 
 
 def deconstruct_queryid(rid):
@@ -152,8 +143,9 @@ def query_coverage(aln):
     return aln['aln'] / qlen
 
 
-def find_best_hits(args, marker_info, m8_file, marker_cutoffs):
+def find_best_hits(marker_info, m8_file, marker_cutoffs, args):
     """ Find top scoring alignment for each read """
+
     best_hits = {}
     i = 0
     with InputStream(m8_file) as m8_stream:
@@ -189,7 +181,7 @@ def assign_unique(alns, species_info, marker_info):
             unique_alns[species_id].append(aln[0])
         else:
             non_unique += 1
-    tsprint(f"  uniquely mapped reads: {unique}")
+    tsprint(f" uniquely mapped reads: {unique}")
     tsprint(f"  ambiguously mapped reads: {non_unique}")
     return unique_alns
 
@@ -211,9 +203,8 @@ def assign_non_unique(alns, unique_alns, marker_info):
 
 
 def read_marker_info_repgenomes(map_file):
-    columns = ["species_id", "genome_id", "gene_id", "gene_length", "marker_id"]
     with InputStream(map_file) as map_file_stream:
-        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=columns, result_structure=dict)}
+        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict)}
 
 
 def sum_marker_gene_lengths(marker_info):
@@ -246,50 +237,64 @@ def normalize_counts(species_alns, total_gene_length):
     return species_abundance
 
 
-def write_abundance(outdir, species_abundance):
+def write_abundance(species_profile_path, species_abundance):
     """ Write species results to specified output file """
-    outpath = f"{outdir}/species/species_profile.txt"  # TODO:  Share this across midas_run_ steps
-    with OutputStream(outpath) as outfile:
-        fields = ['species_id', 'count_reads', 'coverage', 'relative_abundance']
-        outfile.write('\t'.join(fields) + '\n')
+    with OutputStream(species_profile_path) as outfile:
+        outfile.write('\t'.join(species_profile_schema.keys()) + '\n')
         output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['count'], reverse=True)
         for species_id in output_order:
             values = species_abundance[species_id]
             if values['count'] > 0:
                 record = [species_id, values['count'], values['cov'], values['rel_abun']]
-                outfile.write('\t'.join(str(x) for x in record) + '\n')
+                outfile.write("\t".join(map(format_data, record)) + "\n")
 
 
 def midas_run_species(args):
 
-    tempdir = f"{args.outdir}/species/temp/"
+    try:
+        sample = Sample(args.sample_name, args.midas_outdir, "species")
+        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
-    command(f"rm -rf {tempdir}")
-    command(f"mkdir -p {tempdir}")
+        # Fetch db-related file either from S3 or create symlink
+        dbsdir = sample.get_target_layout("dbsdir")
+        if args.local_dbsdir:
+            curr_dbsdir = args.local_dbsdir
+            command(f"ln -s {curr_dbsdir}/* {dbsdir}")
+            markers_db_files = sample.get_target_layout("marker_genes_file")
+            local_toc = sample.get_target_layout("local_toc")
+        else:
+            markers_db_files = fetch_marker_genes(dbsdir)
+            local_toc = download_reference(outputs.genomes, dbsdir)
 
-    markers_db_files = multithreading_map(download_reference, [f"s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.fa{ext}.lz4" for ext in ["", ".bwt", ".header", ".sa", ".sequence"]] + ["s3://microbiome-igg/2.0/marker_genes/phyeco/phyeco.map.lz4"])
+        # Align reads to marker-genes database
+        m8_file = sample.get_target_layout("species_alignments_m8")
+        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
 
-    db = UHGG()
-    species_info = db.species
+        with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
+            marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
-    marker_info = read_marker_info_repgenomes(markers_db_files[-1])
-
-    with TimedSection("aligning reads to marker-genes database"):
-        m8_file = map_reads_hsblast(tempdir, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
-
-    with InputStream(params.inputs.marker_genes_hmm_cutoffs) as cutoff_params:
-        marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
-
-    with TimedSection("classifying reads"):
-        best_hits = find_best_hits(args, marker_info, m8_file, marker_cutoffs)
+        # Classify reads
+        species_info = UHGG(local_toc).species
+        marker_info = read_marker_info_repgenomes(markers_db_files[-1])
+        best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
         unique_alns = assign_unique(best_hits, species_info, marker_info)
         species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
 
-    with TimedSection("estimating species abundance"):
+        # Estimate species abundance
         total_gene_length = sum_marker_gene_lengths(marker_info)
         species_abundance = normalize_counts(species_alns, total_gene_length)
 
-    write_abundance(args.outdir, species_abundance)
+        write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+        tsprint("Finished midas_run_species for %s" % sample.sample_name)
+
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
+        # TODO: find a more robust way to existing file for symlink L263
+        if args.local_dbsdir:
+            sample.remove_dirs(["dbsdir", "tempdir", "dbsdir"])
+        raise
 
 
 @register_args

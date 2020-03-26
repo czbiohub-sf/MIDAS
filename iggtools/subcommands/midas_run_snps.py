@@ -1,36 +1,41 @@
 import json
 import os
-from collections import defaultdict
 import multiprocessing
 
+from collections import defaultdict
+from math import ceil
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multithreading_hashmap, download_reference
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, command, cat_files, select_from_tsv
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
-from iggtools.common.samples import parse_species_profile, select_species
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
+from iggtools.models.sample import Sample
 
 
 DEFAULT_ALN_COV = 0.75
-DEFAULT_SPECIES_COVERAGE = 3.0
+DEFAULT_GENOME_COVERAGE = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
-
-DECIMALS = ".3f"
+DEFAULT_CHUNK_SIZE = 40000
 
 
 def register_args(main_func):
     subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
-    subparser.add_argument('outdir',
+    subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+    subparser.add_argument('--sample_name',
+                           dest='sample_name',
+                           required=True,
+                           help="Unique sample identifier")
     subparser.add_argument('-1',
                            dest='r1',
                            required=True,
@@ -38,25 +43,28 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--species_cov',
+    # Species related
+    subparser.add_argument('--genome_coverage',
                            type=float,
-                           dest='species_cov',
+                           dest='genome_coverage',
                            metavar='FLOAT',
-                           default=DEFAULT_SPECIES_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_SPECIES_COVERAGE})")
-    if False:
-        # This is unused.
-        subparser.add_argument('--species_topn',
-                               type=int,
-                               dest='species_topn',
-                               metavar='INT',
-                               help='Include top N most abundant species')
-
+                           default=DEFAULT_GENOME_COVERAGE,
+                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated list of species ids")
+    subparser.add_argument('--local_bowtie2_indexes',
+                           dest='local_bowtie2_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--species_profile_path',
+                           dest='species_profile_path',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Species profile path for the prebuild bowtie2 index")
     # Alignment flags
     subparser.add_argument('--aln_speed',
                            type=str,
@@ -74,7 +82,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-
+    subparser.add_argument('--aln_sort',
+                           action='store_true',
+                           default=True,
+                           help=f"Sort BAM file.")
     #  Pileup flags (samtools, or postprocessing)
     subparser.add_argument('--aln_mapid',
                            dest='aln_mapid',
@@ -112,37 +123,31 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
-    if False:
-        # This is unused.
-        subparser.add_argument('--aln_discard',
-                               dest='aln_baq',
-                               default=False,
-                               help='Discard discordant read-pairs (False)')
-        subparser.add_argument('--aln_baq',
-                               dest='aln_baq',
-                               default=False,
-                               help='Enable BAQ: per-base alignment quality (False)')
-        subparser.add_argument('--aln_adjust_mq',
-                               dest='aln_adjust_mq',
-                               default=False,
-                               help='Adjust MAPQ (False)')
+    # File related
     subparser.add_argument('--sparse',
-                           dest='sparse',
+                           action='store_true',
                            default=False,
                            help=f"Omit zero rows from output.")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s).  (All)")
     return main_func
 
 
-def imported_genome_file(genome_id, species_id, component):
-    return f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}"
-
-
-def keep_read_worker(aln, args, aln_stats):
-    aln_stats['aligned_reads'] += 1
+def keep_read(aln):
+    global global_args
+    args = global_args
 
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
-
     # min pid
     if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
         return False
@@ -155,171 +160,290 @@ def keep_read_worker(aln, args, aln_stats):
     # min aln cov
     if align_len / float(query_len) < args.aln_cov:
         return False
-
-    aln_stats['mapped_reads'] += 1
     return True
 
 
-def species_pileup(species_id, args, tempdir, outputdir, contig_file, contigs_db_stats):
-    # Read in contigs information for current species_id
-
+def scan_contigs(contig_file, species_id):
+    # TODO: we DO need the contig_seq which can only be read from fasta file
     contigs = {}
-    contigs_db_stats['species_counts'] += 1 # not being updated and passed as expected
-
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             contigs[rec.id] = {
                 "species_id": species_id,
-                "contig_len": int(len(rec.seq)),
+                "contig_id": rec.id,
+                "contig_len": len(rec.seq),
                 "contig_seq": str(rec.seq),
             }
-            contigs_db_stats['total_length'] += contigs[rec.id]["contig_len"]
-            contigs_db_stats['total_seqs'] += 1
+    return contigs
 
-    # Summary statistics
-    aln_stats = {
-        "genome_length": 0,
-        "total_depth": 0,
-        "covered_bases": 0,
-        "aligned_reads":0,
-        "mapped_reads":0,
-        }
 
-    def keep_read(x):
-        return keep_read_worker(x, args, aln_stats)
+def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
+    """ Each chunk is indexed by species_id, chunk_id """
 
-    header = ['ref_id', 'ref_pos', 'ref_allele', 'depth', 'count_a', 'count_c', 'count_g', 'count_t']
-    path = f"{outputdir}/{species_id}.snps.lz4"
+    global sample
+    global semaphore_for_species
+    global species_sliced_snps_path
 
-    with OutputStream(path) as file:
+    semaphore_for_species = dict()
+    # design per species list of headerless_sliced_output_path indexed by chunk_id.
+    species_sliced_snps_path = defaultdict(list)
+    species_sliced_snps_path["input_bamfile"] = sample.get_target_layout("snps_repgenomes_bam")
 
-        file.write('\t'.join(header) + '\n')
+    # TODO: this part can be done in parallel
+    arguments_list = []
+    for species_index, species_id in enumerate(species_ids_of_interest):
+        # Read in contigs information for one species.
+        # TODO: download contigs here. Nope. we need to build one cat-ed bowtie2 database
+        contigs = scan_contigs(contigs_files[species_index], species_id)
+
+        chunk_id = 0
+        for contig_id in sorted(list(contigs.keys())): # why need to sort?
+            contig = contigs[contig_id]
+            contig_length = contig["contig_len"]
+
+            if contig_length <= chunk_size:
+                headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
+                species_sliced_snps_path[species_id].append(headerless_sliced_path)
+
+                # TODO: instead contig as the last argument, just pass the contig_seq.
+                slice_args = (species_id, chunk_id, contig_id, 0, contig_length, contig)
+                arguments_list.append(slice_args)
+                chunk_id += 1
+            else:
+                number_of_chunks = ceil(contig_length/chunk_size) - 1
+                for ni, ci in enumerate(range(0, contig_length, chunk_size)):
+                    headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
+                    species_sliced_snps_path[species_id].append(headerless_sliced_path)
+
+                    if ni == number_of_chunks:
+                        slice_args = (species_id, chunk_id, contig_id, ci, contig_length, contig)
+                    else:
+                        slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig)
+                    arguments_list.append(slice_args)
+                    chunk_id += 1
+
+        # Submit the merge jobs
+        arguments_list.append((species_id, -1))
+        species_sliced_snps_path[species_id].append(sample.get_target_layout("snps_pileup", species_id))
+
+        # Create a semaphore with number_of_chunks of elements
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
+        for _ in range(chunk_id):
+            semaphore_for_species[species_id].acquire()
+
+    return arguments_list
+
+
+def process_chunk_of_sites(packed_args):
+
+    global semaphore_for_species
+    global species_sliced_snps_path
+
+    if packed_args[1] == -1:
+        species_id = packed_args[0]
+        number_of_chunks = len(species_sliced_snps_path[species_id]) - 1
+        for _ in range(number_of_chunks):
+            semaphore_for_species[species_id].acquire()
+        return merge_chunks_per_species(species_id)
+
+    return compute_pileup_per_chunk(packed_args)
+
+
+def compute_pileup_per_chunk(packed_args):
+    """ actual pileup compute for one chunk """
+    global semaphore_for_species
+    global species_sliced_snps_path
+    global global_args
+    args = global_args
+
+    try:
+        # [contig_start, contig_end)
+        species_id, chunk_id, contig_id, contig_start, contig_end, contig = packed_args
+        repgenome_bamfile = species_sliced_snps_path["input_bamfile"]
+
+        headerless_sliced_path = species_sliced_snps_path[species_id][chunk_id]
+
         zero_rows_allowed = not args.sparse
+        current_chunk_size = contig_end - contig_start
 
-        # Loop over alignment for current species's contigs
-        with AlignmentFile(f"{tempdir}/repgenomes.bam") as bamfile:
-            for contig_id in sorted(list(contigs.keys())): # why need to sort?
-                contig = contigs[contig_id]
-                counts = bamfile.count_coverage(
-                    contig_id,
-                    start=0,
-                    end=contig["contig_len"],
-                    quality_threshold=args.aln_baseq,
-                    read_callback=keep_read)
+        with AlignmentFile(repgenome_bamfile) as bamfile:
+            counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
+                                            quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                                            read_callback=keep_read) # select a call-back to ignore reads when counting
+            aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
+            mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
 
-                for ref_pos in range(0, contig["contig_len"]):
-                    ref_allele = contig["contig_seq"][ref_pos]
-                    depth = sum([counts[nt][ref_pos] for nt in range(4)])
-                    count_a = counts[0][ref_pos]
-                    count_c = counts[1][ref_pos]
-                    count_g = counts[2][ref_pos]
-                    count_t = counts[3][ref_pos]
-                    values = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
-
-                    if depth > 0 or zero_rows_allowed:
-                        file.write('\t'.join(str(val) for val in values) + '\n')
-
-                    aln_stats['genome_length'] += 1
-                    aln_stats['total_depth'] += depth
-                    if depth > 0:
-                        aln_stats['covered_bases'] += 1
-
-    tsprint(json.dumps({species_id: aln_stats}, indent=4))
-    return (species_id, {k: str(v) for k, v in aln_stats.items()})
-
-
-def pysam_pileup(args, species_ids, tempdir, outputdir, contigs_files):
-    "Counting alleles and run pileups per species in parallel"
-
-    # Update alignment stats for species
-    species_pileup_stats = defaultdict()
-    contigs_db_stats = {'species_counts':0, 'total_seqs':0, 'total_length':0}
-
-    mp = multiprocessing.Pool(num_physical_cores)
-    argument_list = [(sp_id, args, tempdir, outputdir, contigs_files[sp_id], contigs_db_stats) for sp_id in species_ids]
-
-    for species_id, aln_stats in mp.starmap(species_pileup, argument_list):
-        sp_stats = {
-            "genome_length": int(aln_stats['genome_length']),
-            "covered_bases": int(aln_stats['covered_bases']),
-            "total_depth": int(aln_stats['total_depth']),
-            "aligned_reads": int(aln_stats['aligned_reads']),
-            "mapped_reads": int(aln_stats['mapped_reads']),
-            "fraction_covered": 0.0,
-            "mean_coverage": 0.0,
+        # aln_stats need to be passed from child process back to parents
+        aln_stats = {
+            "species_id": species_id,
+            "contig_id": contig_id,
+            "chunk_length": current_chunk_size,
+            "aligned_reads": aligned_reads,
+            "mapped_reads": mapped_reads,
+            "contig_total_depth": 0,
+            "contig_covered_bases": 0
         }
 
-        if sp_stats["genome_length"] > 0:
-            sp_stats["fraction_covered"] = format(sp_stats["covered_bases"] / sp_stats["genome_length"], DECIMALS)
+        with OutputStream(headerless_sliced_path) as stream:
+            for within_chunk_index in range(0, current_chunk_size):
+                depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
+                count_a = counts[0][within_chunk_index]
+                count_c = counts[1][within_chunk_index]
+                count_g = counts[2][within_chunk_index]
+                count_t = counts[3][within_chunk_index]
 
-        if sp_stats["covered_bases"] > 0:
-            sp_stats["mean_coverage"] = format(sp_stats["total_depth"] / sp_stats["covered_bases"], DECIMALS)
+                ref_pos = within_chunk_index + contig_start
+                ref_allele = contig["contig_seq"][ref_pos]
+                row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
 
-        species_pileup_stats[species_id] = sp_stats
+                aln_stats["contig_total_depth"] += depth
+                if depth > 0:
+                    aln_stats["contig_covered_bases"] += 1
+                if depth > 0 or zero_rows_allowed:
+                    stream.write("\t".join(map(format_data, row)) + "\n")
+            assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
+        return aln_stats
+    finally:
+        semaphore_for_species[species_id].release() # no deadlock
 
-    tsprint(f"contigs_db_stats - total genomes: {contigs_db_stats['species_counts']}")
-    tsprint(f"contigs_db_stats - total contigs: {contigs_db_stats['total_seqs']}")
-    tsprint(f"contigs_db_stats - total base-pairs: {contigs_db_stats['total_length']}")
 
-    return species_pileup_stats
+def merge_chunks_per_species(species_id):
+    """ merge the pileup results from chunks into one file per species """
+    global species_sliced_snps_path
+    global semaphore_for_species
+    global global_args
+
+    tsprint(f"merge_chunks_per_species::{species_id}")
+    files_of_chunks = species_sliced_snps_path[species_id][:-1]
+    species_snps_pileup_file = species_sliced_snps_path[species_id][-1]
+
+    with OutputStream(species_snps_pileup_file) as stream:
+        stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
+    cat_files(files_of_chunks, species_snps_pileup_file, 20)
+
+    if not global_args.debug:
+        tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
+        for s_file in files_of_chunks:
+            command(f"rm -rf {s_file}", quiet=True)
+    # return a status flag
+    # the path should be computable somewhere else
+    return True
 
 
-def write_snps_summary(species_pileup_stats, outfile):
-    """ Get summary of mapping statistics """
-    header = ['species_id', 'genome_length', 'covered_bases', 'total_depth', 'aligned_reads', 'mapped_reads', 'fraction_covered', 'mean_coverage']
-    with OutputStream(outfile) as file:
-        file.write('\t'.join(header) + '\n')
-        for species_id, species_aln in species_pileup_stats.items():
-            values = list(species_aln.values())
-            values.insert(0, species_id)
-            file.write('\t'.join(map(str, values)) + '\n')
+def write_species_pileup_summary(chunks_pileup_summary, outfile):
+    """ Collect species pileup aln stats from all chunks and write to file """
+
+    species_pileup_summary = defaultdict(dict)
+    prev_species_id = None
+
+    for record in chunks_pileup_summary:
+        if record is True:
+            continue
+
+        species_id = record["species_id"]
+        if species_id not in species_pileup_summary:
+            species_pileup_summary[species_id] = {
+                "species_id": species_id,
+                "genome_length": 0,
+                "covered_bases": 0,
+                "total_depth": 0,
+                "aligned_reads":0,
+                "mapped_reads":0,
+                "fraction_covered": 0.0,
+                "mean_coverage": 0.0
+                }
+
+        curr_species_pileup = species_pileup_summary.get(species_id)
+        curr_species_pileup["genome_length"] += record["chunk_length"]
+        curr_species_pileup["total_depth"] += record["contig_total_depth"]
+        curr_species_pileup["covered_bases"] += record["contig_covered_bases"]
+        curr_species_pileup["aligned_reads"] += record["aligned_reads"]
+        curr_species_pileup["mapped_reads"] += record["mapped_reads"]
+        assert curr_species_pileup["fraction_covered"] == 0.0, f"compute_species_pileup_summary error for {species_id}"
+
+        if prev_species_id != species_id:
+            if prev_species_id is not None:
+                previous_species_pileup = species_pileup_summary.get(prev_species_id)
+                if previous_species_pileup["genome_length"] > 0:
+                    previous_species_pileup["fraction_covered"] = previous_species_pileup["covered_bases"] / previous_species_pileup["genome_length"]
+                if previous_species_pileup["covered_bases"] > 0:
+                    previous_species_pileup["mean_coverage"] = previous_species_pileup["total_depth"] / previous_species_pileup["covered_bases"]
+            prev_species_id = species_id
+
+    # Secondary level compute: need to loop over all chunks of sites to compute fraction_covered
+    if curr_species_pileup["genome_length"] > 0:
+        curr_species_pileup["fraction_covered"] = curr_species_pileup["covered_bases"] / curr_species_pileup["genome_length"]
+    if curr_species_pileup["covered_bases"] > 0:
+        curr_species_pileup["mean_coverage"] = curr_species_pileup["total_depth"] / curr_species_pileup["covered_bases"]
+
+    with OutputStream(outfile) as stream:
+        stream.write("\t".join(snps_profile_schema.keys()) + "\n")
+        for record in species_pileup_summary.values():
+            stream.write("\t".join(map(format_data, record.values())) + "\n")
 
 
 def midas_run_snps(args):
 
-    tempdir = f"{args.outdir}/snps/temp_sc{args.species_cov}"
-    if args.debug and os.path.exists(tempdir):
-        tsprint(f"INFO:  Reusing existing temp data in {tempdir} according to --debug flag.")
-    else:
-        command(f"rm -rf {tempdir}")
-        command(f"mkdir -p {tempdir}")
-
-    outputdir = f"{args.outdir}/snps/output_sc{args.species_cov}"
-    if not os.path.exists(outputdir):
-        command(f"mkdir -p {outputdir}")
-
     try:
-        # The full species profile must exist -- it is output by run_midas_species.
-        # Restrict to species above requested coverage.
-        full_species_profile = parse_species_profile(args.outdir)
-        species_profile = select_species(full_species_profile, args.species_cov)
+        global sample
+        sample = Sample(args.sample_name, args.midas_outdir, "snps")
+        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
-        local_toc = download_reference(outputs.genomes)
-        db = UHGG(local_toc)
-        representatives = db.representatives
+        global global_args
+        global_args = args
 
-        def download_contigs(species_id):
-            return download_reference(imported_genome_file(representatives[species_id], species_id, "fna.lz4"), f"{tempdir}/{species_id}")
+        species_list = args.species_list.split(",") if args.species_list else []
+        if args.local_bowtie2_indexes:
+            bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
+            assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
 
-        # Download repgenome_id.fna for every species in the restricted species profile.
-        contigs_files = multithreading_hashmap(download_contigs, species_profile.keys(), num_threads=20)
+            # Update species_list: either particular species of interest or species in the bowtie2 indexes
+            bt2_species = []
+            with InputStream(args.species_profile_path) as stream:
+                for species_id in select_from_tsv(stream, ["species_id"]):
+                    bt2_species.append(species_id[0])
+            species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
 
-        # Use Bowtie2 to map reads to a representative genomes
-        bt2_db_name = "repgenomes"
-        build_bowtie2_db(tempdir, bt2_db_name, contigs_files)
-        bowtie2_align(args, tempdir, bt2_db_name, sort_aln=True)
+            # The index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
+            # can still be based on sample itself.
+            # We also don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
+            # TODO: should we also provide symlink?
+        else:
+            sample.create_dirs(["bt2_indexes_dir"], args.debug)
+            bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
+            bt2_db_name = "repgenomes"
 
-        # Use mpileup to identify SNPs
-        samtools_index(args, tempdir, bt2_db_name)
-        species_pileup_stats = pysam_pileup(args, list(species_profile.keys()), tempdir, outputdir, contigs_files)
+        species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
 
-        write_snps_summary(species_pileup_stats, f"{args.outdir}/snps/output_sc{args.species_cov}/summary.txt")
+        # Download per-species UHGG file into temporary dbs directory
+        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
+        contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
 
+        # Build one bowtie database for species in the restricted species profile
+        if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
+
+        # Map reads to the existing bowtie2 indexes
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
+        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+        bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
+        samtools_index(repgenome_bamfile, args.debug)
+
+        # Use mpileup to call SNPs
+        arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
+
+        write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            command(f"rm -rf {tempdir}", check=False)
-            command(f"rm -rf {outputdir}", check=False)
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "bt2_indexes_dir"])
+        raise
 
 
 @register_args
