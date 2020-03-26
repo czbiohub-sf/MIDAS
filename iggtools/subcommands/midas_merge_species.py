@@ -143,9 +143,9 @@ def midas_merge_species(args):
                 if record[-1] > 0:
                     species_ids_of_interest.append(species_id)
 
-            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbs_tempdir", args.debug)
+            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
             bt2_db_dir = pool_of_samples.get_target_layout("dbsdir")
-            bt2_db_temp_dir = pool_of_samples.get_target_layout("dbs_tempdir")
+            bt2_db_temp_dir = pool_of_samples.get_target_layout("dbsdir")
 
             rep_bt2_db_name = "repgenomes"
             pan_bt2_db_name = "pangenomes"
@@ -158,7 +158,7 @@ def midas_merge_species(args):
             centroids_files = db.fetch_files(species_ids_of_interest, bt2_db_temp_dir, filetype="centroids")
 
             build_bowtie2_db(bt2_db_dir, rep_bt2_db_name, contigs_files)
-            build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
+            #build_bowtie2_db(bt2_db_dir, pan_bt2_db_name, centroids_files)
 
     except:
         if not args.debug:
