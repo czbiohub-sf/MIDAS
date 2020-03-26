@@ -137,9 +137,9 @@ def midas_merge_species(args):
 
         # TO move to another subcommand
         if args.build_bowtie2_indexes:
-            pool_of_samples.get_target_layout("dbsdir")
-            pool_of_samples.get_target_layout("bt2_db_dir")
-            pool_of_samples.create_dirs(["dbsdir", "bt2_db_dir"], args.debug)
+            print(pool_of_samples.get_target_layout("dbsdir"))
+            print(pool_of_samples.get_target_layout("bt2_indexes_dir"))
+            pool_of_samples.create_dirs(["dbsdir", "bt2_indexes_dir"], args.debug)
             # The input for this section is species_prevalance.tsv
             species_ids_of_interest = []
             for species_id, record in stats.items():
@@ -157,8 +157,8 @@ def midas_merge_species(args):
             contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
             centroids_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="centroids")
 
-            build_bowtie2_db(pool_of_samples.get_target_layout("bt2_db_dir"), rep_bt2_db_name, contigs_files)
-             #build_bowtie2_db(pool_of_samples.get_target_layout("bt2_db_dir"), pan_bt2_db_name, centroids_files)
+            build_bowtie2_db(pool_of_samples.get_target_layout("bt2_indexes_dir"), rep_bt2_db_name, contigs_files)
+             #build_bowtie2_db(pool_of_samples.get_target_layout("bt2_indexes_dir"), pan_bt2_db_name, centroids_files)
 
     except:
         if not args.debug:
