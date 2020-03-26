@@ -137,10 +137,8 @@ def midas_merge_species(args):
 
         # TO move to another subcommand
         if args.build_bowtie2_indexes:
-            print(pool_of_samples.get_target_layout("dbsdir"))
-            print(pool_of_samples.get_target_layout("bt2_indexes_dir"))
-            pool_of_samples.create_dirs(["dbsdir", "bt2_indexes_dir"], args.debug)
             # The input for this section is species_prevalance.tsv
+            pool_of_samples.create_dirs(["dbsdir", "bt2_indexes_dir"], args.debug)
             species_ids_of_interest = []
             for species_id, record in stats.items():
                 if record[-1] > 1:
@@ -153,7 +151,7 @@ def midas_merge_species(args):
             db = UHGG(local_toc)
 
             # Fetch the files per genomes
-            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+            pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
             contigs_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
             centroids_files = db.fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="centroids")
 
