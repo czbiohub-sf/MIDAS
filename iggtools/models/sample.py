@@ -20,7 +20,7 @@ def get_single_layout(sample_name, dbtype=""):
             "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             "dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
 
-            "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes/{dbtype}",
+            "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes",
 
             "local_toc":              f"{sample_name}/dbs/genomes.tsv",
             "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
