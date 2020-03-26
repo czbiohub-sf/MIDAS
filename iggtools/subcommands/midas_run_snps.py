@@ -418,13 +418,12 @@ def midas_run_snps(args):
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
 
         # Download per-species UHGG file into temporary dbs directory
-        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
+        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
 
         # Build one bowtie database for species in the restricted species profile
         if bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-            print("here")
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations

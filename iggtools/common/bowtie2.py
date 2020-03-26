@@ -28,7 +28,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
             command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bowtie2-build.log")
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
-            command(f"rm -f {bamfile_prefix}.1.bt2")
+            command(f"rm -f {bt2_db_prefix}.1.bt2")
             raise
 
     return bt2_db_prefix
@@ -38,7 +38,6 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     """ Use Bowtie2 to map reads to prebuilt bowtie2 database """
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
-    bamfile_prefix = f"{bt2_db_dir}/{bt2_db_name}"
 
     if os.path.exists(bamfile_path):
         tsprint(f"Use existing per-sample bowtie2 db {bamfile_path}")
