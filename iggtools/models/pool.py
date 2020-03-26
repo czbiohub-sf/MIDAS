@@ -59,13 +59,12 @@ class Pool: # pylint: disable=too-few-public-methods
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
         for dirname in list_of_dirnames:
             if dirname == "outdir":
-                tsprint(f"Create output directory for given pool of samples.")
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create OUTPUT directory.")
             if dirname == "tempdir":
-                tsprint(f"Create temp directory for given pool of samples.")
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create TEMP directory.")
             if dirname == "dbsdir":
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create DBS directory.")
+            _create_dir(self.get_target_layout(dirname), debug, quiet)
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):

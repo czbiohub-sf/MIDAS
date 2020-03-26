@@ -11,18 +11,21 @@ def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
             "outdir":                 f"{sample_name}/{dbtype}",
-            "species_output_subdir":  f"{sample_name}/{dbtype}/{species_id}",
+            "output_subdir":          f"{sample_name}/{dbtype}/{species_id}",
 
             "tempdir":                f"{sample_name}/temp/{dbtype}",
-            "species_temp_subdir":    f"{sample_name}/temp/{dbtype}/{species_id}",
+            "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
 
             # uhgg-related files
-            "dbsdir":                 f"{sample_name}/dbs",
+            "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             "local_toc":              f"{sample_name}/dbs/genomes.tsv",
-            "marker_genes_file":      [f"{sample_name}/dbs/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
-                                      [f"{sample_name}/dbs/phyeco.map"],
-            "dbs_tempdir":            f"{sample_name}/temp/dbs",
-            "species_dbs_subdir":     f"{sample_name}/temp/dbs/{species_id}",
+            "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
+                                      [f"{sample_name}/dbs/species/phyeco.map"],
+            "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes"
+            "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes"
+
+            "dbs_tempdir":            f"{sample_name}/temp/dbs/{dbtype}",
+            "dbstemp_subdir":         f"{sample_name}/temp/dbs/{dbtype}/{species_id}",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",
@@ -40,7 +43,6 @@ def get_single_layout(sample_name, dbtype=""):
             "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
             "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
             "marker_genes_mapping":   f"{sample_name}/temp/genes/{species_id}/marker_to_centroid.tsv",
-
         }
     return per_species
 
@@ -62,18 +64,17 @@ class Sample: # pylint: disable=too-few-public-methods
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
         for dirname in list_of_dirnames:
             if dirname == "outdir":
-                tsprint(f"Create output directory for sample {self.sample_name}.")
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create OUTPUT directory for {self.sample_name}.")
             if dirname == "tempdir":
-                tsprint(f"Create temp directory for sample {self.sample_name}.")
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create TEMP directory for {self.sample_name}.")
             if dirname == "dbsdir":
-                _create_dir(self.get_target_layout(dirname), debug, quiet)
+                tsprint(f"Create DBS directory for {self.sample_name}.")
+            _create_dir(self.get_target_layout(dirname), debug, quiet)
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         for species_id in species_ids:
-            species_subdir = self.get_target_layout(f"species_{dirname}_subdir", species_id)
+            species_subdir = self.get_target_layout(f"{dirname}_subdir", species_id)
             _create_dir(species_subdir, debug, quiet)
 
 

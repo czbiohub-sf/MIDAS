@@ -115,17 +115,13 @@ def midas_merge_species(args):
                 if record[-1] > 0:
                     species_ids_of_interest.append(species_id)
 
-            # Create the dbs/species
             pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbs_tempdir", args.debug)
-
-            # where to build the shared dbs for all the samples to merge
             bt2_db_dir = pool_of_samples.get_target_layout("dbsdir")
             bt2_db_temp_dir = pool_of_samples.get_target_layout("dbs_tempdir")
 
             rep_bt2_db_name = "repgenomes"
             pan_bt2_db_name = "pangenomes"
 
-            #
             local_toc = download_reference(outputs.genomes, bt2_db_temp_dir)
             db = UHGG(local_toc)
 

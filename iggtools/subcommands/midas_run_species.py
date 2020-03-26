@@ -253,10 +253,9 @@ def midas_run_species(args):
 
     try:
         sample = Sample(args.sample_name, args.midas_outdir, "species")
-        sample.create_dirs(["outdir", "tempdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
         # Fetch db-related file either from S3 or create symlink
-        sample.create_dirs(["dbsdir"], args.debug)
         dbsdir = sample.get_target_layout("dbsdir")
         if args.local_dbsdir:
             curr_dbsdir = args.local_dbsdir
@@ -275,8 +274,7 @@ def midas_run_species(args):
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Classify reads
-        db = UHGG(local_toc)
-        species_info = db.species
+        species_info = UHGG(local_toc).species
         marker_info = read_marker_info_repgenomes(markers_db_files[-1])
         best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
         unique_alns = assign_unique(best_hits, species_info, marker_info)

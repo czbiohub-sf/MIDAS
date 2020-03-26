@@ -425,7 +425,7 @@ def midas_run_genes(args):
     try:
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
-        sample.create_dirs(["outdir", "tempdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
         global global_args
         global_args = args
@@ -448,10 +448,10 @@ def midas_run_genes(args):
             bt2_db_name = "pangenomes"
 
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
-        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
 
-        # Download centroid_files every species into dbs/temp/{species}/
+        # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
+        sample.create_species_subdirs(species_ids_of_interest, "dbstemp", args.debug)
         centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbs_tempdir"), filetype="centroids")
 
         # Build one bowtie database for species in the restricted species profile
@@ -476,7 +476,7 @@ def midas_run_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
+            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "dbs_tempdir"])
         raise
 
 
