@@ -115,5 +115,6 @@ def _create_dir(dirname, debug, quiet=False):
     if debug and os.path.exists(dirname):
         tsprint(f"Use existing {dirname} according to --debug flag.")
     else:
+        # TODO: think about this
         command(f"rm -rf {dirname}", quiet)
         command(f"mkdir -p {dirname}", quiet)
