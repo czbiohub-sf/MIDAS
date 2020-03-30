@@ -42,6 +42,11 @@ def register_args(main_func):
                            metavar="INT",
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
+    subparser.add_argument('--local_dbsdir',
+                           dest='local_dbsdir',
+                           type=str,
+                           metavar="STR",
+                           help=f"Provide local path of the dbs instead of sample-specific")
 
     subparser.add_argument('--word_size',
                            dest='word_size',
@@ -65,11 +70,6 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--local_dbsdir',
-                           dest='local_dbsdir',
-                           type=str,
-                           metavar="STR",
-                           help=f"Provide local path of the dbs instead of sample-specific")
     return main_func
 
 
@@ -115,11 +115,13 @@ def parse_reads(filename, max_reads=None):
     read_count_filter = None
     if max_reads != None:
         read_count_filter = f"head -n {4 * max_reads}"
+
     read_count = 0
     with InputStream(filename, read_count_filter) as fp:
         for name, seq, _ in readfq(fp):
             read_count += 1
-            new_name = construct_queryid(name, len(seq))  # We need to encode the length in the query id to be able to recover it from hs-blastn output
+            # We need to encode the length in the query id to be able to recover it from hs-blastn output
+            new_name = construct_queryid(name, len(seq))
             yield (new_name, seq)
         if read_count_filter:
             fp.ignore_errors()
@@ -127,8 +129,6 @@ def parse_reads(filename, max_reads=None):
 
 
 def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, num_cores, max_reads):
-    assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit ."
-
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
@@ -259,9 +259,9 @@ def write_abundance(species_profile_path, species_abundance):
 def midas_run_species(args):
 
     try:
-        tsprint(f"CZ::midas_run_snps::Sample::start")
+        tsprint(f"CZ::Sample::start")
         sample = Sample(args.sample_name, args.midas_outdir, "species")
-        tsprint(f"CZ::midas_run_snps::Sample::finish")
+        tsprint(f"CZ::Sample::finish")
         sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
         tsprint(f"CZ::marker genes database")
