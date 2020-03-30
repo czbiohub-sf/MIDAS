@@ -36,6 +36,13 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
+
     subparser.add_argument('--word_size',
                            dest='word_size',
                            default=DEFAULT_WORD_SIZE,
@@ -119,10 +126,10 @@ def parse_reads(filename, max_reads=None):
     tsprint(f"parse_reads:: parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
+def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, num_cores, max_reads):
     assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit ."
 
-    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
+    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
@@ -272,7 +279,7 @@ def midas_run_species(args):
         tsprint(f"CZ::map_reads_hsblast::start")
         # Align reads to marker-genes database
         m8_file = sample.get_target_layout("species_alignments_m8")
-        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.num_cores, args.max_reads)
         tsprint(f"CZ::map_reads_hsblast::finish")
 
         with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
