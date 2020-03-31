@@ -243,7 +243,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
 
 def process_chunk_of_sites(packed_args):
     species_id = packed_args[0]
-    tsprint(f"CZ::process_chunk_of_sites::{species_id }::start")
+    tsprint(f"  CZ::process_chunk_of_sites::{species_id }::start")
 
     global semaphore_for_species
     global species_sliced_snps_path
@@ -255,18 +255,22 @@ def process_chunk_of_sites(packed_args):
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::call merge_chunks_per_species")
-        return merge_chunks_per_species(species_id)
+        ret = merge_chunks_per_species(species_id)
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish")
+        return ret
 
     chunk_id = packed_args[1]
-    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::call compute_pileup_per_chunk")
-    return compute_pileup_per_chunk(packed_args)
+    tsprint(f"    CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
+    ret = compute_pileup_per_chunk(packed_args)
+    tsprint(f"    CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    return ret
 
 
 def compute_pileup_per_chunk(packed_args):
     """ actual pileup compute for one chunk """
     species_id = packed_args[0]
     chunk_id = packed_args[1]
-    tsprint(f"  CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::start")
+    tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::start")
 
     try:
         global semaphore_for_species
@@ -283,7 +287,7 @@ def compute_pileup_per_chunk(packed_args):
         zero_rows_allowed = not args.sparse
         current_chunk_size = contig_end - contig_start
 
-        tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::1. parse bam file for pileup")
+        tsprint(f"      CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::1-parse bam file for pileup")
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
@@ -301,7 +305,7 @@ def compute_pileup_per_chunk(packed_args):
             "contig_total_depth": 0,
             "contig_covered_bases": 0
         }
-        tsprint(f"  CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::2. compute pileup counts and write to file")
+        tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::2-compute pileup counts and write to file")
         with OutputStream(headerless_sliced_path) as stream:
             for within_chunk_index in range(0, current_chunk_size):
                 depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
@@ -322,11 +326,11 @@ def compute_pileup_per_chunk(packed_args):
             assert within_chunk_index+contig_start == contig_end-1, f"index mismatch error for {contig_id}."
 
         nz_sites = aln_stats["contig_covered_bases"]
-        tsprint(f"  CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::finish with nonzero sites {nz_sites} out of chunk_size {current_chunk_size}")
+        tsprint(f"      CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::3-finish with nonzero sites {nz_sites} out of chunk_size {current_chunk_size}")
         return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock
-        tsprint(f"  CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::release")
+        tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::finish")
 
 
 def merge_chunks_per_species(species_id):
@@ -335,7 +339,7 @@ def merge_chunks_per_species(species_id):
     global semaphore_for_species
     global global_args
 
-    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::start")
+    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::start")
     files_of_chunks = species_sliced_snps_path[species_id][:-1]
     species_snps_pileup_file = species_sliced_snps_path[species_id][-1]
     with OutputStream(species_snps_pileup_file) as stream:
@@ -347,7 +351,7 @@ def merge_chunks_per_species(species_id):
             command(f"rm -rf {s_file}", quiet=True)
     # return a status flag
     # the path should be computable somewhere else
-    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::finish")
+    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::finish")
     return True
 
 

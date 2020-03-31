@@ -158,7 +158,7 @@ def marker_to_centroid_mapping(species_id):
     # find marker genes from the centroid_99 genes
     # We also have the marker genes for all the genomes phyeco/temp/genome/genome.marker.map/fa
 
-    tsprint(f"CZ::marker_to_centroid_mapping::{species_id} start")
+    tsprint(f"  CZ::marker_to_centroid_mapping::{species_id}::start")
     global sample
 
     # Get the gene_id - marker_id map
@@ -190,7 +190,7 @@ def marker_to_centroid_mapping(species_id):
     with open(sample.get_target_layout("marker_genes_mapping", species_id), "a") as stream:
         for k, v in marker_to_centroid_dict.items():
             stream.write("\t".join([k, v]) + "\n")
-    tsprint(f"CZ::marker_to_centroid_mapping::{species_id} end")
+    tsprint(f"  CZ::marker_to_centroid_mapping::{species_id}::end")
 
 
 def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
@@ -211,7 +211,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
     arguments_list = []
     for species_index, species_id in enumerate(species_ids_of_interest):
 
-        tsprint(f"  CZ::design_chunks::{species_id} 1. start")
+        tsprint(f"  CZ::design_chunks::{species_id}::start")
         # Get the list of centroids99 genes that contains marker genes in the cluster
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
             marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
@@ -224,7 +224,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         chunk_id = 0
         curr_chunk_genes_dict = defaultdict()
 
-        tsprint(f"  CZ::design_chunks::{species_id} 2. centroid loop start")
+        tsprint(f"  CZ::design_chunks::{species_id}::2. centroid loop start")
         with InputStream(centroid_file) as file:
             # TODO: we should (if not already) have the centroid_99_gene_info.TSV
             # while the gene_length should be merged with genes_info for next round of database build
@@ -248,7 +248,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
             species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
             chunk_id += 1
 
-        tsprint(f"  CZ::design_chunks::{species_id} for loop finish with {chunk_id} chunks for cureent species")
+        tsprint(f"  CZ::design_chunks::{species_id}::finish with {chunk_id} chunks")
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
         species_sliced_genes_path[species_id].append(sample.get_target_layout("genes_coverage", species_id))
@@ -264,22 +264,27 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
 def process_chunk_of_genes(packed_args):
     """ Compute coverage of pangenome for given species_id and write results to disk """
     species_id = packed_args[0]
-    tsprint(f"CZ::process_chunk_of_genes::{species_id }start")
+    tsprint(f"CZ::process_chunk_of_genes::{species_id}::start")
+
     global semaphore_for_species
     global species_sliced_genes_path
 
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_genes_path[species_id]) - 1
-        tsprint(f"  CZ::process_chunk_of_genes::{species_id} wait for all chunks to be processed")
+        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::wait for all chunks to be processed")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::process_chunk_of_genes::{species_id} call merge_chunks_per_species")
-        return merge_chunks_per_species(species_id)
+        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::call merge_chunks_per_species")
+        ret = merge_chunks_per_species(species_id)
+        tsprint(f"CZ::process_chunk_of_genes::{species_id}::finish")
+        return ret
 
     chunk_id = packed_args[1]
-    tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id} call compute_pileup_per_chunk")
-    return compute_coverage_per_chunk(packed_args)
+    tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
+    ret = compute_coverage_per_chunk(packed_args)
+    tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    return ret
 
 
 def compute_coverage_per_chunk(packed_args):
@@ -287,7 +292,7 @@ def compute_coverage_per_chunk(packed_args):
 
     species_id = packed_args[0]
     chunk_id = packed_args[1]
-    tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id} start")
+    tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::start")
 
 
     global semaphore_for_species
@@ -312,7 +317,7 @@ def compute_coverage_per_chunk(packed_args):
         chunk_mapped_reads = 0
 
 
-        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id} 1. compute / accumulate stats over genes")
+        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::1-compute / accumulate stats over genes")
         with OutputStream(headerless_gene_coverage_path) as stream:
             with AlignmentFile(pangenome_bamfile) as bamfile:
                 for gene_id in chunk_of_gene_ids:
@@ -338,7 +343,7 @@ def compute_coverage_per_chunk(packed_args):
                     stream.write("\t".join(map(format_data, vals)) + "\n")
 
         current_chunk_size = len(chunk_of_gene_ids)
-        tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id} 2. finish with num covered genes {chunk_num_covered_genes} out of chunk_size {current_chunk_size}")
+        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::2-finish with {chunk_num_covered_genes} covered genes out of total {current_chunk_size}")
 
         return {
             "species_id": species_id,
@@ -352,7 +357,7 @@ def compute_coverage_per_chunk(packed_args):
 
     finally:
         semaphore_for_species[species_id].release()
-        tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id} finish")
+        tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::finish")
 
 
 def cat_awk_files(files_of_chunks, species_file, median_marker_depth, number_of_chunks=20):
@@ -370,7 +375,7 @@ def merge_chunks_per_species(species_id):
     global global_args
     global species_marker_genes
 
-    tsprint(f"  CZ::merge_chunks_per_species::start {species_id}")
+    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::start")
     all_chunks = species_sliced_genes_path[species_id][:-1]
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
@@ -393,7 +398,7 @@ def merge_chunks_per_species(species_id):
         for s_file in all_chunks:
             command(f"rm -rf {s_file}", quiet=True)
 
-    tsprint(f"  CZ::merge_chunks_per_species::finish {species_id}")
+    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::finish")
     return True
 
 
