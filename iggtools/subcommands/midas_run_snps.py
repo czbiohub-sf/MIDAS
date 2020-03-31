@@ -246,7 +246,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
     # TODO: the last species_id was computed in not in a linear way
     if False:
         tsprint("  CZ::design_chunks::sort_species::start")
-        sort_species_by_chunk_counts = sorted((species_id, len(args_list)) for species_id, args_list in arguments_dict.items(), key=lambda x: x[1], reverse=True)
+        #sort_species_by_chunk_counts = sorted((species_id, len(args_list)) for species_id, args_list in arguments_dict.items(), key=lambda x: x[1], reverse=True)
 
         args_list = []
         for species in sort_species_by_chunk_counts:
