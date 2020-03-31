@@ -183,7 +183,7 @@ def scan_contigs(contig_file, species_id):
                 "contig_len": len(rec.seq),
                 "contig_seq": str(rec.seq),
             }
-    tsprint(f"    CZ::scan_contigs::{species_id}::finish\n")
+    tsprint(f"    CZ::scan_contigs::{species_id}::finish")
     return contigs
 
 
@@ -251,7 +251,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
         args_list = []
         for species in sort_species_by_chunk_counts:
             args_list.extend(arguments_dict[species[0]])
-        tsprint("  CZ::design_chunks::sort_species::finish\n")
+        tsprint("  CZ::design_chunks::sort_species::finish")
         assert len(args_list) == len(arguments_list), f"sort species by chunks run into error"
     return arguments_list
 
@@ -269,7 +269,7 @@ def process_chunk_of_sites(packed_args):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish\n")
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish")
         return ret
 
     species_id = packed_args[0]
@@ -364,7 +364,7 @@ def merge_chunks_per_species(species_id):
             command(f"rm -rf {s_file}", quiet=True)
     # return a status flag
     # the path should be computable somewhere else
-    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::finish\n")
+    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::finish")
     return True
 
 
@@ -419,7 +419,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
         stream.write("\t".join(snps_profile_schema.keys()) + "\n")
         for record in species_pileup_summary.values():
             stream.write("\t".join(map(format_data, record.values())) + "\n")
-    tsprint(f"  CZ::write_species_pileup_summary::finish\n")
+    tsprint(f"  CZ::write_species_pileup_summary::finish")
 
 
 def midas_run_snps(args):
@@ -429,7 +429,7 @@ def midas_run_snps(args):
 
         tsprint(f"CZ::midas_run_snps::Sample::start")
         sample = Sample(args.sample_name, args.midas_outdir, "snps")
-        tsprint(f"CZ::midas_run_snps::Sample::finish\n")
+        tsprint(f"CZ::midas_run_snps::Sample::finish")
         sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
 
         global global_args
@@ -462,14 +462,14 @@ def midas_run_snps(args):
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
         species_counts = len(species_ids_of_interest)
         tsprint(f"  CZ::number of species to analyze: {species_counts}")
-        tsprint(f"CZ::select_species::finish\n")
+        tsprint(f"CZ::select_species::finish")
 
         tsprint(f"CZ::download_reference::start")
         # Download per-species UHGG file into temporary dbs directory
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
-        tsprint(f"CZ::download_reference::finish\n")
+        tsprint(f"CZ::download_reference::finish")
 
         # Build one bowtie database for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
@@ -484,22 +484,22 @@ def midas_run_snps(args):
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
-        tsprint(f"CZ::bowtie2_align::finish\n")
+        tsprint(f"CZ::bowtie2_align::finish")
 
         tsprint(f"CZ::samtools_index::start")
         samtools_index(repgenome_bamfile, args.debug)
-        tsprint(f"CZ::samtools_index::finish\n")
+        tsprint(f"CZ::samtools_index::finish")
 
         # Use mpileup to call SNPs
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        tsprint(f"CZ::design_chunks::finish\n")
+        tsprint(f"CZ::design_chunks::finish")
 
         tsprint(f"CZ::multiprocessing map process_chunk_of_sites::start")
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, args.num_cores)
-        tsprint(f"CZ::multiprocessing map process_chunk_of_sites::finish\n")
+        tsprint(f"CZ::multiprocessing map process_chunk_of_sites::finish")
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
-        tsprint(f"CZ::midas_run_snps::finish\n")
+        tsprint(f"CZ::midas_run_snps::finish")
 
     except:
         if not args.debug:
