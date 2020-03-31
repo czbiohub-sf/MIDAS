@@ -197,7 +197,7 @@ def marker_to_centroid_mapping(species_id):
     with open(sample.get_target_layout("marker_genes_mapping", species_id), "a") as stream:
         for k, v in marker_to_centroid_dict.items():
             stream.write("\t".join([k, v]) + "\n")
-    tsprint(f"  CZ::marker_to_centroid_mapping::{species_id}::end")
+    tsprint(f"  CZ::marker_to_centroid_mapping::{species_id}::finish")
 
 
 def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
