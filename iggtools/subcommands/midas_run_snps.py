@@ -243,9 +243,9 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
 
     tsprint("CZ::design_chunks::finish num_of_species: %s" % (len(species_ids_of_interest)))
 
-    species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
-    
-    for species_id, args_list in arguments_dict.items()
+    #species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
+
+    #for species_id, args_list in arguments_dict.items()
 
     return arguments_list
 
