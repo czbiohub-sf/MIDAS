@@ -88,7 +88,7 @@ class Sample: # pylint: disable=too-few-public-methods
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
                 if record["coverage"] >= genome_coverage:
-                    species_ids.append(record["species_id"])
+                    species_ids.append(int(record["species_id"]))
         return species_ids
 
 

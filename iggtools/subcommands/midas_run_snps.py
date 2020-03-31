@@ -493,9 +493,6 @@ def midas_run_snps(args):
         # Use mpileup to call SNPs
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-        for i in range(0, 100):
-            print(arguments_list[i][:5])
-        exit(0)
         tsprint(f"CZ::design_chunks::finish")
 
         tsprint(f"CZ::multiprocessing map process_chunk_of_sites::start")
