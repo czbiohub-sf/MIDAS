@@ -152,6 +152,13 @@ def keep_read(aln):
     return True
 
 
+def cat_awk_files(files_of_chunks, species_file, median_marker_depth, number_of_chunks=20):
+    for temp_files in split(files_of_chunks, number_of_chunks):
+        cat_cmd = "cat " + " ".join(temp_files)
+        awk_cmd = f"awk -F \"\t\" 'BEGIN {{OFS=FS; ORS=\"\"}}; {{print $1,$2,$3,$4,$5; printf(\"\t%.3f\\n\", $5/{median_marker_depth})}}'"
+        command(f"{cat_cmd} | {awk_cmd} >> {species_file}")
+
+
 def marker_to_centroid_mapping(species_id):
     """ Identify which cluster the marker_genes belong to """
     # TODO: pre-build this part for all species in the uhgg db
@@ -263,8 +270,6 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
 
 def process_chunk_of_genes(packed_args):
     """ Compute coverage of pangenome for given species_id and write results to disk """
-    species_id = packed_args[0]
-    tsprint(f"CZ::process_chunk_of_genes::{species_id}::start")
 
     global semaphore_for_species
     global species_sliced_genes_path
@@ -275,11 +280,12 @@ def process_chunk_of_genes(packed_args):
         tsprint(f"  CZ::process_chunk_of_genes::{species_id}::wait for all chunks to be processed")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::call merge_chunks_per_species")
+        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"CZ::process_chunk_of_genes::{species_id}::finish")
+        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::finish")
         return ret
 
+    species_id = packed_args[0]
     chunk_id = packed_args[1]
     tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
     ret = compute_coverage_per_chunk(packed_args)
@@ -317,7 +323,7 @@ def compute_coverage_per_chunk(packed_args):
         chunk_mapped_reads = 0
 
 
-        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::1-compute / accumulate stats over genes")
+        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}:: 1-compute / accumulate stats over genes")
         with OutputStream(headerless_gene_coverage_path) as stream:
             with AlignmentFile(pangenome_bamfile) as bamfile:
                 for gene_id in chunk_of_gene_ids:
@@ -343,7 +349,7 @@ def compute_coverage_per_chunk(packed_args):
                     stream.write("\t".join(map(format_data, vals)) + "\n")
 
         current_chunk_size = len(chunk_of_gene_ids)
-        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::2-finish with {chunk_num_covered_genes} covered genes out of total {current_chunk_size}")
+        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::finish with {chunk_num_covered_genes} covered genes out of total {current_chunk_size}")
 
         return {
             "species_id": species_id,
@@ -354,17 +360,8 @@ def compute_coverage_per_chunk(packed_args):
             "chunk_aligned_reads": chunk_aligned_reads,
             "chunk_mapped_reads": chunk_mapped_reads
         }
-
     finally:
         semaphore_for_species[species_id].release()
-        tsprint(f"  CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::finish")
-
-
-def cat_awk_files(files_of_chunks, species_file, median_marker_depth, number_of_chunks=20):
-    for temp_files in split(files_of_chunks, number_of_chunks):
-        cat_cmd = "cat " + " ".join(temp_files)
-        awk_cmd = f"awk -F \"\t\" 'BEGIN {{OFS=FS; ORS=\"\"}}; {{print $1,$2,$3,$4,$5; printf(\"\t%.3f\\n\", $5/{median_marker_depth})}}'"
-        command(f"{cat_cmd} | {awk_cmd} >> {species_file}")
 
 
 def merge_chunks_per_species(species_id):
