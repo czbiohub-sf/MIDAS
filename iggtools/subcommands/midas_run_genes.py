@@ -282,7 +282,7 @@ def process_chunk_of_genes(packed_args):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_chunk_of_genes::{species_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::finish")
+        tsprint(f"  CZ::process_chunk_of_genes::{species_id}::finish\n")
         return ret
 
     species_id = packed_args[0]
@@ -395,7 +395,7 @@ def merge_chunks_per_species(species_id):
         for s_file in all_chunks:
             command(f"rm -rf {s_file}", quiet=True)
 
-    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::finish")
+    tsprint(f"  CZ::merge_chunks_per_species::{species_id}::finish\n")
     return True
 
 
@@ -437,7 +437,7 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
             vals = [record["species_id"], record["pangenome_size"], record["num_covered_genes"], \
                     fraction_covered, mean_coverage, record["aligned_reads"], record["mapped_reads"], median_marker_depth]
             stream.write("\t".join(map(format_data, vals)) + "\n")
-    tsprint(f"  CZ::write_species_coverage_summary::finish")
+    tsprint(f"  CZ::write_species_coverage_summary::finish\n")
 
 
 def midas_run_genes(args):
@@ -475,14 +475,14 @@ def midas_run_genes(args):
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
         species_counts = len(species_ids_of_interest)
         tsprint(f"  CZ::number of species to analyze: {species_counts}")
-        tsprint(f"CZ::select_species::finish")
+        tsprint(f"CZ::select_species::finish\n")
 
         tsprint(f"CZ::download_reference::start")
         # Download per-species UHGG file into temporary dbs directory
         local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
         sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
         centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="centroids")
-        tsprint(f"CZ::download_reference::finish")
+        tsprint(f"CZ::download_reference::finish\n")
 
         tsprint(f"CZ::bowtie2_align::start")
         # Build one bowtie database for species in the restricted species profile
@@ -495,27 +495,27 @@ def midas_run_genes(args):
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
-        tsprint(f"CZ::bowtie2_align::finish")
+        tsprint(f"CZ::bowtie2_align::finish\n")
 
         tsprint(f"CZ::samtools_index::start")
         samtools_index(pangenome_bamfile, args.debug)
-        tsprint(f"CZ::samtools_index::finish")
+        tsprint(f"CZ::samtools_index::finish\n")
 
         # Convert marker_genes to centroid_genes for each species
         # TODO: move this part go UHGG
         tsprint("CZ::start marker_to_centroid_mapping start")
         multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, args.num_cores)
-        tsprint("CZ::start marker_to_centroid_mapping finish")
+        tsprint("CZ::start marker_to_centroid_mapping finish\n")
 
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
-        tsprint(f"CZ::design_chunks::finish")
+        tsprint(f"CZ::design_chunks::finish\n")
 
         tsprint(f"CZ::multiprocessing map::start")
         chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, args.num_cores)
-        tsprint(f"CZ::multiprocessing map::finish")
+        tsprint(f"CZ::multiprocessing map::finish\n")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
-        tsprint(f"CZ::midas_run_genes::finish")
+        tsprint(f"CZ::midas_run_genes::finish\n")
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
