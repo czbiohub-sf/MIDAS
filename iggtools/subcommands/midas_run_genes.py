@@ -231,7 +231,6 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
         chunk_id = 0
         curr_chunk_genes_dict = defaultdict()
 
-        tsprint(f"  CZ::design_chunks::{species_id}::2. centroid loop start")
         with InputStream(centroid_file) as file:
             # TODO: we should (if not already) have the centroid_99_gene_info.TSV
             # while the gene_length should be merged with genes_info for next round of database build
@@ -323,7 +322,7 @@ def compute_coverage_per_chunk(packed_args):
         chunk_mapped_reads = 0
 
 
-        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}:: 1-compute / accumulate stats over genes")
+        tsprint(f"    CZ::compute_coverage_per_chunk::{species_id}-{chunk_id}::1-compute / accumulate stats over genes")
         with OutputStream(headerless_gene_coverage_path) as stream:
             with AlignmentFile(pangenome_bamfile) as bamfile:
                 for gene_id in chunk_of_gene_ids:
