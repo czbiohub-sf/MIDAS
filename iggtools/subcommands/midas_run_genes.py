@@ -218,7 +218,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
     arguments_list = []
     for species_index, species_id in enumerate(species_ids_of_interest):
 
-        tsprint(f"  CZ::design_chunks::{species_id}::start")
+        tsprint(f"  CZ::design_chunks::{species_id}::start for loop")
         # Get the list of centroids99 genes that contains marker genes in the cluster
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
             marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
@@ -254,7 +254,7 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
             species_gene_length[species_id][chunk_id] = curr_chunk_genes_dict
             chunk_id += 1
 
-        tsprint(f"  CZ::design_chunks::{species_id}::finish with {chunk_id} chunks")
+        tsprint(f"  CZ::design_chunks::{species_id}::finish for loop with {chunk_id} chunks")
         # Submit merge tasks for all chunks per species
         arguments_list.append((species_id, -1))
         species_sliced_genes_path[species_id].append(sample.get_target_layout("genes_coverage", species_id))
@@ -483,7 +483,7 @@ def midas_run_genes(args):
         centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="centroids")
         tsprint(f"CZ::download_reference::finish")
 
-        tsprint(f"CZ::bowtie2_align::start")
+        tsprint(f"CZ::build_bowtie2_indexes::start")
         # Build one bowtie database for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
@@ -491,6 +491,7 @@ def midas_run_genes(args):
 
 
         # Map reads to pan-genes bowtie2 database
+        tsprint(f"CZ::bowtie2_align::start")
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
