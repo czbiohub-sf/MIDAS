@@ -516,7 +516,7 @@ def hashmap(func, items):
 # private! use multiprocessing_map or multithreading_map instead
 def _multi_map(func, items, num_procs, PoolClass):
     p = PoolClass(num_procs)
-    return p.map(func, items)
+    return p.map(func, items, chunksize=1)
 
 
 # private! use multiprocessing_hashmap or multithreading_hashmap instead
@@ -651,7 +651,40 @@ def cat_files(files_of_chunks, one_file, number_of_chunks=20):
     for temp_files in split(files_of_chunks, number_of_chunks):
         command("cat " + " ".join(temp_files) + f" >> {one_file}", quiet=True)
 
+# -------------- testing testing testing ---------------------
 
+def random_sleep(args):
+    t = time.time()
+    idx, quiet = args
+    delay = 0.1 + random.random() * 0.3
+    if not quiet:
+        tsprint(f"{idx:5} falling asleep for {delay:.3f} seconds.")
+    time.sleep(delay)
+    elapsed = time.time() - t
+    overslept = elapsed - delay
+    if not quiet and overslept >= 0.1 * delay:
+        tsprint(f"{idx:5} overslept by {overslept:.3f} seconds.")
+    return (t, idx, elapsed)
+
+def test_sleepers(n, quiet=False):
+    tsprint(f"Testing multiprocesing.map order with {n} sleepers on {num_physical_cores} physical cores.")
+    t = time.time()
+    info = multiprocessing_map(random_sleep, ((idx, quiet) for idx in range(n)))
+    order = [idx for _, idx, _ in sorted(info)]
+    elapsed_sum = sum(elapsed for _, _, elapsed in info)
+    elapsed = time.time() - t
+    if not quiet:
+        tsprint(f"Elapsed {elapsed:.1f} seconds with effective parallelism {elapsed_sum / max(elapsed, 1e-9):.1f}x.")
+    if order != list(range(n)):
+        examples = dict([(i, order[i]) for i in range(n) if i != order[i]][:10])
+        assert False, f"Error: Out-of-order dispatch: examples {examples}: full order {order}."
+    tsprint(f"SUCCESS")
 
 if __name__ == "__main__":
     tsprint(f"Hello from {backtick('pwd')}.  Put tests here.")
+    try:
+        n_sleepers = int(sys.argv[1])
+    except:
+        n_sleepers = num_physical_cores * 31
+    for n in range(max(1, n_sleepers - 3), n_sleepers + 4):
+        test_sleepers(n, quiet=True)
