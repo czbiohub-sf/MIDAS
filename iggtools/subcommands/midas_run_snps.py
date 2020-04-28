@@ -48,7 +48,7 @@ def register_args(main_func):
                            dest='midas_iggdb',
                            type=str,
                            metavar="CHAR",
-                           help=f"Local midas db mirror s3 igg db")
+                           help=f"Local midas db mirror s3 igg db"),
     subparser.add_argument('--prebuilt_bowtie2_indexes',
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
@@ -265,6 +265,7 @@ def compute_pileup_per_chunk(packed_args):
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
         # Compute the aligned_reads once per contig, so only one chunk needed.
         if count_flag:
+            tsprint("count reads for contig {contig_id}")
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)

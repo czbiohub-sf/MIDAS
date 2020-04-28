@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 import numpy as np
 
-from iggtools.models.pool import SamplePool
+from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, OutputStream, download_reference
 from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
