@@ -11,6 +11,18 @@ MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
 def get_uhgg_layout(species_id="", component="", genome_id=""):
     return {
         "genomes_toc":                f"genomes.tsv",
+        
+        "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+
+        # 100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
+        "pangenome_file":             f"pangenomes/{species_id}/{component}",
+        "marker_genes_file":          f"marker_genes/phyeco/phyeco.fa{component}.lz4",
+        "marker_genes_mapfile":       f"marker_genes/phyeco/phyeco.map.lz4",
+    }
+
+def _delete_get_uhgg_layout(species_id="", component="", genome_id=""):
+    return {
+        "genomes_toc":                f"genomes.tsv",
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
         #"raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.fna.lz4",
         #"imported_genome_file":       f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}",

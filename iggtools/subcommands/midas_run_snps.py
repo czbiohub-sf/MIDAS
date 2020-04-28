@@ -44,11 +44,6 @@ def register_args(main_func):
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
     # Prebuilt/predownload
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--prebuilt_bowtie2_indexes',
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
@@ -59,6 +54,11 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"List of species used for building the prebuild bowtie2 indexes.")
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
 
     # Species related
     subparser.add_argument('--genome_coverage',
