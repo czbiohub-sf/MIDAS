@@ -17,16 +17,22 @@ def get_single_layout(sample_name, dbtype=""):
             "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
 
             # uhgg-related files
-            "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
-            "dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
+            #"dbsdir":                 f"{sample_name}/dbs/{dbtype}",
+            #"dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
+            "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
+                                      [f"{sample_name}/dbs/species/phyeco.map"],
+            #"local_toc":              f"{sample_name}/dbs/genomes.tsv",
 
-            "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes/{dbtype}",
 
+            "midas_iggdb_dir":        f"midas_dbs",
             "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
                                       [f"{sample_name}/dbs/species/phyeco.map"],
             "local_toc":              f"{sample_name}/dbs/genomes.tsv",
-            "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
-            "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
+
+
+            "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
+            #"repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
+            #"pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",
@@ -80,9 +86,11 @@ class Sample: # pylint: disable=too-few-public-methods
 
 
     def select_species(self, genome_coverage, species_list=[]):
-        """ Read in species_summary and filter species """
+        """ Parse species_summary and return list of species for pileup/pangenome analysis """
         schema = fetch_schema_by_dbtype("species")
         species_ids = []
+
+        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run midas_run_species before midas_run_snps for {self.sample_name}"
         with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:

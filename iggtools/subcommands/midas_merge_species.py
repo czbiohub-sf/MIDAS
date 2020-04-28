@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 import numpy as np
 
-from iggtools.models.pool import Pool
+from iggtools.models.pool import SamplePool
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, OutputStream, download_reference
 from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
@@ -120,7 +120,7 @@ def midas_merge_species(args):
         global global_args
         global_args = args
 
-        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "species")
+        pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "species")
         # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
         pool_of_samples.create_dirs(["outdir"], args.debug)

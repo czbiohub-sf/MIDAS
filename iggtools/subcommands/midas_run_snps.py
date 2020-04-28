@@ -10,21 +10,20 @@ import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, command, cat_files, select_from_tsv
-from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
+from iggtools.models.uhgg import UHGG, MIDAS_IGGDB
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
 from iggtools.models.sample import Sample
 
 
-DEFAULT_ALN_COV = 0.75
-DEFAULT_GENOME_COVERAGE = 3.0
+DEFAULT_GENOME_COVERAGE = 5.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 20
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
+DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_TRIM = 0
-DEFAULT_CHUNK_SIZE = 40000
+DEFAULT_CHUNK_SIZE = 50000
 
 
 def register_args(main_func):
@@ -43,6 +42,24 @@ def register_args(main_func):
     subparser.add_argument('-2',
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
+
+    # Prebuilt/predownload
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Local midas db mirror s3 igg db")
+    subparser.add_argument('--prebuilt_bowtie2_indexes',
+                           dest='prebuilt_bowtie2_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--prebuilt_bowtie2_species',
+                           dest='prebuilt_bowtie2_species',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"List of species used for building the prebuild bowtie2 indexes.")
+
     # Species related
     subparser.add_argument('--genome_coverage',
                            type=float,
@@ -55,16 +72,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-    subparser.add_argument('--local_bowtie2_indexes',
-                           dest='local_bowtie2_indexes',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--species_profile_path',
-                           dest='species_profile_path',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Species profile path for the prebuild bowtie2 index")
+
     # Alignment flags
     subparser.add_argument('--aln_speed',
                            type=str,
@@ -145,22 +153,7 @@ def register_args(main_func):
 def keep_read(aln):
     global global_args
     args = global_args
-
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < args.aln_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < args.aln_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < args.aln_cov:
-        return False
-    return True
+    _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
 def scan_contigs(contig_file, species_id):
@@ -191,10 +184,10 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
 
     # TODO: this part can be done in parallel
     arguments_list = []
-    for species_index, species_id in enumerate(species_ids_of_interest):
+    for species_id in species_ids_of_interest:
         # Read in contigs information for one species.
         # TODO: download contigs here. Nope. we need to build one cat-ed bowtie2 database
-        contigs = scan_contigs(contigs_files[species_index], species_id)
+        contigs = scan_contigs(contigs_files[species_id], species_id)
 
         chunk_id = 0
         for contig_id in sorted(list(contigs.keys())): # why need to sort?
@@ -206,7 +199,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
                 species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
                 # TODO: instead contig as the last argument, just pass the contig_seq.
-                slice_args = (species_id, chunk_id, contig_id, 0, contig_length, contig)
+                slice_args = (species_id, chunk_id, contig_id, 0, contig_length, contig, True)
                 arguments_list.append(slice_args)
                 chunk_id += 1
             else:
@@ -216,9 +209,9 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
                     if ni == number_of_chunks:
-                        slice_args = (species_id, chunk_id, contig_id, ci, contig_length, contig)
+                        slice_args = (species_id, chunk_id, contig_id, ci, contig_length, contig, True)
                     else:
-                        slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig)
+                        slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig, False)
                     arguments_list.append(slice_args)
                     chunk_id += 1
 
@@ -258,7 +251,7 @@ def compute_pileup_per_chunk(packed_args):
 
     try:
         # [contig_start, contig_end)
-        species_id, chunk_id, contig_id, contig_start, contig_end, contig = packed_args
+        species_id, chunk_id, contig_id, contig_start, contig_end, contig, count_flag = packed_args
         repgenome_bamfile = species_sliced_snps_path["input_bamfile"]
 
         headerless_sliced_path = species_sliced_snps_path[species_id][chunk_id]
@@ -270,8 +263,14 @@ def compute_pileup_per_chunk(packed_args):
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
-            aligned_reads = bamfile.count(contig_id, contig_start, contig_end)
-            mapped_reads = bamfile.count(contig_id, contig_start, contig_end, read_callback=keep_read)
+        # Compute the aligned_reads once per contig, so only one chunk needed.
+        if count_flag:
+            with AlignmentFile(repgenome_bamfile) as bamfile:
+                aligned_reads = bamfile.count(contig_id)
+                mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
+        else:
+            aligned_reads = 0
+            mapped_reads = 0
 
         # aln_stats need to be passed from child process back to parents
         aln_stats = {
@@ -387,40 +386,46 @@ def midas_run_snps(args):
     try:
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "snps")
-        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        #sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         global global_args
         global_args = args
 
         species_list = args.species_list.split(",") if args.species_list else []
-        if args.local_bowtie2_indexes:
-            bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
-            bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
+        if args.prebuilt_bowtie2_indexes:
+            bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
+
+            # We only need a list of species that we need to pull the
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            bt2_species_list = []
+            with InputStream(args.prebuilt_bowtie2_species) as stream:
+                for species_id in select_from_tsv(stream, ["species_id"]):
+                    bt2_species_list.append(species_id[0])
 
             # Update species_list: either particular species of interest or species in the bowtie2 indexes
-            bt2_species = []
-            with InputStream(args.species_profile_path) as stream:
-                for species_id in select_from_tsv(stream, ["species_id"]):
-                    bt2_species.append(species_id[0])
-            species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
-
-            # The index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
+            species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
+            # Note: the index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
             # can still be based on sample itself.
-            # We also don't want too many empty species in our parsing stageself. need to fix the species_prevalence.tsv with SampleID??
-            # TODO: should we also provide symlink?
+            # We also don't want too many empty species in our parsing stageself.
+            # TODO: need to fix the species_prevalence.tsv with SampleID??
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
             bt2_db_name = "repgenomes"
 
+        # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
 
-        # Download per-species UHGG file into temporary dbs directory
-        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
-        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
-        contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="contigs")
+        # Download representative genome fastas for each species (multiprocessing)
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        contigs_files = midas_iggdb.fetch_files(species_ids_of_interest, filetype="contigs")
+        print(contigs_files)
+        #marker_genes_mapfile = midas_iggdb.get_target_layout("marker_genes_mapfile")
+
+        # For the database we don't re-download when the file exists
 
         # Build one bowtie database for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):

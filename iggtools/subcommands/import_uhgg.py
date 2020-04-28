@@ -21,6 +21,7 @@ def unified_genome_id(genome_id):
 # 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
 @retry
 def clean_genome(genome_id, representative_id):
+    #get_get_uhgg_layout(representative_id, "fna.lz4", genome_id)["raw_genome_file"]
     raw_genome = raw_genome_file(genome_id, representative_id)
     output_genome = f"{genome_id}.fna"
 

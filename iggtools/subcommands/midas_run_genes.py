@@ -10,8 +10,8 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, download_reference, num_physical_cores, cat_files
 from iggtools.params import outputs
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists
-from iggtools.models.uhgg import UHGG, get_uhgg_layout
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from iggtools.models.uhgg import UHGG, get_iggdb_layout
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 
@@ -52,13 +52,13 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-    subparser.add_argument('--local_bowtie2_indexes',
-                           dest='local_bowtie2_indexes',
+    subparser.add_argument('--prebuilt_bowtie2_indexes',
+                           dest='prebuilt_bowtie2_indexes',
                            type=str,
                            metavar="CHAR",
                            help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--species_profile_path',
-                           dest='species_profile_path',
+    subparser.add_argument('--prebuilt_bowtie2_species',
+                           dest='prebuilt_bowtie2_species',
                            type=str,
                            metavar="CHAR",
                            help=f"Species profile path for the prebuild bowtie2 index")
@@ -127,22 +127,7 @@ def register_args(main_func):
 def keep_read(aln):
     global global_args
     args = global_args
-
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < args.aln_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < args.aln_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < args.aln_cov:
-        return False
-    return True
+    _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
 def marker_to_centroid_mapping(species_id):
@@ -155,7 +140,7 @@ def marker_to_centroid_mapping(species_id):
     # Get the gene_id - marker_id map
     markers = dict()
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    marker_genes_mapfile = get_uhgg_layout("marker_genes_mapfile")
+    marker_genes_mapfile = get_iggdb_layout("marker_genes_mapfile")
     with InputStream(marker_genes_mapfile, awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
@@ -164,7 +149,7 @@ def marker_to_centroid_mapping(species_id):
     # Get the gene_id to centroid_gene_id map
     # TODO This part can also be done during the database build
     gene_info = dict()
-    pangenome_file = get_uhgg_layout("pangenome_file", species_id, "gene_info.txt.lz4")
+    pangenome_file = get_iggdb_layout("pangenome_file", species_id, "gene_info.txt.lz4")
     with InputStream(pangenome_file) as stream:
         for gene_id, centroids_gene_id in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             if gene_id in markers.keys():
@@ -431,16 +416,16 @@ def midas_run_genes(args):
         global_args = args
 
         species_list = args.species_list.split(",") if args.species_list else []
-        if args.local_bowtie2_indexes:
+        if args.prebuilt_bowtie2_indexes:
             # Already-built bowtie2 indexes
-            bt2_db_dir = os.path.dirname(args.local_bowtie2_indexes)
-            bt2_db_name = os.path.basename(args.local_bowtie2_indexes)
+            bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.species_profile_path and os.path.exists(args.species_profile_path)), f"Need to provide valid species_profile_path."
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide valid prebuilt_bowtie2_species."
 
             # Update species_list: either particular species of interest or species in the bowtie2 indexes
             bt2_species = []
-            with InputStream(args.species_profile_path) as stream:
+            with InputStream(args.prebuilt_bowtie2_species) as stream:
                 for species_id in select_from_tsv(stream, ["species_id"]):
                     bt2_species.append(species_id[0])
             species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species

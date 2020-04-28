@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 
-from iggtools.models.pool import Pool
+from iggtools.models.pool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
@@ -198,7 +198,7 @@ def midas_merge_genes(args):
 
         global pool_of_samples
 
-        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
+        pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "genes")
         dict_of_species = pool_of_samples.select_species("genes", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 

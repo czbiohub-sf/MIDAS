@@ -6,26 +6,29 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, split
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
     bt2_db_suffixes = ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]
     if all(os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.{ext}") for ext in bt2_db_suffixes):
-        tsprint(f"Bowtie2 index {bt2_db_dir}/{bt2_db_name} exist.")
+        tsprint(f"Use existing bowtie2 indexes {bt2_db_dir}/{bt2_db_name}.")
         return True
     return False
 
 
-def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, cat=True):
+def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
     """ Build Bowtie2 database for the collections of fasta files """
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
     if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-        if cat:
-            command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
-            command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
-            for files in split(downloaded_files, 20):  # keep "cat" commands short
-                command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
-        else:
-            command(f"ln -rs {downloaded_files} {bt2_db_dir}/{bt2_db_name}.fa")
+        # Write the species_id to file, that used to build the bowtie2 indexes
+        with OutputStream(f"{bt2_db_dir}/species_ids.tsv") as stream:
+            stream.write("\n".join(map(str, downloaded_files.keys())))
+
+        command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
+        command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
+        for files in split(downloaded_files, 20):  # keep "cat" commands short
+            command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
+        #else:
+        #    command(f"ln -rs {downloaded_files} {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
-            command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bowtie2-build.log")
+            command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
             command(f"rm -f {bt2_db_prefix}.1.bt2")
@@ -83,3 +86,22 @@ def samtools_index(bamfile_path, debug):
         tsprint(f"Samtools index {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}.bai")
         raise
+
+
+def _keep_read(aln, aln_mapid, aln_readq, aln_mapq, aln_cov):
+    # Check the quality of one read alignnment from BAM file
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < aln_cov:
+        return False
+    return True

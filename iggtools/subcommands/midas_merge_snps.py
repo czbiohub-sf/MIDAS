@@ -4,7 +4,7 @@ from operator import itemgetter
 import multiprocessing
 from math import ceil
 
-from iggtools.models.pool import Pool
+from iggtools.models.pool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, download_reference, select_from_tsv
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG
@@ -430,7 +430,7 @@ def midas_merge_snps(args):
         global pool_of_samples
         global dict_of_species
 
-        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "snps")
+        pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
 
