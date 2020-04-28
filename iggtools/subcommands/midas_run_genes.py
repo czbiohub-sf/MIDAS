@@ -11,7 +11,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, download_reference, num_physical_cores, cat_files
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.models.uhgg import UHGG, get_iggdb_layout
+from iggtools.models.uhgg import UHGG, MIDAS_IGGDB
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 

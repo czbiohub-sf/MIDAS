@@ -2,7 +2,7 @@
 import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multiprocessing_map, comamnd
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multiprocessing_map, command
 from iggtools.params import outputs
 from iggtools.params.inputs import igg
 
@@ -34,8 +34,8 @@ def raw_genome_file(genome_id, representative_id):
 def fetch_marker_genes(dbs_dir):
     s3_marker_files = []
     for ext in MARKER_FILE_EXTS:
-        s3_marker_files.append(get_iggdb_layout("marker_genes_file", species_id="", component=ext))
-    s3_marker_files.append(get_iggdb_layout("marker_genes_mapfile"))
+        s3_marker_files.append(get_uhgg_layout("marker_genes_file", species_id="", component=ext))
+    s3_marker_files.append(get_uhgg_layout("marker_genes_mapfile"))
     return multithreading_map(fetch_file_from_s3, ((s3file, dbs_dir) for s3file in s3_marker_files))
 
 
