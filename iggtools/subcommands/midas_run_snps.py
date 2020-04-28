@@ -9,8 +9,8 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, download_reference, command, cat_files, select_from_tsv
-from iggtools.models.uhgg import UHGG, MIDAS_IGGDB
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv
+from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
 from iggtools.models.sample import Sample
@@ -48,7 +48,7 @@ def register_args(main_func):
                            dest='midas_iggdb',
                            type=str,
                            metavar="CHAR",
-                           help=f"Local midas db mirror s3 igg db")
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--prebuilt_bowtie2_indexes',
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
