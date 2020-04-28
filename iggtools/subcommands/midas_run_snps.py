@@ -48,7 +48,7 @@ def register_args(main_func):
                            dest='midas_iggdb',
                            type=str,
                            metavar="CHAR",
-                           help=f"Local midas db mirror s3 igg db"),
+                           help=f"Local midas db mirror s3 igg db")
     subparser.add_argument('--prebuilt_bowtie2_indexes',
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
