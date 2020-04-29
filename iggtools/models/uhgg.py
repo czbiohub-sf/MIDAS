@@ -19,7 +19,7 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
         # 100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
 
-        "marker_db":                  f"marker_genes/phyeco/phyeco.{component}.lz4",
+        "marker_db":                  f"marker_genes/phyeco/phyeco.{component}",
     }
 
 ### old codes, improve the readibility
@@ -59,7 +59,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
 
         if filetype == "marker_db":
             for ext in MARKER_FILE_EXTS:
-                s3_file = self.get_target_layout("marker_db", species_id="", component=ext, genome_id="", remote=True)
+                s3_file = self.get_target_layout("marker_db", species_id="", component=f"{ext}.lz4", genome_id="", remote=True)
                 local_file = self.get_target_layout("marker_db", species_id="", component=ext, genome_id="", remote=False)
                 if not os.path.exists(local_file):
                     local_dir = os.path.dirname(local_file)
