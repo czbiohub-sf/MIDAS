@@ -6,7 +6,7 @@ from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, dow
 from iggtools.params import outputs, inputs
 from iggtools.params.inputs import igg
 
-MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
+MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
 
 
 def get_uhgg_layout(filename, species_id="", component="", genome_id=""):
@@ -18,8 +18,8 @@ def get_uhgg_layout(filename, species_id="", component="", genome_id=""):
         "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
         # 100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
-        "marker_genes_file":          f"marker_genes/phyeco/phyeco.fa{component}.lz4",
-        "marker_genes_mapfile":       f"marker_genes/phyeco/phyeco.map.lz4",
+
+        "marker_db":                  f"marker_genes/phyeco/phyeco.{component}.lz4",
     }
 
 ### old codes, improve the readibility
@@ -47,17 +47,26 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
 
     def get_target_layout(self, filename, species_id="", component="", genome_id="", remote=False):
         file_name = get_uhgg_layout(filename, species_id, component, genome_id)
-        if remote:
-            return f"{igg}/{file_name}"
-        return os.path.join(self.midas_iggdb_dir, file_name)
+        target_filepath = f"{igg}/{file_name}" if remote else os.path.join(self.midas_iggdb_dir, file_name)
+        return target_filepath
 
 
     def fetch_files(self, list_of_species_ids, filetype=None):
         # Fetch igg/2.0 files to local midas_iggdb
-        args_dict = {}
-        fetched_files = {}
+
 
         for species_id in list_of_species_ids:
+
+            args_dict = {}
+            fetched_files = {}
+
+            if filetype == "marker_db":
+                for ext in MARKER_FILE_EXTS:
+                    s3_file = self.get_target_layout("marker_db", species_id="", component=ext, genome_id="", True)
+                    local_file = self.get_target_layout("marker_db", species_id="", component=ext, genome_id="", False)
+                    fetch_files[ext] = fetch_file_from_s3(s3_file, local_file)
+                return fetched_files
+
             if filetype == "contigs":
                 s3_file = self.get_target_layout("imported_genome_file", species_id, "fna.lz4", self.uhgg.representatives[species_id], True)
                 local_file = self.get_target_layout("imported_genome_file", species_id, "fna", self.uhgg.representatives[species_id], False)

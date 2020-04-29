@@ -36,6 +36,12 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+
     subparser.add_argument('--word_size',
                            dest='word_size',
                            default=DEFAULT_WORD_SIZE,
@@ -58,11 +64,6 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
-    subparser.add_argument('--local_dbsdir',
-                           dest='local_dbsdir',
-                           type=str,
-                           metavar="STR",
-                           help=f"Provide local path of the dbs instead of sample-specific")
     return main_func
 
 
@@ -253,29 +254,21 @@ def midas_run_species(args):
 
     try:
         sample = Sample(args.sample_name, args.midas_outdir, "species")
-        sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        # Fetch db-related file either from S3 or create symlink
-        dbsdir = sample.get_target_layout("dbsdir")
-        if args.local_dbsdir:
-            curr_dbsdir = args.local_dbsdir
-            command(f"ln -s {curr_dbsdir}/* {dbsdir}")
-            markers_db_files = sample.get_target_layout("marker_genes_file")
-            local_toc = sample.get_target_layout("local_toc")
-        else:
-            markers_db_files = fetch_marker_genes(dbsdir)
-            local_toc = download_reference(outputs.genomes, dbsdir)
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        marker_db_files = midas_iggdb.fetch_files("marker_db")
 
         # Align reads to marker-genes database
         m8_file = sample.get_target_layout("species_alignments_m8")
-        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, markers_db_files[0], args.max_reads)
+        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files[0], args.max_reads)
 
         with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Classify reads
-        species_info = UHGG(local_toc).species
-        marker_info = read_marker_info_repgenomes(markers_db_files[-1])
+        species_info = midas_iggdb.uhgg.species
+        marker_info = read_marker_info_repgenomes(marker_db_files[-1])
         best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
         unique_alns = assign_unique(best_hits, species_info, marker_info)
         species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
@@ -290,10 +283,7 @@ def midas_run_species(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir"])
-        # TODO: find a more robust way to existing file for symlink L263
-        if args.local_dbsdir:
-            sample.remove_dirs(["dbsdir", "tempdir", "dbsdir"])
+            sample.remove_dirs(["outdir", "tempdir"])
         raise
 
 

@@ -448,7 +448,7 @@ def midas_run_snps(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "bt2_indexes_dir"])
+            sample.remove_dirs(["outdir", "tempdir", "bt2_indexes_dir"])
         raise
 
 
