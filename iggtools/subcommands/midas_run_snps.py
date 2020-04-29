@@ -237,7 +237,6 @@ def process_chunk_of_sites(packed_args):
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
         return merge_chunks_per_species(species_id)
-    print("compute one chunk")
     return compute_pileup_per_chunk(packed_args)
 
 
@@ -264,7 +263,7 @@ def compute_pileup_per_chunk(packed_args):
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
         # Compute the aligned_reads once per contig, so only one chunk needed.
         if count_flag:
-            #tsprint(f"count reads for contig {contig_id}")
+            tsprint(f"count reads for contig {contig_id}")
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
