@@ -7,7 +7,7 @@ from iggtools.common.utils import tsprint, num_physical_cores, command, split, O
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
     bt2_db_suffixes = ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]
     if all(os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.{ext}") for ext in bt2_db_suffixes):
-        tsprint(f"Use existing bowtie2 indexes {bt2_db_dir}/{bt2_db_name}.")
+        tsprint(f"Use existing bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
         return True
     return False
 
@@ -18,15 +18,13 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
     if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
         # Write the species_id to file, that used to build the bowtie2 indexes
-        with OutputStream(f"{bt2_db_dir}/species_ids.tsv") as stream:
+        with OutputStream(f"{bt2_db_prefix}.species") as stream:
             stream.write("\n".join(map(str, downloaded_files.keys())))
 
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
         command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
         for files in split(downloaded_files, 20):  # keep "cat" commands short
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
-        #else:
-        #    command(f"ln -rs {downloaded_files} {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
             command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")

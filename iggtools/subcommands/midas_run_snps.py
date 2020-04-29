@@ -400,6 +400,7 @@ def midas_run_snps(args):
 
             # We only need a list of species that we need to pull the
             assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
             bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
                 for species_id in select_from_tsv(stream, schema={"species_id": str}):
@@ -417,23 +418,19 @@ def midas_run_snps(args):
             bt2_db_name = "repgenomes"
 
         # Select abundant species present in the sample for SNPs calling
-        print(species_list)
         species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
-        print(species_ids_of_interest)
         # Download representative genome fastas for each species (multiprocessing)
+        # When --midas_iggdb, we don't re-download existing files
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
         contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
-        print(contigs_files)
-        exit(0)
-        #marker_genes_mapfile = midas_iggdb.get_target_layout("marker_genes_mapfile")
-
-        # For the database we don't re-download when the file exists
+        tsprint(contigs_files)
 
         # Build one bowtie database for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
+        exit(0)
 
         # Map reads to the existing bowtie2 indexes
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
@@ -456,5 +453,4 @@ def midas_run_snps(args):
 @register_args
 def main(args):
     tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    print(args)
     midas_run_snps(args)
