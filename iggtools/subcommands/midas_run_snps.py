@@ -419,11 +419,12 @@ def midas_run_snps(args):
         # Select abundant species present in the sample for SNPs calling
         print(species_list)
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
-
+        print(species_ids_of_interest)
         # Download representative genome fastas for each species (multiprocessing)
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
         contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
         print(contigs_files)
+        exit(0)
         #marker_genes_mapfile = midas_iggdb.get_target_layout("marker_genes_mapfile")
 
         # For the database we don't re-download when the file exists

@@ -14,11 +14,13 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
         "genomes_toc":                f"genomes.tsv",
         "marker_db":                  f"marker_genes/phyeco/phyeco.{component}",
 
+        "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
         #"raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.fna.lz4",
 
         #"imported_genome_file":       f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}",
-        "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+
 
         # 100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
