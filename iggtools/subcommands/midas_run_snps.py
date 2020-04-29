@@ -402,7 +402,7 @@ def midas_run_snps(args):
             assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
             bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
-                for species_id in select_from_tsv(stream, schema = {"species_id": str}):
+                for species_id in select_from_tsv(stream, schema={"species_id": str}):
                     bt2_species_list.append(species_id[0])
 
             # Update species_list: either particular species of interest or species in the bowtie2 indexes
@@ -422,7 +422,7 @@ def midas_run_snps(args):
 
         # Download representative genome fastas for each species (multiprocessing)
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
-        contigs_files = midas_iggdb.fetch_files(species_ids_of_interest, filetype="contigs")
+        contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
         print(contigs_files)
         #marker_genes_mapfile = midas_iggdb.get_target_layout("marker_genes_mapfile")
 
