@@ -456,4 +456,5 @@ def midas_run_snps(args):
 @register_args
 def main(args):
     tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    print(args)
     midas_run_snps(args)
