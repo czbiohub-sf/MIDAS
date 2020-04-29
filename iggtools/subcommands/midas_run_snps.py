@@ -414,7 +414,7 @@ def midas_run_snps(args):
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
-            bt2_db_name = "repgenome"
+            bt2_db_name = "repgenome" # add s later
 
         # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
