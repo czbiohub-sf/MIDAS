@@ -402,7 +402,7 @@ def midas_run_snps(args):
             assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
             bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
-                for species_id in select_from_tsv(stream, ["species_id"]):
+                for species_id in select_from_tsv(stream, schema = {"species_id": str}):
                     bt2_species_list.append(species_id[0])
 
             # Update species_list: either particular species of interest or species in the bowtie2 indexes
