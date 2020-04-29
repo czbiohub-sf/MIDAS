@@ -34,13 +34,13 @@ def get_single_layout(sample_name, dbtype=""):
             # snps workflow output
             "snps_summary":           f"{sample_name}/snps/summary.tsv",
             "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
-            "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
+            "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenome.bam",
             "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
-            "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
+            "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenome.bam",
             "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
             "marker_genes_mapping":   f"{sample_name}/temp/genes/{species_id}/marker_to_centroid.tsv",
         }
