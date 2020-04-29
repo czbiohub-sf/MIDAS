@@ -2,26 +2,15 @@
 import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multiprocessing_map, command
-from iggtools.params import outputs
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multiprocessing_map, multithreading_map, command
+from iggtools.params import outputs, inputs
 from iggtools.params.inputs import igg
 
 MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
 
+
 def get_uhgg_layout(species_id="", component="", genome_id=""):
-    return {
-        "genomes_toc":                f"genomes.tsv",
-        
-        "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
-
-        # 100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
-        "pangenome_file":             f"pangenomes/{species_id}/{component}",
-        "marker_genes_file":          f"marker_genes/phyeco/phyeco.fa{component}.lz4",
-        "marker_genes_mapfile":       f"marker_genes/phyeco/phyeco.map.lz4",
-    }
-
-def _delete_get_uhgg_layout(species_id="", component="", genome_id=""):
-    return {
+    dict = {
         "genomes_toc":                f"genomes.tsv",
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
         #"raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.fna.lz4",
@@ -34,6 +23,7 @@ def _delete_get_uhgg_layout(species_id="", component="", genome_id=""):
         "marker_genes_file":          f"marker_genes/phyeco/phyeco.fa{component}.lz4",
         "marker_genes_mapfile":       f"marker_genes/phyeco/phyeco.map.lz4",
     }
+    return dict
 
 ### old codes, improve the readibility
 ## there two functions were used in import_uhgg.py leave it alone for now
@@ -58,7 +48,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
         self.midas_iggdb_dir = midas_iggdb_dir
         self.uhgg = UHGG(self.local_toc)
 
-    def get_target_layout(filename, species_id="", component="", genome_id="", remote=False):
+    def get_target_layout(self, filename, species_id="", component="", genome_id="", remote=False):
         file_name = get_uhgg_layout(species_id, component, genome_id)[filename]
         if remote:
             return f"{igg}/{file_name}"
@@ -85,7 +75,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
 
             if not os.path.exists(local_file):
                 local_dir = os.path.dirname(local_file)
-                commad(f"mkdir -p {local_dir}")
+                command(f"mkdir -p {local_dir}")
                 args_dict[species_id] = ((s3_file, local_dir))
             else:
                 fetched_files[species_id] = local_file
