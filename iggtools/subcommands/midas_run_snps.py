@@ -439,6 +439,8 @@ def midas_run_snps(args):
 
         # Use mpileup to call SNPs
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
+        print(arguments_list)
+        exit(0)
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
         exit(0)
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
