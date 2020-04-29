@@ -63,13 +63,11 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
                 local_file = self.get_target_layout("marker_db", species_id="", component=ext, genome_id="", remote=False)
                 if not os.path.exists(local_file):
                     local_dir = os.path.dirname(local_file)
-                    print(local_dir)
                     if not os.path.isdir(local_dir):
                         command(f"mkdir -p {local_dir}")
-                    fetched_files[ext] = fetch_file_from_s3((s3_file, local_file))
+                    fetched_files[ext] = fetch_file_from_s3((s3_file, local_dir))
                 else:
                     fetched_files[ext] = local_file
-            print(fetched_files)
             return fetched_files
 
         for species_id in list_of_species_ids:
