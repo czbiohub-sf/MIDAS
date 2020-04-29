@@ -11,7 +11,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, download_reference, num_physical_cores, cat_files
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.models.uhgg import UHGG, MIDAS_IGGDB
+from iggtools.models.uhgg import UHGG, MIDAS_IGGDB, get_uhgg_layout
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 
@@ -140,7 +140,7 @@ def marker_to_centroid_mapping(species_id):
     # Get the gene_id - marker_id map
     markers = dict()
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    marker_genes_mapfile = get_iggdb_layout("marker_genes_mapfile")
+    marker_genes_mapfile = get_uhgg_layout("marker_genes_mapfile")
     with InputStream(marker_genes_mapfile, awk_command) as stream:
         for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
             assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
@@ -149,7 +149,7 @@ def marker_to_centroid_mapping(species_id):
     # Get the gene_id to centroid_gene_id map
     # TODO This part can also be done during the database build
     gene_info = dict()
-    pangenome_file = get_iggdb_layout("pangenome_file", species_id, "gene_info.txt.lz4")
+    pangenome_file = get_uhgg_layout("pangenome_file", species_id, "gene_info.txt.lz4")
     with InputStream(pangenome_file) as stream:
         for gene_id, centroids_gene_id in select_from_tsv(stream, ["gene_id", "centroid_99"]):
             if gene_id in markers.keys():

@@ -4,7 +4,6 @@ import multiprocessing
 
 from collections import defaultdict
 from math import ceil
-import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 import Bio.SeqIO
 

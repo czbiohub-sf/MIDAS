@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 
-from iggtools.models.pool import SamplePool
+from iggtools.models.samplepool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference

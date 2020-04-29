@@ -9,7 +9,7 @@ from iggtools.params.inputs import igg
 MARKER_FILE_EXTS = ["", ".bwt", ".header", ".sa", ".sequence"]
 
 
-def get_uhgg_layout(species_id="", component="", genome_id=""):
+def get_uhgg_layout(filename, species_id="", component="", genome_id=""):
     return {
         "genomes_toc":                f"genomes.tsv",
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
@@ -46,7 +46,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
         self.uhgg = UHGG(self.local_toc)
 
     def get_target_layout(self, filename, species_id="", component="", genome_id="", remote=False):
-        file_name = get_uhgg_layout(species_id, component, genome_id)[filename]
+        file_name = get_uhgg_layout(filename, species_id, component, genome_id)
         if remote:
             return f"{igg}/{file_name}"
         return os.path.join(self.midas_iggdb_dir, file_name)

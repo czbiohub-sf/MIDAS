@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
-from iggtools.common.utils import tsprint, num_physical_cores, command, split
+import numpy as np
+from iggtools.common.utils import tsprint, num_physical_cores, command, split, OutputStream
 
 
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):

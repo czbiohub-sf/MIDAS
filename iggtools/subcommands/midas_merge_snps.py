@@ -4,7 +4,7 @@ from operator import itemgetter
 import multiprocessing
 from math import ceil
 
-from iggtools.models.pool import SamplePool
+from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, download_reference, select_from_tsv
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG

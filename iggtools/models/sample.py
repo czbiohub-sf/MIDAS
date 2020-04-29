@@ -19,8 +19,7 @@ def get_single_layout(sample_name, dbtype=""):
             # uhgg-related files
             #"dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             #"dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
-            "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
-                                      [f"{sample_name}/dbs/species/phyeco.map"],
+            #"marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + [f"{sample_name}/dbs/species/phyeco.map"],
             #"local_toc":              f"{sample_name}/dbs/genomes.tsv",
 
 
