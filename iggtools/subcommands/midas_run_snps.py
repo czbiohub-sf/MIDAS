@@ -237,6 +237,7 @@ def process_chunk_of_sites(packed_args):
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
         return merge_chunks_per_species(species_id)
+
     return compute_pileup_per_chunk(packed_args)
 
 
@@ -249,7 +250,6 @@ def compute_pileup_per_chunk(packed_args):
 
     try:
         # [contig_start, contig_end)
-        print(contig_id)
         species_id, chunk_id, contig_id, contig_start, contig_end, contig, count_flag = packed_args
         repgenome_bamfile = species_sliced_snps_path["input_bamfile"]
 
@@ -383,69 +383,70 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
 
 def midas_run_snps(args):
 
-    #try:
-    global sample
-    sample = Sample(args.sample_name, args.midas_outdir, "snps")
-    #sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
-    sample.create_dirs(["outdir", "tempdir"], args.debug)
+    try:
+        global sample
+        sample = Sample(args.sample_name, args.midas_outdir, "snps")
+        #sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-    global global_args
-    global_args = args
+        global global_args
+        global_args = args
 
-    species_list = args.species_list.split(",") if args.species_list else []
-    if args.prebuilt_bowtie2_indexes:
-        bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
-        bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
-        assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
+        species_list = args.species_list.split(",") if args.species_list else []
+        if args.prebuilt_bowtie2_indexes:
+            bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
+            bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
 
-        # We only need a list of species that we need to pull the
-        assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
-        tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
-        bt2_species_list = []
-        with InputStream(args.prebuilt_bowtie2_species) as stream:
-            for species_id in select_from_tsv(stream, schema={"species_id": str}):
-                bt2_species_list.append(species_id[0])
+            # We only need a list of species that we need to pull the
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
+            bt2_species_list = []
+            with InputStream(args.prebuilt_bowtie2_species) as stream:
+                for species_id in select_from_tsv(stream, schema={"species_id": str}):
+                    bt2_species_list.append(species_id[0])
 
-        # Update species_list: either particular species of interest or species in the bowtie2 indexes
-        species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
-        # Note: the index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
-        # can still be based on sample itself.
-        # We also don't want too many empty species in our parsing stageself.
-        # TODO: need to fix the species_prevalence.tsv with SampleID??
-    else:
-        sample.create_dirs(["bt2_indexes_dir"], args.debug)
-        bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
-        bt2_db_name = "repgenome" # add s later
+            # Update species_list: either particular species of interest or species in the bowtie2 indexes
+            species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
+            # Note: the index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
+            # can still be based on sample itself.
+            # We also don't want too many empty species in our parsing stageself.
+            # TODO: need to fix the species_prevalence.tsv with SampleID??
+        else:
+            sample.create_dirs(["bt2_indexes_dir"], args.debug)
+            bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
+            bt2_db_name = "repgenomes"
 
-    # Select abundant species present in the sample for SNPs calling
-    species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
-    # Download representative genome fastas for each species (multiprocessing)
-    # When --midas_iggdb, we don't re-download existing files
-    midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
-    contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
-    tsprint(contigs_files)
+        # Select abundant species present in the sample for SNPs calling
+        species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
+        # Download representative genome fastas for each species (multiprocessing)
+        # When --midas_iggdb, we don't re-download existing files
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
+        tsprint(contigs_files)
 
-    # Build one bowtie database for species in the restricted species profile
-    if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
-    # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-    # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
+        # Build one bowtie database for species in the restricted species profile
+        if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
+        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
-    # Map reads to the existing bowtie2 indexes
-    sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
-    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
-    bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
-    samtools_index(repgenome_bamfile, args.debug)
+        # Map reads to the existing bowtie2 indexes
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
+        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+        bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
+        samtools_index(repgenome_bamfile, args.debug)
 
-    # Use mpileup to call SNPs
-    arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
-    chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
-    write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
-    #except:
-    #    if not args.debug:
-    #        tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-    #        sample.remove_dirs(["outdir", "tempdir", "bt2_indexes_dir"])
-    #    raise
+        # Use mpileup to call SNPs
+        arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
+
+        write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
+    except:
+        if not args.debug:
+            tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
+            sample.remove_dirs(["outdir", "tempdir", "bt2_indexes_dir"])
+        raise
 
 
 @register_args
