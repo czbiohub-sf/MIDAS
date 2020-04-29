@@ -121,7 +121,7 @@ def parse_reads(filename, max_reads=None):
 
 
 def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
-    assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit ."
+    assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit."
 
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
