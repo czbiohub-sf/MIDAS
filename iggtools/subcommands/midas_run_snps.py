@@ -417,6 +417,7 @@ def midas_run_snps(args):
             bt2_db_name = "repgenomes"
 
         # Select abundant species present in the sample for SNPs calling
+        print(species_list)
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
 
         # Download representative genome fastas for each species (multiprocessing)
