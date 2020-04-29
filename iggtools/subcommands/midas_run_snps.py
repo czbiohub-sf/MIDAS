@@ -249,6 +249,7 @@ def compute_pileup_per_chunk(packed_args):
 
     try:
         # [contig_start, contig_end)
+        print(contig_id)
         species_id, chunk_id, contig_id, contig_start, contig_end, contig, count_flag = packed_args
         repgenome_bamfile = species_sliced_snps_path["input_bamfile"]
 
