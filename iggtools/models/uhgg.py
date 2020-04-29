@@ -35,8 +35,8 @@ def raw_genome_file(genome_id, representative_id):
 class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
 
     def __init__(self, midas_iggdb_dir):
-        self.local_toc = _fetch_file_from_s3(outputs.genomes, self.get_target_layout("genomes_toc", "", "", "", False))
         self.midas_iggdb_dir = midas_iggdb_dir
+        self.local_toc = _fetch_file_from_s3((outputs.genomes, self.get_target_layout("genomes_toc", "", "", "", False)))
         self.uhgg = UHGG(self.local_toc)
 
     def get_target_layout(self, filename, species_id="", component="", genome_id="", remote=False):
