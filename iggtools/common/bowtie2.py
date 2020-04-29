@@ -23,7 +23,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
 
         command(f"rm -f {bt2_db_dir}/{bt2_db_name}.fa", quiet=False)
         command(f"touch {bt2_db_dir}/{bt2_db_name}.fa")
-        for files in split(downloaded_files, 20):  # keep "cat" commands short
+        for files in split(downloaded_files.values(), 20):  # keep "cat" commands short
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
