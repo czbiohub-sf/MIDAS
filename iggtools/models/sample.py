@@ -88,7 +88,6 @@ class Sample: # pylint: disable=too-few-public-methods
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                print(record)
                 if record["coverage"] >= genome_coverage:
                     species_ids.append(record["species_id"])
         return species_ids

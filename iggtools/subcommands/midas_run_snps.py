@@ -418,7 +418,6 @@ def midas_run_snps(args):
 
         # Select abundant species present in the sample for SNPs calling
         print(species_list)
-        print(args.genome_coverage)
         species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
         print(species_ids_of_interest)
         # Download representative genome fastas for each species (multiprocessing)
