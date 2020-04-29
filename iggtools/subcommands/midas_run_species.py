@@ -7,7 +7,7 @@ import numpy as np
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference, command
-from iggtools.models.uhgg import UHGG, fetch_marker_genes
+from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
 from iggtools.params.inputs import marker_genes_hmm_cutoffs
