@@ -418,7 +418,7 @@ def midas_run_snps(args):
 
         # Select abundant species present in the sample for SNPs calling
         print(species_list)
-        species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
+        species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
         print(species_ids_of_interest)
         # Download representative genome fastas for each species (multiprocessing)
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
