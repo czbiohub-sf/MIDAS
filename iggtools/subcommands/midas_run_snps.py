@@ -149,10 +149,31 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read(aln):
+def keep_read_new(aln):
     global global_args
     args = global_args
     _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
+
+
+def keep_read(aln):
+    global global_args
+    args = global_args
+
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < args.aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < args.aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < args.aln_cov:
+        return False
+    return True
 
 
 def scan_contigs(contig_file, species_id):
