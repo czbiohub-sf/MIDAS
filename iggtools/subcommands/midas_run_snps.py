@@ -13,6 +13,7 @@ from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
 from iggtools.models.sample import Sample
+import numpy as np
 
 
 DEFAULT_GENOME_COVERAGE = 5.0
