@@ -289,6 +289,7 @@ def compute_pileup_per_chunk(packed_args):
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
+                tsprint(f"mapped_reads, {mapped_reads}")
         else:
             aligned_reads = 0
             mapped_reads = 0
