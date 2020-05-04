@@ -18,7 +18,8 @@ DECIMALS = ".6f"
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='estimate species abundance profile for given sample')
+    subparser = add_subcommand('midas_run_species', main_func, help='Estimate species abundance profile for given sample')
+
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
@@ -264,7 +265,8 @@ def midas_run_species(args):
         marker_db_hmm_cutoffs = midas_iggdb.fetch_file("marker_db_hmm_cutoffs")
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
-
+        print(marker_cutoffs)
+        exit(0)
         # Classify reads
         species_info = midas_iggdb.uhgg.species
         marker_info = read_marker_info_repgenomes(marker_db_files["map"])
@@ -282,7 +284,7 @@ def midas_run_species(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir"])
+            sample.remove_dirs(["sample_dir"])
         raise
 
 

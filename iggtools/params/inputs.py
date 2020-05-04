@@ -10,6 +10,6 @@ uhgg_genomes = "s3://jason.shi-bucket/IGGdb2.0/clean_set"
 igg = "s3://microbiome-igg/2.0"
 marker_set = "phyeco"
 marker_genes_hmm = f"{igg}/marker_genes_models/{marker_set}/marker_genes.hmm.lz4"
-marker_genes_hmm_cutoffs = f"{igg}/marker_genes_models/{marker_set}/marker_genes.mapping_cutoffs.lz4"
+#marker_genes_hmm_cutoffs = f"{igg}/marker_genes_models/{marker_set}/marker_genes.mapping_cutoffs.lz4"
 hmmsearch_max_evalue = 1e-5
 hmmsearch_min_cov = 0.00
