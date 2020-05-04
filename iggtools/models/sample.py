@@ -2,7 +2,6 @@ import os
 from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, species_profile_schema
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.uhgg import MARKER_FILE_EXTS
 
 
 # Executable Documentation
@@ -20,8 +19,6 @@ def get_single_layout(sample_name, dbtype=""):
             # uhgg-related files
             #"dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             #"dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
-            #"marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + [f"{sample_name}/dbs/species/phyeco.map"],
-            #"local_toc":              f"{sample_name}/dbs/genomes.tsv",
 
             "midas_iggdb_dir":        f"midas_dbs",
             "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
