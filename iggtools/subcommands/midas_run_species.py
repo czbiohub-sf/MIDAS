@@ -6,12 +6,10 @@ from itertools import chain
 import numpy as np
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, download_reference, command
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
-from iggtools.params.inputs import marker_genes_hmm_cutoffs
-from iggtools.params import outputs
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
@@ -52,7 +50,7 @@ def register_args(main_func):
                            dest='aln_mapid',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in {marker_genes_hmm_cutoffs}")
+                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in marker_genes.mapping_cutoffs.")
     subparser.add_argument('--aln_cov',
                            dest='aln_cov',
                            default=DEFAULT_ALN_COV,
@@ -263,7 +261,8 @@ def midas_run_species(args):
         m8_file = sample.get_target_layout("species_alignments_m8")
         map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads)
 
-        with InputStream(marker_genes_hmm_cutoffs) as cutoff_params:
+        marker_db_hmm_cutoffs = midas_iggdb.fetch_file("marker_db_hmm_cutoffs")
+        with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Classify reads

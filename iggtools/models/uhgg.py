@@ -2,7 +2,7 @@
 import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, multithreading_map, command
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, command
 from iggtools.params import outputs, inputs
 from iggtools.params.inputs import igg
 
@@ -13,6 +13,7 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
     return {
         "genomes_toc":                f"genomes.tsv",
         "marker_db":                  f"marker_genes/phyeco/phyeco.{component}",
+        "marker_db_hmm_cutoffs":      f"marker_genes_models/phyeco/marker_genes.mapping_cutoffs{component}",
 
         "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
 
@@ -60,15 +61,19 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
                 fetched_files[ext] = _fetch_file_from_s3((s3_file, local_file))
             return fetched_files
 
+        if filetype == "marker_db_hmm_cutoffs":
+            s3_file = self.get_target_layout("marker_db_hmm_cutoffs", species_id="", component=".lz4", genome_id="", remote=True)
+            local_file = self.get_target_layout("marker_db_hmm_cutoffs", species_id="", component="", genome_id="", remote=False)
+            return _fetch_file_from_s3((s3_file, local_file))
+
+        # Download per species files
         for species_id in list_of_species_ids:
             if filetype == "contigs":
                 s3_file = self.get_target_layout("imported_genome_file", species_id, "fna.lz4", self.uhgg.representatives[species_id], True)
                 local_file = self.get_target_layout("imported_genome_file", species_id, "fna", self.uhgg.representatives[species_id], False)
-
             if filetype == "centroids":
                 s3_file = self.get_target_layout("pangenome_file", species_id, "centroids.ffn.lz4", True)
                 local_file = self.get_target_layout("pangenome_file", species_id, "centroids.ffn", True)
-
             if filetype == "genes_info":
                 s3_file = self.get_target_layout("pangenome_file", species_id, "gene_info.txt.lz4", True)
                 local_file = self.get_target_layout("pangenome_file", species_id, "gene_info.txt", False)
