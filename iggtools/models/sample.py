@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype, species_profile_schema

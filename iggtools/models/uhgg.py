@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
 from collections import defaultdict
