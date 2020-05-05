@@ -154,7 +154,7 @@ def register_args(main_func):
 def keep_read(aln):
     global global_args
     args = global_args
-    _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
+    return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
 def keep_read_old(aln):
