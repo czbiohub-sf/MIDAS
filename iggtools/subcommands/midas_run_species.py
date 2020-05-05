@@ -263,7 +263,7 @@ def midas_run_species(args):
         m8_file = sample.get_target_layout("species_alignments_m8")
         map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads)
 
-        marker_db_hmm_cutoffs = midas_iggdb.fetch_file("marker_db_hmm_cutoffs")
+        marker_db_hmm_cutoffs = midas_iggdb.fetch_files("marker_db_hmm_cutoffs")
         print(marker_db_hmm_cutoffs)
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
