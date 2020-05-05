@@ -25,7 +25,8 @@ DEFAULT_CHUNK_SIZE = 5000
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_genes', main_func, help='metagenomic pan-genome profiling')
+    subparser = add_subcommand('midas_run_genes', main_func, help='Metagenomic pan-genome profiling')
+
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
@@ -41,6 +42,23 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
+    # Prebuilt/predownload
+    subparser.add_argument('--prebuilt_bowtie2_indexes',
+                           dest='prebuilt_bowtie2_indexes',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Prebuilt bowtie2 database indexes")
+    subparser.add_argument('--prebuilt_bowtie2_species',
+                           dest='prebuilt_bowtie2_species',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"List of species used for building the prebuild bowtie2 indexes.")
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+
     subparser.add_argument('--genome_coverage',
                            type=float,
                            dest='genome_coverage',
@@ -52,49 +70,8 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-    subparser.add_argument('--prebuilt_bowtie2_indexes',
-                           dest='prebuilt_bowtie2_indexes',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
-    subparser.add_argument('--prebuilt_bowtie2_species',
-                           dest='prebuilt_bowtie2_species',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Species profile path for the prebuild bowtie2 index")
-
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
 
     #  Alignment flags (bowtie, or postprocessing)
-    subparser.add_argument('--aln_cov',
-                           dest='aln_cov',
-                           default=DEFAULT_ALN_COV,
-                           type=float,
-                           metavar="FLOAT",
-                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
-    subparser.add_argument('--aln_readq',
-                           dest='aln_readq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_READQ,
-                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
-    subparser.add_argument('--aln_mapid',
-                           dest='aln_mapid',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
-    subparser.add_argument('--aln_mapq',
-                           dest='aln_mapq',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_ALN_MAPQ,
-                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
     subparser.add_argument('--aln_speed',
                            type=str,
                            dest='aln_speed',
@@ -116,6 +93,38 @@ def register_args(main_func):
                            default=True,
                            help=f"Sort BAM file.")
 
+    subparser.add_argument('--aln_mapid',
+                           dest='aln_mapid',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_ALN_MAPID,
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+    subparser.add_argument('--aln_mapq',
+                           dest='aln_mapq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_MAPQ,
+                           help=f"Discard reads with DEFAULT_ALN_MAPQ < MAPQ. ({DEFAULT_ALN_MAPQ})")
+    subparser.add_argument('--aln_readq',
+                           dest='aln_readq',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_ALN_READQ,
+                           help=f"Discard reads with mean quality < READQ ({DEFAULT_ALN_READQ})")
+    subparser.add_argument('--aln_cov',
+                           dest='aln_cov',
+                           default=DEFAULT_ALN_COV,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+
+    # File related
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
     subparser.add_argument('--max_reads',
                            dest='max_reads',
                            type=int,

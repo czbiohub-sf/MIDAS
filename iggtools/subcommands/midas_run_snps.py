@@ -27,7 +27,8 @@ DEFAULT_CHUNK_SIZE = 50000
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_snps', main_func, help='single-nucleotide-polymorphism prediction')
+    subparser = add_subcommand('midas_run_snps', main_func, help='Predict single-nucleotide-polymorphism')
+
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
@@ -150,13 +151,13 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read_new(aln):
+def keep_read(aln):
     global global_args
     args = global_args
     _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
-def keep_read(aln):
+def keep_read_old(aln):
     global global_args
     args = global_args
 
@@ -286,11 +287,9 @@ def compute_pileup_per_chunk(packed_args):
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
         # Compute the aligned_reads once per contig, so only one chunk needed.
         if count_flag:
-            tsprint(f"count reads for contig {contig_id}")
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
-                tsprint(f"mapped_reads, {mapped_reads}")
         else:
             aligned_reads = 0
             mapped_reads = 0
@@ -442,7 +441,7 @@ def midas_run_snps(args):
         # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
         tsprint(species_ids_of_interest)
-        
+
         # Download representative genome fastas for each species (multiprocessing)
         # When --midas_iggdb, we don't re-download existing files
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
