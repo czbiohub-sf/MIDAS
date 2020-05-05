@@ -9,7 +9,7 @@ from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, co
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
-            "sample_dir":             f"{sample_name}",
+            #"sample_dir":             f"{sample_name}",
             "outdir":                 f"{sample_name}/{dbtype}",
             "output_subdir":          f"{sample_name}/{dbtype}/{species_id}",
 
