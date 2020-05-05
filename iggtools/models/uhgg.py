@@ -13,6 +13,7 @@ MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
 def get_uhgg_layout(species_id, component="", genome_id=""):
     return {
         "genomes_toc":                f"genomes.tsv",
+
         "marker_db":                  f"marker_genes/phyeco/phyeco.{component}",
         "marker_db_hmm_cutoffs":      f"marker_genes_models/phyeco/marker_genes.mapping_cutoffs{component}",
 
@@ -51,7 +52,6 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
 
     def fetch_files(self, filetype, list_of_species_ids=""):
         # Fetch igg/2.0 files to local midas_iggdb
-
         args_list = []
         fetched_files = {}
 

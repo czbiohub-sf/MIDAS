@@ -409,7 +409,6 @@ def midas_run_snps(args):
     try:
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "snps")
-        #sample.create_dirs(["outdir", "tempdir", "dbsdir"], args.debug)
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         global global_args
@@ -468,7 +467,7 @@ def midas_run_snps(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "bt2_indexes_dir"])
+            sample.remove_dirs(["sample_dir"])
         raise
 
 
