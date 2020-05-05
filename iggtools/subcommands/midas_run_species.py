@@ -264,27 +264,22 @@ def midas_run_species(args):
         map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads)
 
         marker_db_hmm_cutoffs = midas_iggdb.fetch_files("marker_db_hmm_cutoffs")
-        print(marker_db_hmm_cutoffs)
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
-        print(marker_cutoffs)
-        exit(0)
+        # Classify reads
+        species_info = midas_iggdb.uhgg.species
+        marker_info = read_marker_info_repgenomes(marker_db_files["map"])
+        best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
+        unique_alns = assign_unique(best_hits, species_info, marker_info)
+        species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
 
-        if False:
-            # Classify reads
-            species_info = midas_iggdb.uhgg.species
-            marker_info = read_marker_info_repgenomes(marker_db_files["map"])
-            best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
-            unique_alns = assign_unique(best_hits, species_info, marker_info)
-            species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
+        # Estimate species abundance
+        total_gene_length = sum_marker_gene_lengths(marker_info)
+        species_abundance = normalize_counts(species_alns, total_gene_length)
 
-            # Estimate species abundance
-            total_gene_length = sum_marker_gene_lengths(marker_info)
-            species_abundance = normalize_counts(species_alns, total_gene_length)
-
-            write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-            tsprint("Finished midas_run_species for %s" % sample.sample_name)
+        write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+        tsprint("Finished midas_run_species for %s" % sample.sample_name)
 
     except:
         if not args.debug:
