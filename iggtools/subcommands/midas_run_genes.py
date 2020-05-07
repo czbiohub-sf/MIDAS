@@ -178,8 +178,8 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         marker_centroid_file = marker_centroids_files[species_id]
         centroid_file = centroids_files[species_id]
 
-        with InputStream(marker_centroids_files[species_id]) as stream:
-            for row in select_from_tsv(stream, )
+        #with InputStream(marker_centroids_files[species_id]) as stream:
+        #    for row in select_from_tsv(stream, )
 
         # Get the list of centroids99 genes that contains marker genes in the cluster
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
