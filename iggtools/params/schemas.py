@@ -29,6 +29,17 @@ BLAST_M8_SCHEMA = {
 }
 
 
+PAN_GENE_INFO_SCHEMA = {
+    "gene_id": str,
+    "centroid_99": str,
+    "centroid_95": str,
+    "centroid_90": str,
+    "centroid_85": str,
+    "centroid_80": str,
+    "centroid_75": str,
+}
+
+
 def fetch_default_genome_depth(dbtype):
     if dbtype == "species":
         DEFAULT_GENOME_DEPTH = 1.0

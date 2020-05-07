@@ -12,7 +12,7 @@ from iggtools.common.utils import tsprint, InputStream, OutputStream, select_fro
 from iggtools.params import outputs
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.models.uhgg import UHGG, MIDAS_IGGDB, get_uhgg_layout
-from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, format_data
+from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, MARKER_INFO_SCHEMA, PAN_GENE_INFO_SCHEMA, format_data
 from iggtools.models.sample import Sample
 
 
@@ -133,51 +133,33 @@ def register_args(main_func):
     return main_func
 
 
+def keep_read_new(aln):
+    global global_args
+    args = global_args
+    return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
+
 def keep_read(aln):
     global global_args
     args = global_args
-    _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
+
+    align_len = len(aln.query_alignment_sequence)
+    query_len = aln.query_length
+    # min pid
+    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
+        return False
+    # min read quality
+    if np.mean(aln.query_qualities) < args.aln_readq:
+        return False
+    # min map quality
+    if aln.mapping_quality < args.aln_mapq:
+        return False
+    # min aln cov
+    if align_len / float(query_len) < args.aln_cov:
+        return False
+    return True
 
 
-def marker_to_centroid_mapping(species_id):
-    """ Identify which cluster the marker_genes belong to """
-    # TODO: pre-build this part for all species in the uhgg db
-    # find marker genes from the centroid_99 genes
-    # We also have the marker genes for all the genomes phyeco/temp/genome/genome.marker.map/fa
-    global sample
-
-    # Get the gene_id - marker_id map
-    markers = dict()
-    awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    marker_genes_mapfile = get_uhgg_layout("marker_genes_mapfile")
-    with InputStream(marker_genes_mapfile, awk_command) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-            assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
-            markers[gene_id] = marker_id
-
-    # Get the gene_id to centroid_gene_id map
-    # TODO This part can also be done during the database build
-    gene_info = dict()
-    pangenome_file = get_uhgg_layout("pangenome_file", species_id, "gene_info.txt.lz4")
-    with InputStream(pangenome_file) as stream:
-        for gene_id, centroids_gene_id in select_from_tsv(stream, ["gene_id", "centroid_99"]):
-            if gene_id in markers.keys():
-                gene_info[gene_id] = centroids_gene_id
-
-    marker_to_centroid_dict = dict()
-    for gene_id, marker_id in markers.items():
-        centroid_gene_id = gene_info[gene_id]
-        marker_to_centroid_dict[marker_id] = centroid_gene_id
-        # I don't think one marker_gene should map to multiple centroids genes
-        #marker_to_centroid_dict[marker_id].append(centroid_gene_id)
-
-    # Write marker_to_centroid_dict to file
-    with open(sample.get_target_layout("marker_genes_mapping", species_id), "a") as stream:
-        for k, v in marker_to_centroid_dict.items():
-            stream.write("\t".join([k, v]) + "\n")
-
-
-def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
+def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, chunk_size):
     global sample
     global semaphore_for_species
     global species_sliced_genes_path
@@ -192,14 +174,20 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
 
     arguments_list = []
-    for species_index, species_id in enumerate(species_ids_of_interest):
+    for species_id in species_ids_of_interest:
+        marker_centroid_file = marker_centroids_files[species_id]
+        centroid_file = centroids_files[species_id]
+
+        with InputStream(marker_centroids_files[species_id]) as stream:
+            for row in select_from_tsv(stream, )
+
         # Get the list of centroids99 genes that contains marker genes in the cluster
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
             marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
         c_markers = list(marker_to_centroid.values()) #<= all we care is the list of centroid genes corresponds to marker genes
         species_marker_genes[species_id] = dict(zip(c_markers, [0.0]*len(c_markers)))
 
-        centroid_file = centroids_files[species_index]
+
 
         gene_count = 0
         chunk_id = 0
@@ -419,37 +407,44 @@ def midas_run_genes(args):
     try:
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
-        sample.create_dirs(["outdir", "dbsdir"], args.debug)
+        sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         global global_args
         global_args = args
 
         species_list = args.species_list.split(",") if args.species_list else []
         if args.prebuilt_bowtie2_indexes:
-            # Already-built bowtie2 indexes
             bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
             bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide valid prebuilt_bowtie2_species."
+
+            # We only need a list of species that we need to pull the
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
+            bt2_species_list = []
+            with InputStream(args.prebuilt_bowtie2_species) as stream:
+                for species_id in select_from_tsv(stream, schema={"species_id": str}):
+                    bt2_species_list.append(species_id[0])
 
             # Update species_list: either particular species of interest or species in the bowtie2 indexes
-            bt2_species = []
-            with InputStream(args.prebuilt_bowtie2_species) as stream:
-                for species_id in select_from_tsv(stream, ["species_id"]):
-                    bt2_species.append(species_id[0])
-            species_list = list(set(species_list) & set(bt2_species)) if len(species_list) > 0 else bt2_species
-
+            species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
             bt2_db_name = "pangenomes"
 
-        species_ids_of_interest = sample.select_species(args.genome_coverage, species_list)
+        # Select abundant species present in the sample for SNPs calling
+        species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
+        tsprint(species_ids_of_interest)
 
-        # Download per-species UHGG file into temporary dbs directory
-        local_toc = download_reference(outputs.genomes, sample.get_target_layout("dbsdir"))
-        sample.create_species_subdirs(species_ids_of_interest, "dbs", args.debug)
-        centroids_files = UHGG(local_toc).fetch_files(species_ids_of_interest, sample.get_target_layout("dbsdir"), filetype="centroids")
+        # Fetch representative genome fastas for each species (multiprocessing)
+        # When --midas_iggdb, we don't re-download existing files
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        centroids_files = midas_iggdb.fetch_files("centroids", species_ids_of_interest)
+        tsprint(centroids_files)
+        # Fetch marker's centroids cluster info for given species
+        marker_centroids_files = midas_iggdb.fetch_files("marker_centroids", species_ids_of_interest)
+        tsprint(marker_centroids_files)
 
         # Build one bowtie database for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
@@ -462,10 +457,7 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug)
 
         # Convert marker_genes to centroid_genes for each species
-        # TODO: move this part go UHGG
-        multiprocessing_map(marker_to_centroid_mapping, species_ids_of_interest, num_physical_cores)
-
-        arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
+        arguments_list = design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, args.chunk_size)
         chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_physical_cores)
 
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))

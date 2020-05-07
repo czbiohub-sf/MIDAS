@@ -21,7 +21,7 @@ def get_single_layout(sample_name, dbtype=""):
             #"dbsdir":                 f"{sample_name}/dbs/{dbtype}",
             #"dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
 
-            "midas_iggdb_dir":        f"midas_dbs",
+            "midas_iggdb_dir":        f"midas_iggdb",
             "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
             #"repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
             #"pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
@@ -40,8 +40,7 @@ def get_single_layout(sample_name, dbtype=""):
             "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
             "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
-            "marker_genes_mapping":   f"{sample_name}/temp/genes/{species_id}/marker_to_centroid.tsv",
+            "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4"
         }
     return per_species
 
