@@ -66,7 +66,7 @@ def map_marker_to_centroids(args):
                         ostream.write("\t".join([markers[row["gene_id"]]] + list(row.values())) + "\n")
 
         # Update to s3
-        upload(mc_file_local, mc_file_local, check=False)
+        upload(mc_file_local, mc_file_remote, check=False)
 
         with open(f"{log_local}", "a") as slog:
             slog.write(f"Species {species_id} finished" + "\n")
