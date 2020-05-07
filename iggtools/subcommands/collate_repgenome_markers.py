@@ -74,7 +74,7 @@ def map_marker_to_centroids(args):
     multithreading_map(species_work, midas_iggdb.uhgg.species.keys(), num_physical_cores)
 
     # Upload log_local log file in the last
-    upload(collate_log, log_remote, check=False)
+    upload(log_local, log_remote, check=False)
 
 
 def collate_repgenome_markers(args):
