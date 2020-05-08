@@ -156,6 +156,7 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         with InputStream(marker_centroids_files[species_id]) as stream:
             centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"], schema={**{"marker_id":str}, **PAN_GENE_INFO_SCHEMA}))
         marker_centroids = list(centroids_of_marker.values())
+        print(marker_centroids)
         species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
 
         gene_count = 0
@@ -289,7 +290,7 @@ def merge_chunks_per_species(species_id):
     marker_genes_depth = species_marker_genes[species_id]
     tsprint(f"marker_genes_coverage: {marker_genes_depth}")
     median_marker_depth = np.median(list(marker_genes_depth.values()))
-    print(f"median_marker_depth => {median_marker_depth}")
+    tsprint(f"median_marker_depth => {median_marker_depth}")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
@@ -297,7 +298,6 @@ def merge_chunks_per_species(species_id):
         for chunk_file in all_chunks:
             args.append((chunk_file, median_marker_depth))
         multithreading_map(rewrite_chunk_coverage_file, args, 4)
-    print("==========================start simple cat")
 
     # Write current species's gene coverage to file
     with OutputStream(species_gene_coverage_path) as stream:
