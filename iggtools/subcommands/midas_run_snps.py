@@ -428,7 +428,7 @@ def midas_run_snps(args):
         contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
         tsprint(contigs_files)
 
-        # Build one bowtie database for species in the restricted species profile
+        # Build Bowtie indexes for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.

@@ -92,8 +92,6 @@ def collate_repgenome_markers(args):
 
     collate_log = midas_iggdb.get_target_layout("marker_collate_log", remote=False)
     collate_subdir = os.path.dirname(collate_log)
-    if not args.debug:
-        command(f"rm -rf {collate_subdir}")
     if not os.path.isdir(collate_subdir):
         command(f"mkdir -p {collate_subdir}")
     with open(collate_log, "w") as slog:
@@ -113,9 +111,7 @@ def collate_repgenome_markers(args):
         command("cat " + " ".join(marker_map_files) + f" >> {collaged_genes_map}")
 
     # Build hs-blastn index for the collated phyeco sequences
-    #? do we have to provide the collage_subdir to hs-blastn?
-    # can only check this one out on S3, wait until the marker_centroids works
-    cmd_index = f"cd {collate_subdir}; hs-blastn index {collated_genes_fa} &>> {collate_log}"
+    cmd_index = f"hs-blastn index {collated_genes_fa} &>> {collate_log}"
     with open(f"{collate_log}", "a") as slog:
         slog.write(cmd_index + "\n")
     command(cmd_index)
@@ -130,10 +126,6 @@ def collate_repgenome_markers(args):
 
     # Upload the log file in the last
     upload(collate_log, collate_log_remote, check=False)
-
-    # Clean up
-    if not args.debug:
-        command(f"rm -rf {collate_subdir}", check=False)
 
 
 def register_args(main_func):

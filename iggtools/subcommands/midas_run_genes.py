@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import os
 import multiprocessing
@@ -83,15 +84,11 @@ def register_args(main_func):
                            dest='aln_mode',
                            default='local',
                            choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local).  Global corresponds to the bowtie2 default --end-to-end.')
+                           help='Global/local read alignment. Local (default) corresponds to the bowtie2 --local.  Global corresponds to the bowtie2 --end-to-end.')
     subparser.add_argument('--aln_interleaved',
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-    subparser.add_argument('--aln_sort',
-                           action='store_true',
-                           default=True,
-                           help=f"Sort BAM file.")
 
     subparser.add_argument('--aln_mapid',
                            dest='aln_mapid',
@@ -156,7 +153,7 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
     arguments_list = []
     for species_id in species_ids_of_interest:
         # Get the list of centroids_99 genes that contains marker genes in the cluster
-        with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
+        with InputStream(marker_centroids_files[species_id]) as stream:
             centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"], schema={**{"marker_id":str}, **PAN_GENE_INFO_SCHEMA}))
         marker_centroids = list(centroids_of_marker.values())
         species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
@@ -165,9 +162,10 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         chunk_id = 0
         curr_chunk_genes_dict = defaultdict()
         with InputStream(centroids_files[species_id]) as file:
-            # TODO: we should (if not already) have the centroids_info.txt
+            # TODO: we should generate the centroids_info.txt
             # while the gene_length should be merged with genes_info for next round of database build
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
+
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the gene_length separately
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -241,7 +239,7 @@ def compute_coverage_per_chunk(packed_args):
         with OutputStream(headerless_gene_coverage_path) as stream:
             with AlignmentFile(pangenome_bamfile) as bamfile:
                 for gene_id in chunk_of_gene_ids:
-                    # core, basic compute unit for each gene
+                    # Basic compute unit for each gene
                     gene_length = gene_length_dict[gene_id]
                     aligned_reads = bamfile.count(gene_id)
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
@@ -413,21 +411,22 @@ def midas_run_genes(args):
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
         centroids_files = midas_iggdb.fetch_files("centroids", species_ids_of_interest)
         tsprint(centroids_files)
+
         # Fetch marker's centroids cluster info for given species
         marker_centroids_files = midas_iggdb.fetch_files("marker_centroids", species_ids_of_interest)
         tsprint(marker_centroids_files)
 
-        # Build one bowtie database for species in the restricted species profile
+        # Build Bowtie indexes for species in the restricted species profile
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
 
-        # Map reads to pan-genes bowtie2 database
+        # Map reads to the pan-genes bowtie2 database
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
-        # Convert marker_genes to centroid_genes for each species
+        # Compute the coverage for each gene
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, args.chunk_size)
         chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_physical_cores)
 
