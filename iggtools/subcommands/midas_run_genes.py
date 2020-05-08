@@ -246,7 +246,7 @@ def compute_coverage_per_chunk(packed_args):
                     aligned_reads = bamfile.count(gene_id)
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
                     gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
-
+                    ## BUGS: this is the problem: multiprocessing and global variable. Let's me think about how to solve the problem.
                     if gene_id in marker_genes.keys():
                         marker_genes[gene_id] += gene_depth
 
