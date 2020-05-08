@@ -154,9 +154,10 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
     for species_id in species_ids_of_interest:
         # Get the list of centroids_99 genes that contains marker genes in the cluster
         with InputStream(marker_centroids_files[species_id]) as stream:
-            centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"], schema={**{"marker_id":str}, **PAN_GENE_INFO_SCHEMA}))
+            centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
         marker_centroids = list(centroids_of_marker.values())
         print(marker_centroids)
+        exit(0)
         species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
 
         gene_count = 0
