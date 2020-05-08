@@ -133,30 +133,10 @@ def register_args(main_func):
     return main_func
 
 
-def keep_read_new(aln):
-    global global_args
-    args = global_args
-    return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
-
 def keep_read(aln):
     global global_args
     args = global_args
-
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    # min pid
-    if 100 * (align_len - dict(aln.tags)['NM']) / float(align_len) < args.aln_mapid:
-        return False
-    # min read quality
-    if np.mean(aln.query_qualities) < args.aln_readq:
-        return False
-    # min map quality
-    if aln.mapping_quality < args.aln_mapq:
-        return False
-    # min aln cov
-    if align_len / float(query_len) < args.aln_cov:
-        return False
-    return True
+    return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
 def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, chunk_size):
@@ -175,28 +155,19 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
 
     arguments_list = []
     for species_id in species_ids_of_interest:
-        marker_centroid_file = marker_centroids_files[species_id]
-        centroid_file = centroids_files[species_id]
-
-        #with InputStream(marker_centroids_files[species_id]) as stream:
-        #    for row in select_from_tsv(stream, )
-
-        # Get the list of centroids99 genes that contains marker genes in the cluster
+        # Get the list of centroids_99 genes that contains marker genes in the cluster
         with InputStream(sample.get_target_layout("marker_genes_mapping", species_id)) as stream:
-            marker_to_centroid = dict(select_from_tsv(stream, selected_columns=["marker", "centroid"], schema={"marker":str, "centroid":str}))
-        c_markers = list(marker_to_centroid.values()) #<= all we care is the list of centroid genes corresponds to marker genes
-        species_marker_genes[species_id] = dict(zip(c_markers, [0.0]*len(c_markers)))
-
-
+            centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"], schema={**{"marker_id":str}, **PAN_GENE_INFO_SCHEMA}))
+        marker_centroids = list(centroids_of_marker.values())
+        species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
 
         gene_count = 0
         chunk_id = 0
         curr_chunk_genes_dict = defaultdict()
-        with InputStream(centroid_file) as file:
-            # TODO: we should (if not already) have the centroid_99_gene_info.TSV
+        with InputStream(centroids_files[species_id]) as file:
+            # TODO: we should (if not already) have the centroids_info.txt
             # while the gene_length should be merged with genes_info for next round of database build
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the gene_length separately
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -465,7 +436,7 @@ def midas_run_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_dirs(["outdir", "tempdir", "dbsdir", "bt2_indexes_dir"])
+            sample.remove_dirs(["sample_dir"])
         raise
 
 

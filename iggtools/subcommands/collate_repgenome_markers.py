@@ -12,7 +12,6 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-# Find out which pan-gene is the marker-gene. This is a UHGG related add on scripts.
 def map_marker_to_centroids(args):
     """ Identify which gene clusters have repgenome's marker genes """
     midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)

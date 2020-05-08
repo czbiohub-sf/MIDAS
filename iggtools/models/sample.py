@@ -10,21 +10,15 @@ from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, co
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
-            #"sample_dir":             f"{sample_name}",
+            "sample_dir":             f"{sample_name}",
             "outdir":                 f"{sample_name}/{dbtype}",
             "output_subdir":          f"{sample_name}/{dbtype}/{species_id}",
 
             "tempdir":                f"{sample_name}/temp/{dbtype}",
             "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            # uhgg-related files
-            #"dbsdir":                 f"{sample_name}/dbs/{dbtype}",
-            #"dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
-
             "midas_iggdb_dir":        f"midas_iggdb",
             "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
-            #"repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
-            #"pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",
