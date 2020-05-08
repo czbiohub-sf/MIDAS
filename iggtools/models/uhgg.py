@@ -22,11 +22,11 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
         "marker_centroids_log":       f"marker_genes/{inputs.marker_set}/marker_centroids.log",
 
         "marker_collate_log":         f"marker_genes/{inputs.marker_set}/collate_repgenome_markers.log",
-        # s3://{igg}/marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}
+        # marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}
         "marker_genes":               f"marker_genes/{inputs.marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
 
 
-        # s3://microbiome-igg/2.0/gene_annotations/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{fna, faa, gff, log}
+        # gene_annotations/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{fna, faa, gff, log}
         "annotation_file":            f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
 
 

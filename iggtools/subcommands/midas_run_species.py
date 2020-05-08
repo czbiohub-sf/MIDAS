@@ -283,7 +283,7 @@ def midas_run_species(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            sample.remove_dirs(["sample_dir"])
+            sample.remove_dirs(["outdir", "tempdir"])
         raise
 
 

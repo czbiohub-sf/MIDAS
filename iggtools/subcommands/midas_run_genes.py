@@ -287,6 +287,7 @@ def merge_chunks_per_species(species_id):
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
     marker_genes_depth = species_marker_genes[species_id]
+    tsprint(f"marker_genes_coverage: {marker_genes_depth}")
     median_marker_depth = np.median(list(marker_genes_depth.values()))
     print(f"median_marker_depth => {median_marker_depth}")
 
@@ -420,13 +421,13 @@ def midas_run_genes(args):
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
 
-        # Map reads to the pan-genes bowtie2 database
+        # Align reads to pangenome database
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug)
 
-        # Compute the coverage for each gene
+        # Compute coverage of genes in pangenome database
         arguments_list = design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, args.chunk_size)
         chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_physical_cores)
 
@@ -435,7 +436,9 @@ def midas_run_genes(args):
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
-            sample.remove_dirs(["sample_dir"])
+            sample.remove_dirs(["outdir", "tempdir"])
+        if not args.prebuilt_bowtie2_indexes:
+            sample.remove_dirs(["bt2_indexes_dir"])
         raise
 
 
