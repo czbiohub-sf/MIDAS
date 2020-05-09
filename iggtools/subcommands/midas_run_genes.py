@@ -280,7 +280,7 @@ def merge_chunks_per_species(species_id):
     mc_genes = list(centroids_of_marker.values())
 
     pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
-    awk_command = "awk \'%s {print $6}\'" % pat_str
+    awk_command = "awk \'%s\'" % pat_str
 
     marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
     tsprint(f"before {marker_genes_depth}")
@@ -325,6 +325,7 @@ def get_marker_coverage_from_chunks(my_args):
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
         # BUG todo when after awk the std in is empty, then select_from_tsv ran into error -- Sunday
     #tsprint(f"{marker_genes_depth}")
+    ## This is todo: pass the marker_genes_depth back to parents. Refer to xsnp's way.
 
 
 def rewrite_chunk_coverage_file(my_args):
