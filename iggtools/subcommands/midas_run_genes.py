@@ -308,7 +308,7 @@ def merge_chunks_per_species(species_id):
 
     awk_command = "awk \'%s {print $6}\'" % pat_str
     print(awk_command)
-
+    exit(0)
 
     marker_genes_depth = species_marker_genes[species_id]
     tsprint(f"marker_genes_coverage: {marker_genes_depth}")
