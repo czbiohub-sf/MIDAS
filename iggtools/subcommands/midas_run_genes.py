@@ -344,7 +344,7 @@ def merge_chunks_per_species(species_id):
 
 
 def get_marker_coverage_from_chunks():
-
+    mc_genes
 
 def rewrite_chunk_coverage_file(my_args):
 
