@@ -138,7 +138,7 @@ def keep_read(aln):
 
 def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
     global sample
-    global semaphore_for_specie
+    global semaphore_for_species
     global species_sliced_genes_path
     global species_gene_length
 
@@ -276,7 +276,6 @@ def merge_chunks_per_species(species_id):
     global semaphore_for_species
     global species_sliced_genes_path
     global global_args
-    global species_marker_genes
     global marker_centroids_files
 
     tsprint(f"merge_chunks_per_species::{species_id}")
