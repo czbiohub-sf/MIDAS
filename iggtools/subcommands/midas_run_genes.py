@@ -307,6 +307,7 @@ def merge_chunks_per_species(species_id):
     pat_str = " || ".join([f"$1=={g}" for g in mc_genes])
 
     awk_command = "awk \'%s {print $6}\'" % pat_str
+    print("awk_command: ")
     print(awk_command)
     exit(0)
 
