@@ -163,11 +163,8 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         print(" || ".join([f"$1=={g}" for g in mc_genes]))
 
         awk_command = f"awk \'$1 == \"{species_id}\"\'"
-        pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
-        awk_command = "awk \'%s {print $6}\'" % pat_str
-        print("awk_command: ")
+        awk_command = "awk \'%s \'" % pat_str
         print(awk_command)
-
         exit(0)
         species_marker_genes[species_id] = dict(zip(mc_genes, [0.0]*len(mc_genes)))
 
@@ -308,8 +305,13 @@ def merge_chunks_per_species(species_id):
         centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
     mc_genes = list(centroids_of_marker.values())
 
+
+    pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
+    awk_command = "awk \'%s {print $6}\'" % pat_str
+
+
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
-    pat_str = " || ".join([f"$1=={g}" for g in mc_genes])
+
 
     awk_command = "awk \'%s {print $6}\'" % pat_str
     print("awk_command: ")
@@ -339,6 +341,9 @@ def merge_chunks_per_species(species_id):
             command(f"rm -rf {s_file}", quiet=True)
     # return a flag
     return True
+
+
+def get_marker_coverage_from_chunks():
 
 
 def rewrite_chunk_coverage_file(my_args):
