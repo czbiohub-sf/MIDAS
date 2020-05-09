@@ -161,6 +161,8 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         mc_genes = list(centroids_of_marker.values())
         print(mc_genes)
         print(" || ".join([f"$1=={g}" for g in mc_genes]))
+        awk_command = f"awk \'$1 == \"{species_id}\"\'"
+        f"awk \' \'"
         exit(0)
         species_marker_genes[species_id] = dict(zip(mc_genes, [0.0]*len(mc_genes)))
 
@@ -302,8 +304,10 @@ def merge_chunks_per_species(species_id):
     mc_genes = list(centroids_of_marker.values())
 
     awk_command = f"awk \'$1 == \"{species_id}\"\'"
+    pat_str = " || ".join([f"$1=={g}" for g in mc_genes])
 
-    print("$1 == g" for g in mc_genes)
+    awk_command = "awk \'%s {print $6}\'" % pat_str
+    print(awk_command)
 
 
     marker_genes_depth = species_marker_genes[species_id]
