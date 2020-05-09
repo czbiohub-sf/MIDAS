@@ -349,7 +349,7 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
     for record in chunks_gene_coverage:
         # for the merge task, we return the marker genes coverage
 
-        if not isinstance(record, "dict"):
+        if not isinstance(record, dict):
             print(record)
             median_marker_depth = record
 
