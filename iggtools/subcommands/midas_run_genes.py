@@ -160,7 +160,7 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
             centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
         mc_genes = list(centroids_of_marker.values())
         print(mc_genes)
-        print("$1 == g" for g in mc_genes)
+        print("||".join(["$1 == g" for g in mc_genes]))
         exit(0)
         species_marker_genes[species_id] = dict(zip(mc_genes, [0.0]*len(mc_genes)))
 
