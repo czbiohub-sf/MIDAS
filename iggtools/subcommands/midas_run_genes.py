@@ -274,28 +274,24 @@ def merge_chunks_per_species(species_id):
     all_chunks = species_sliced_genes_path[species_id][:-1]
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
-    # After compute coverage for all the genes, we want to compute the median coverage for all the marker genes
+    # After compute coverage for all the genes, we want to subset the centroid_99 of clusters with marker genes
     with InputStream(marker_centroids_files[species_id]) as stream:
         centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
     mc_genes = list(centroids_of_marker.values())
+    # note: when centroid_70, multiple marker genes may correspond to one centroid_70 (T OR F)?
+    # then that centroin_70 would be single copy anymore.
 
     pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
     awk_command = "awk \'%s\'" % pat_str
 
     marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
-    tsprint(f"before {marker_genes_depth}")
     args = []
     for chunk_file in all_chunks:
         args.append((chunk_file, awk_command, marker_genes_depth))
     multithreading_map(get_marker_coverage_from_chunks, args, 4)
-    tsprint(marker_genes_depth)
 
-    exit(0)
-    median_marker_depth = 0.0
-    #marker_genes_depth = species_marker_genes[species_id]
-    #tsprint(f"marker_genes_coverage: {marker_genes_depth}")
-    #median_marker_depth = np.median(list(marker_genes_depth.values()))
-    #tsprint(f"median_marker_depth => {median_marker_depth}")
+    median_marker_depth = np.median(list(marker_genes_depth.values()))
+    tsprint(f"median_marker_depth => {median_marker_depth}")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
@@ -322,12 +318,8 @@ def get_marker_coverage_from_chunks(my_args):
     tsprint(chunk_file)
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            print("======================")
-            print(row["gene_id"], row["total_depth"])
+            tsprint("=====================", row["gene_id"], row["total_depth"], "===================")
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
-        # BUG todo when after awk the std in is empty, then select_from_tsv ran into error -- Sunday
-    #tsprint(f"{marker_genes_depth}")
-    ## This is todo: pass the marker_genes_depth back to parents. Refer to xsnp's way.
 
 
 def rewrite_chunk_coverage_file(my_args):
