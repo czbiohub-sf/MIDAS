@@ -289,7 +289,7 @@ def merge_chunks_per_species(species_id):
     for chunk_file in all_chunks:
         args.append((chunk_file, awk_command, marker_genes_depth))
     multithreading_map(get_marker_coverage_from_chunks, args, 4)
-
+    tspring("===================== {marker_genes_depth}")
     median_marker_depth = np.median(list(marker_genes_depth.values()))
     tsprint(f"median_marker_depth => {median_marker_depth}")
 
