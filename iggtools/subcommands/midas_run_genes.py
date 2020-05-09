@@ -138,15 +138,13 @@ def keep_read(aln):
 
 def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, chunk_size):
     global sample
-    global semaphore_for_species
-    global manager_for_species
+    global semaphore_for_specie
     global species_sliced_genes_path
     global species_gene_length
     global species_marker_genes
 
     # Create read-only global variables
     semaphore_for_species = dict()
-    manager_for_species = dict()
 
     species_sliced_genes_path = defaultdict(list)
     species_gene_length = defaultdict(dict)
@@ -160,9 +158,11 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
         # Get the list of centroids_99 genes that contains marker genes in the cluster
         with InputStream(marker_centroids_files[species_id]) as stream:
             centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
-        marker_centroids = list(centroids_of_marker.values())
-        species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
-        manager_for_species[species_id] = multiprocessing.Manage()
+        mc_genes = list(centroids_of_marker.values())
+
+        print("$1 == g" for g in mc_genes)
+        exit(0)
+        species_marker_genes[species_id] = dict(zip(mc_genes, [0.0]*len(mc_genes)))
 
         gene_count = 0
         chunk_id = 0
@@ -254,6 +254,7 @@ def compute_coverage_per_chunk(packed_args):
                     if gene_id in marker_genes.keys():
                         print(f"here => {gene_depth}")
                         marker_genes[gene_id] += gene_depth
+                        semaphore_for_species[species_id][gene_id] += gene_depth
                         # .... I will deal with this tomorrow. Go back to see how MIDAS handle the marker genes problem... Maybe I don't need to accumulate along the way. Just do it in the end.....
 
                     chunk_genome_size += 1
@@ -289,12 +290,20 @@ def merge_chunks_per_species(species_id):
     global species_sliced_genes_path
     global global_args
     global species_marker_genes
+    global marker_centroids_files
 
     tsprint(f"merge_chunks_per_species::{species_id}")
     all_chunks = species_sliced_genes_path[species_id][:-1]
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
     # After compute coverage for all the genes, we want to compute the median coverage for all the marker genes
+    with InputStream(marker_centroids_files[species_id]) as stream:
+        centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
+    mc_genes = list(centroids_of_marker.values())
+
+    awk_command = f"awk \'$1 == \"{species_id}\"\'"
+
+    print("$1 == g" for g in mc_genes)
 
 
     marker_genes_depth = species_marker_genes[species_id]
@@ -424,6 +433,7 @@ def midas_run_genes(args):
         tsprint(centroids_files)
 
         # Fetch marker's centroids cluster info for given species
+        global marker_centroids_files
         marker_centroids_files = midas_iggdb.fetch_files("marker_centroids", species_ids_of_interest)
         tsprint(marker_centroids_files)
 
