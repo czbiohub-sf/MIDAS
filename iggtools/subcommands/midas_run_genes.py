@@ -289,7 +289,7 @@ def merge_chunks_per_species(species_id):
     for chunk_file in all_chunks:
         args.append((chunk_file, awk_command, marker_genes_depth))
     multithreading_map(get_marker_coverage_from_chunks, args, 4)
-    tsprint("===================== {marker_genes_depth}")
+    tsprint(f"===================== {marker_genes_depth}")
     median_marker_depth = np.median(list(marker_genes_depth.values()))
     tsprint(f"median_marker_depth => {median_marker_depth}")
 
@@ -310,7 +310,8 @@ def merge_chunks_per_species(species_id):
         for s_file in all_chunks:
             command(f"rm -rf {s_file}", quiet=True)
     # return a flag
-    return True
+    #return True
+    return median_marker_depth
 
 
 def get_marker_coverage_from_chunks(my_args):
@@ -344,12 +345,13 @@ def rewrite_chunk_coverage_file(my_args):
 
 def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_path):
 
-    global species_marker_genes
-
     species_coverage_summary = defaultdict(dict)
     for record in chunks_gene_coverage:
-        if record is True:
-            continue
+        # for the merge task, we return the marker genes coverage
+
+        if not isinstance(record, "dict"):
+            print(record)
+            median_marker_depth = record
 
         species_id = record["species_id"]
         if species_id not in species_coverage_summary:
@@ -374,8 +376,6 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
         for record in species_coverage_summary.values():
             mean_coverage = record["total_nz_gene_depth"] / record["num_covered_genes"]
             fraction_covered = record["num_covered_genes"] / record["pangenome_size"]
-            median_marker_depth = np.median(list(species_marker_genes[species_id].values()))
-
             vals = [record["species_id"], record["pangenome_size"], record["num_covered_genes"], \
                     fraction_covered, mean_coverage, record["aligned_reads"], record["mapped_reads"], median_marker_depth]
             stream.write("\t".join(map(format_data, vals)) + "\n")
