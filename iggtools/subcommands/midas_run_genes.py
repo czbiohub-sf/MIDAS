@@ -291,7 +291,6 @@ def merge_chunks_per_species(species_id):
     multithreading_map(get_marker_coverage_from_chunks, args, 4)
     tsprint(f"===================== {marker_genes_depth}")
     median_marker_depth = np.median(list(marker_genes_depth.values()))
-    tsprint(f"median_marker_depth => {median_marker_depth}")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
@@ -310,7 +309,6 @@ def merge_chunks_per_species(species_id):
         for s_file in all_chunks:
             command(f"rm -rf {s_file}", quiet=True)
     # return a flag
-    #return True
     return median_marker_depth
 
 
@@ -350,7 +348,6 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
         # for the merge task, we return the marker genes coverage
 
         if not isinstance(record, dict):
-            print(record)
             median_marker_depth = record
             continue
 
