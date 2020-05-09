@@ -144,10 +144,8 @@ def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
 
     # Create read-only global variables
     semaphore_for_species = dict()
-
     species_sliced_genes_path = defaultdict(list)
     species_gene_length = defaultdict(dict)
-
 
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
 
@@ -238,12 +236,6 @@ def compute_coverage_per_chunk(packed_args):
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
                     gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
 
-                    ## BUGS: this is the problem: multiprocessing and global variable. Let's me think about how to solve the problem.
-                    #if gene_id in marker_genes.keys():
-                    #    print(f"here => {gene_depth}")
-                    #    marker_genes[gene_id] += gene_depth
-                    # .... I will deal with this tomorrow. Go back to see how MIDAS handle the marker genes problem... Maybe I don't need to accumulate along the way. Just do it in the end.....
-
                     chunk_genome_size += 1
                     if gene_depth == 0: # Sparse by default.
                         continue
@@ -276,7 +268,7 @@ def merge_chunks_per_species(species_id):
     global semaphore_for_species
     global species_sliced_genes_path
     global global_args
-    global marker_centroids_files
+    global marker_centroids_files # we can deal with marker_centroids_files global or not later
 
     tsprint(f"merge_chunks_per_species::{species_id}")
     all_chunks = species_sliced_genes_path[species_id][:-1]
@@ -328,9 +320,11 @@ def get_marker_coverage_from_chunks(my_args):
     chunk_file, awk_command, marker_genes_depth = my_args
     tsprint(chunk_file)
     with InputStream(chunk_file, awk_command) as stream:
-        for gene_id, gene_depth in select_from_tsv(stream, ["gene_id", "total_depth"], schema=genes_coverage_schema):
-            marker_genes_depth[gene_id] += gene_depth
-    tsprint(f"{marker_genes_depth}")
+        for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
+            print(row)
+            marker_genes_depth[row["gene_id"]] += row["total_depth"]
+        # BUG todo when after awk the std in is empty, then select_from_tsv ran into error -- Sunday
+    #tsprint(f"{marker_genes_depth}")
 
 
 def rewrite_chunk_coverage_file(my_args):
