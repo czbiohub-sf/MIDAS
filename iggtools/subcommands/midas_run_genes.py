@@ -450,7 +450,7 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug)
 
         # Compute coverage of genes in pangenome database
-        arguments_list = design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, args.chunk_size)
+        arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
         chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_physical_cores)
 
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
