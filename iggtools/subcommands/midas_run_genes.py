@@ -139,13 +139,18 @@ def keep_read(aln):
 def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, chunk_size):
     global sample
     global semaphore_for_species
+    global manager_for_species
     global species_sliced_genes_path
     global species_gene_length
     global species_marker_genes
 
+    # Create read-only global variables
     semaphore_for_species = dict()
+    manager_for_species = dict()
+
     species_sliced_genes_path = defaultdict(list)
     species_gene_length = defaultdict(dict)
+
     species_marker_genes = defaultdict(dict)
 
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
@@ -157,6 +162,7 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
             centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
         marker_centroids = list(centroids_of_marker.values())
         species_marker_genes[species_id] = dict(zip(marker_centroids, [0.0]*len(marker_centroids)))
+        manager_for_species[species_id] = multiprocessing.Manage()
 
         gene_count = 0
         chunk_id = 0
@@ -225,8 +231,8 @@ def compute_coverage_per_chunk(packed_args):
         pangenome_bamfile = species_sliced_genes_path["input_bamfile"]
 
         headerless_gene_coverage_path = species_sliced_genes_path[species_id][chunk_id]
-        marker_genes = species_marker_genes[species_id]
         gene_length_dict = species_gene_length[species_id][chunk_id]
+        marker_genes = species_marker_genes[species_id]
 
         # Statistics needed to be accmulated within each chunk
         chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
@@ -248,6 +254,7 @@ def compute_coverage_per_chunk(packed_args):
                     if gene_id in marker_genes.keys():
                         print(f"here => {gene_depth}")
                         marker_genes[gene_id] += gene_depth
+                        # .... I will deal with this tomorrow. Go back to see how MIDAS handle the marker genes problem... Maybe I don't need to accumulate along the way. Just do it in the end.....
 
                     chunk_genome_size += 1
                     if gene_depth == 0: # Sparse by default.
@@ -286,6 +293,9 @@ def merge_chunks_per_species(species_id):
     tsprint(f"merge_chunks_per_species::{species_id}")
     all_chunks = species_sliced_genes_path[species_id][:-1]
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
+
+    # After compute coverage for all the genes, we want to compute the median coverage for all the marker genes
+
 
     marker_genes_depth = species_marker_genes[species_id]
     tsprint(f"marker_genes_coverage: {marker_genes_depth}")
