@@ -333,7 +333,6 @@ def rewrite_chunk_coverage_file(my_args):
     with InputStream(chunk_coverage_path) as stream:
         for line in stream:
             vals = line.rstrip("\n").split("\t")
-            print(vals)
             # infer gene copy counts
             vals[c_copies] = float(vals[c_depth]) / median_marker_depth
             add_cn_to_write.append(vals)
