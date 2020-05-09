@@ -282,12 +282,16 @@ def merge_chunks_per_species(species_id):
     pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
     awk_command = "awk \'%s\'" % pat_str
 
+    #awk_command = f"awk \'$1 == \"{species_id}\"\'"
+
     marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
     tsprint(f"before {marker_genes_depth}")
     args = []
     for chunk_file in all_chunks:
         args.append((chunk_file, awk_command, marker_genes_depth))
-    multithreading_map(get_marker_coverage_from_chunks, args, 4)
+    results = multithreading_map(get_marker_coverage_from_chunks, args, 4)
+    tsprint(results)
+    tsprint(marker_genes_depth)
     exit(0)
 
     median_marker_depth = 0.0
