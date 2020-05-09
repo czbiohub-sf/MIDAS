@@ -290,7 +290,7 @@ def merge_chunks_per_species(species_id):
     multithreading_map(get_marker_coverage_from_chunks, args, 4)
     tsprint(marker_genes_depth)
 
-
+    exit(0)
     median_marker_depth = 0.0
     #marker_genes_depth = species_marker_genes[species_id]
     #tsprint(f"marker_genes_coverage: {marker_genes_depth}")
