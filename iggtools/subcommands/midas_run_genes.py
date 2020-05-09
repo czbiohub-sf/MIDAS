@@ -352,6 +352,7 @@ def write_species_coverage_summary(chunks_gene_coverage, species_genes_coverage_
         if not isinstance(record, dict):
             print(record)
             median_marker_depth = record
+            continue
 
         species_id = record["species_id"]
         if species_id not in species_coverage_summary:
