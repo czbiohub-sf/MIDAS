@@ -136,12 +136,11 @@ def keep_read(aln):
     return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
-def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_files, chunk_size):
+def design_chunks(species_ids_of_interest, centroids_files, chunk_size):
     global sample
     global semaphore_for_specie
     global species_sliced_genes_path
     global species_gene_length
-    global species_marker_genes
 
     # Create read-only global variables
     semaphore_for_species = dict()
@@ -149,24 +148,11 @@ def design_chunks(species_ids_of_interest, centroids_files, marker_centroids_fil
     species_sliced_genes_path = defaultdict(list)
     species_gene_length = defaultdict(dict)
 
-    species_marker_genes = defaultdict(dict)
 
     species_sliced_genes_path["input_bamfile"] = sample.get_target_layout("genes_pangenomes_bam")
 
     arguments_list = []
     for species_id in species_ids_of_interest:
-        # Get the list of centroids_99 genes that contains marker genes in the cluster
-        with InputStream(marker_centroids_files[species_id]) as stream:
-            centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
-        mc_genes = list(centroids_of_marker.values())
-        print(mc_genes)
-        pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
-        awk_command = f"awk \'$1 == \"{species_id}\"\'"
-        awk_command = "awk \'%s\'" % pat_str
-        print(awk_command)
-        exit(0)
-        species_marker_genes[species_id] = dict(zip(mc_genes, [0.0]*len(mc_genes)))
-
         gene_count = 0
         chunk_id = 0
         curr_chunk_genes_dict = defaultdict()
@@ -227,7 +213,6 @@ def compute_coverage_per_chunk(packed_args):
     global semaphore_for_species
     global species_sliced_genes_path
     global species_gene_length
-    global species_marker_genes
 
     try:
         species_id, chunk_id = packed_args
@@ -235,7 +220,6 @@ def compute_coverage_per_chunk(packed_args):
 
         headerless_gene_coverage_path = species_sliced_genes_path[species_id][chunk_id]
         gene_length_dict = species_gene_length[species_id][chunk_id]
-        marker_genes = species_marker_genes[species_id]
 
         # Statistics needed to be accmulated within each chunk
         chunk_of_gene_ids = sorted(list(gene_length_dict.keys()))
@@ -253,12 +237,12 @@ def compute_coverage_per_chunk(packed_args):
                     aligned_reads = bamfile.count(gene_id)
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
                     gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+
                     ## BUGS: this is the problem: multiprocessing and global variable. Let's me think about how to solve the problem.
-                    if gene_id in marker_genes.keys():
-                        print(f"here => {gene_depth}")
-                        marker_genes[gene_id] += gene_depth
-                        semaphore_for_species[species_id][gene_id] += gene_depth
-                        # .... I will deal with this tomorrow. Go back to see how MIDAS handle the marker genes problem... Maybe I don't need to accumulate along the way. Just do it in the end.....
+                    #if gene_id in marker_genes.keys():
+                    #    print(f"here => {gene_depth}")
+                    #    marker_genes[gene_id] += gene_depth
+                    # .... I will deal with this tomorrow. Go back to see how MIDAS handle the marker genes problem... Maybe I don't need to accumulate along the way. Just do it in the end.....
 
                     chunk_genome_size += 1
                     if gene_depth == 0: # Sparse by default.
@@ -304,23 +288,22 @@ def merge_chunks_per_species(species_id):
         centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
     mc_genes = list(centroids_of_marker.values())
 
-
     pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
     awk_command = "awk \'%s {print $6}\'" % pat_str
 
-
-    awk_command = f"awk \'$1 == \"{species_id}\"\'"
-
-
-    awk_command = "awk \'%s {print $6}\'" % pat_str
-    print("awk_command: ")
-    print(awk_command)
+    marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
+    tsprint(f"before {marker_genes_depth}")
+    args = []
+    for chunk_file in all_chunks:
+        args.append((chunk_file, awk_command, marker_genes_depth))
+    multithreading_map(get_marker_coverage_from_chunks, args, 4)
     exit(0)
 
-    marker_genes_depth = species_marker_genes[species_id]
-    tsprint(f"marker_genes_coverage: {marker_genes_depth}")
-    median_marker_depth = np.median(list(marker_genes_depth.values()))
-    tsprint(f"median_marker_depth => {median_marker_depth}")
+    median_marker_depth = 0.0
+    #marker_genes_depth = species_marker_genes[species_id]
+    #tsprint(f"marker_genes_coverage: {marker_genes_depth}")
+    #median_marker_depth = np.median(list(marker_genes_depth.values()))
+    #tsprint(f"median_marker_depth => {median_marker_depth}")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     if median_marker_depth > 0:
@@ -342,8 +325,13 @@ def merge_chunks_per_species(species_id):
     return True
 
 
-def get_marker_coverage_from_chunks():
-    mc_genes
+def get_marker_coverage_from_chunks(my_args):
+    chunk_file, awk_command, marker_genes_depth = my_args
+    with InputStream(chunk_file, awk_command) as stream:
+        for gene_id, gene_depth in select_from_tsv(stream, ["gene_id", "total_depth"], schema=genes_coverage_schema):
+            marker_genes_depth[gene_id] += gene_depth
+    tsprint(f"{chunk_file} -- {marker_genes_depth}")
+
 
 def rewrite_chunk_coverage_file(my_args):
 
