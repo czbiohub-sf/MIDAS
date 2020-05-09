@@ -322,7 +322,8 @@ def get_marker_coverage_from_chunks(my_args):
     tsprint(chunk_file)
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            print("======================row["gene_id"], row["total_depth"]===========")
+            print("======================")
+            print(row["gene_id"], row["total_depth"])
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
         # BUG todo when after awk the std in is empty, then select_from_tsv ran into error -- Sunday
     #tsprint(f"{marker_genes_depth}")
