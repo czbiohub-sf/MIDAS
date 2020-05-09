@@ -282,17 +282,14 @@ def merge_chunks_per_species(species_id):
     pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
     awk_command = "awk \'%s\'" % pat_str
 
-    #awk_command = f"awk \'$1 == \"{species_id}\"\'"
-
     marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
     tsprint(f"before {marker_genes_depth}")
     args = []
     for chunk_file in all_chunks:
         args.append((chunk_file, awk_command, marker_genes_depth))
-    results = multithreading_map(get_marker_coverage_from_chunks, args, 4)
-    tsprint(results)
+    multithreading_map(get_marker_coverage_from_chunks, args, 4)
     tsprint(marker_genes_depth)
-    exit(0)
+
 
     median_marker_depth = 0.0
     #marker_genes_depth = species_marker_genes[species_id]
@@ -325,7 +322,7 @@ def get_marker_coverage_from_chunks(my_args):
     tsprint(chunk_file)
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            print(row)
+            print("======================row["gene_id"], row["total_depth"]===========")
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
         # BUG todo when after awk the std in is empty, then select_from_tsv ran into error -- Sunday
     #tsprint(f"{marker_genes_depth}")
