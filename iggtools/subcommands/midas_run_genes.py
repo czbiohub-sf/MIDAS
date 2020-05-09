@@ -326,10 +326,11 @@ def merge_chunks_per_species(species_id):
 
 def get_marker_coverage_from_chunks(my_args):
     chunk_file, awk_command, marker_genes_depth = my_args
+    tsprint(chunk_file)
     with InputStream(chunk_file, awk_command) as stream:
         for gene_id, gene_depth in select_from_tsv(stream, ["gene_id", "total_depth"], schema=genes_coverage_schema):
             marker_genes_depth[gene_id] += gene_depth
-    tsprint(f"{chunk_file} -- {marker_genes_depth}")
+    tsprint(f"{marker_genes_depth}")
 
 
 def rewrite_chunk_coverage_file(my_args):
