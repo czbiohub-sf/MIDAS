@@ -253,6 +253,8 @@ def write_abundance(species_profile_path, species_abundance):
 def midas_run_species(args):
 
     try:
+        tsprint(f"CZ::midas_run_species::start")
+
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
@@ -263,23 +265,34 @@ def midas_run_species(args):
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
+        tsprint(f"CZ::map_reads_hsblast::start")
         m8_file = sample.get_target_layout("species_alignments_m8")
         map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads)
+        tsprint(f"CZ::map_reads_hsblast::finish")
 
         # Classify reads
         species_info = midas_iggdb.uhgg.species
         marker_info = read_marker_info_repgenomes(marker_db_files["map"])
+        tsprint(f"CZ::find_best_hits::start")
         best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
+        tsprint(f"CZ::find_best_hits::finish")
+
+        tsprint(f"CZ::assign_unique::start")
         unique_alns = assign_unique(best_hits, species_info, marker_info)
+        tsprint(f"CZ::assign_unique::finish")
+
+        tsprint(f"CZ::assign_non_unique::start")
         species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
+        tsprint(f"CZ::assign_non_unique::finish")
 
         # Estimate species abundance
+        tsprint(f"CZ::normalize_counts::start")
         total_gene_length = sum_marker_gene_lengths(marker_info)
         species_abundance = normalize_counts(species_alns, total_gene_length)
+        tsprint(f"CZ::normalize_counts::finish")
 
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-        tsprint("Finished midas_run_species for %s" % sample.sample_name)
-
+        tsprint("CZ::midas_run_species::finish for %s" % (sample.sample_name))
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")

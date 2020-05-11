@@ -14,7 +14,6 @@ from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
 from iggtools.models.sample import Sample
-import numpy as np
 
 
 DEFAULT_GENOME_COVERAGE = 5.0
@@ -87,15 +86,12 @@ def register_args(main_func):
                            dest='aln_mode',
                            default='global',
                            choices=['local', 'global'],
-                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 default --end-to-end).')
+                           help='Global/local read alignment (local, corresponds to the bowtie2 --local; Default global corresponds to the bowtie2 --end-to-end).')
     subparser.add_argument('--aln_interleaved',
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
-    subparser.add_argument('--aln_sort',
-                           action='store_true',
-                           default=True,
-                           help=f"Sort BAM file.")
+
     #  Pileup flags (samtools, or postprocessing)
     subparser.add_argument('--aln_mapid',
                            dest='aln_mapid',
@@ -136,7 +132,7 @@ def register_args(main_func):
     # File related
     subparser.add_argument('--sparse',
                            action='store_true',
-                           default=False,
+                           default=True,
                            help=f"Omit zero rows from output.")
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
@@ -159,7 +155,7 @@ def keep_read(aln):
 
 
 def scan_contigs(contig_file, species_id):
-    # TODO: we DO need the contig_seq which can only be read from fasta file
+    """ Scan the genome file to get contig_id and contig_seq as ref_seq """
     contigs = {}
     with InputStream(contig_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
@@ -173,22 +169,26 @@ def scan_contigs(contig_file, species_id):
 
 
 def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
-    """ Each chunk is indexed by species_id, chunk_id """
+    """ Chunks_of_continuous_genomic_sites and each chunk is indexed by (species_id, chunk_id) """
+
+    tsprint("CZ::design_chunks::start species_counts: %s" % (len(species_ids_of_interest)))
 
     global sample
     global semaphore_for_species
     global species_sliced_snps_path
 
+    # Read-only global variables
     semaphore_for_species = dict()
-    # design per species list of headerless_sliced_output_path indexed by chunk_id.
+    # For each species, list-of-headerless_sliced_output_path is indexed by chunk_id
     species_sliced_snps_path = defaultdict(list)
     species_sliced_snps_path["input_bamfile"] = sample.get_target_layout("snps_repgenomes_bam")
 
     # TODO: this part can be done in parallel
     arguments_list = []
     for species_id in species_ids_of_interest:
+        tsprint(f"  CZ::design_chunks::{species_id}::start for loop ")
+
         # Read in contigs information for one species.
-        # TODO: download contigs here. Nope. we need to build one cat-ed bowtie2 database
         contigs = scan_contigs(contigs_files[species_id], species_id)
 
         chunk_id = 0
@@ -216,6 +216,7 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
                         slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig, False)
                     arguments_list.append(slice_args)
                     chunk_id += 1
+        tsprint(f"  CZ::design_chunks::{species_id}::finish for loop with {chunk_id} chunks")
 
         # Submit the merge jobs
         arguments_list.append((species_id, -1))
@@ -226,10 +227,12 @@ def design_chunks(species_ids_of_interest, contigs_files, chunk_size):
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
 
+    tsprint("CZ::design_chunks::finish species_counts: %s" % (len(species_ids_of_interest)))
     return arguments_list
 
 
 def process_chunk_of_sites(packed_args):
+    """ Pileup for given species_id and write results to disk """
 
     global semaphore_for_species
     global species_sliced_snps_path
@@ -237,36 +240,51 @@ def process_chunk_of_sites(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_snps_path[species_id]) - 1
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait for all chunks to be processed")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        return merge_chunks_per_species(species_id)
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::start merge_chunks_per_species")
+        ret = merge_chunks_per_species(species_id)
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish")
+        return ret
 
-    return compute_pileup_per_chunk(packed_args)
+    species_id = packed_args[0]
+    chunk_id = packed_args[1]
+    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
+    ret = compute_pileup_per_chunk(packed_args)
+    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    return ret
 
 
 def compute_pileup_per_chunk(packed_args):
     """ actual pileup compute for one chunk """
+
     global semaphore_for_species
-    global species_sliced_snps_path
-    global global_args
-    args = global_args
+    species_id = packed_args[0]
+    chunk_id = packed_args[1]
+    tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::start")
 
     try:
+        global species_sliced_snps_path
+        global global_args
+
         # [contig_start, contig_end)
         species_id, chunk_id, contig_id, contig_start, contig_end, contig, count_flag = packed_args
         repgenome_bamfile = species_sliced_snps_path["input_bamfile"]
 
         headerless_sliced_path = species_sliced_snps_path[species_id][chunk_id]
 
-        zero_rows_allowed = not args.sparse
+        zero_rows_allowed = not global_args.sparse
         current_chunk_size = contig_end - contig_start
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
-                                            quality_threshold=args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
+                                            quality_threshold=global_args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
-        # Compute the aligned_reads once per contig, so only one chunk needed.
+
         if count_flag:
+            # Designed chunk boundaries can cut reads into two chunks. To avoid overcount of boundary reads,
+            # we only compute the aligned_reads per contig once
             with AlignmentFile(repgenome_bamfile) as bamfile:
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
@@ -303,6 +321,10 @@ def compute_pileup_per_chunk(packed_args):
                 if depth > 0 or zero_rows_allowed:
                     stream.write("\t".join(map(format_data, row)) + "\n")
             assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
+
+        nz_sites = aln_stats["contig_covered_bases"]
+        tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::finish with nz-sites {nz_sites} out of chunk_size {current_chunk_size}")
+
         return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -310,11 +332,13 @@ def compute_pileup_per_chunk(packed_args):
 
 def merge_chunks_per_species(species_id):
     """ merge the pileup results from chunks into one file per species """
+
+    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::start")
+
     global species_sliced_snps_path
     global semaphore_for_species
     global global_args
 
-    tsprint(f"merge_chunks_per_species::{species_id}")
     files_of_chunks = species_sliced_snps_path[species_id][:-1]
     species_snps_pileup_file = species_sliced_snps_path[species_id][-1]
 
@@ -326,13 +350,16 @@ def merge_chunks_per_species(species_id):
         tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
         for s_file in files_of_chunks:
             command(f"rm -rf {s_file}", quiet=True)
+
     # return a status flag
     # the path should be computable somewhere else
+    tsprint(f"    CZ::merge_chunks_per_species::{species_id}::finish")
     return True
 
 
 def write_species_pileup_summary(chunks_pileup_summary, outfile):
     """ Collect species pileup aln stats from all chunks and write to file """
+    tsprint(f"  CZ::write_species_pileup_summary::start")
 
     species_pileup_summary = defaultdict(dict)
     prev_species_id = None
@@ -381,6 +408,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
         stream.write("\t".join(snps_profile_schema.keys()) + "\n")
         for record in species_pileup_summary.values():
             stream.write("\t".join(map(format_data, record.values())) + "\n")
+    tsprint(f"  CZ::write_species_pileup_summary::finish")
 
 
 def midas_run_snps(args):
@@ -412,7 +440,6 @@ def midas_run_snps(args):
             # Note: the index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
             # can still be based on sample itself.
             # We also don't want too many empty species in our parsing stageself.
-            # TODO: need to fix the species_prevalence.tsv with SampleID??
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug)
             bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
@@ -420,31 +447,41 @@ def midas_run_snps(args):
 
         # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
+        species_counts = len(species_ids_of_interest)
         tsprint(species_ids_of_interest)
 
-        # Download representative genome fastas for each species (multiprocessing)
-        # When --midas_iggdb, we don't re-download existing files
+        # Fetch representative genome fastas for each species (multiprocessing)
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
         contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
         tsprint(contigs_files)
 
         # Build Bowtie indexes for species in the restricted species profile
+        tsprint(f"CZ::build_bowtie2_indexes::start")
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
             build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+        tsprint(f"CZ::build_bowtie2_indexes::finish ({species_counts}) species counts")
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
         # Map reads to the existing bowtie2 indexes
+        tsprint(f"CZ::bowtie2_align::start")
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug)
+        tsprint(f"CZ::bowtie2_align::finish")
 
         # Use mpileup to call SNPs
+        tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(species_ids_of_interest, contigs_files, args.chunk_size)
+        tsprint(f"CZ::design_chunks::finish")
+
+        tsprint(f"CZ::multiprocessing_map::start")
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
+        tsprint(f"CZ::multiprocessing_map::finish")
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
+
     except:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
