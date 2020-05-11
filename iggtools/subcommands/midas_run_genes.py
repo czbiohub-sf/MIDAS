@@ -350,7 +350,7 @@ def get_marker_coverage_from_chunk(my_args):
     chunk_file, awk_command, marker_genes_depth = my_args
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-              tsprint("=============================== %s - %s" % (row["gene_id"], row["total_depth"]))
+            tsprint("=============================== %s - %s" % (row["gene_id"], row["total_depth"]))
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
 
 
