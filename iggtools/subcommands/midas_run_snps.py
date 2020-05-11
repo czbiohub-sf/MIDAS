@@ -145,6 +145,12 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
     return main_func
 
 
@@ -477,7 +483,7 @@ def midas_run_snps(args):
         tsprint(f"CZ::design_chunks::finish")
 
         tsprint(f"CZ::multiprocessing_map::start")
-        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, num_physical_cores)
+        chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, args.num_cores)
         tsprint(f"CZ::multiprocessing_map::finish")
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))

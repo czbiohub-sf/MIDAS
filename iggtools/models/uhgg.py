@@ -3,7 +3,7 @@
 import os
 from collections import defaultdict
 from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, command, num_physical_cores
+from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, multithreading_map, command
 from iggtools.params import outputs, inputs
 from iggtools.params.inputs import igg
 from iggtools.params.schemas import MARKER_INFO_SCHEMA
@@ -25,18 +25,14 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
         # marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}
         "marker_genes":               f"marker_genes/{inputs.marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
 
-
         # gene_annotations/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{fna, faa, gff, log}
         "annotation_file":            f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
-
 
         "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
 
         # f"{inputs.uhgg_genomes}/{representative_id}/{genome_id}.fna.lz4"
         #"raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.fna.lz4",
-
         #"imported_genome_file":       f"{outputs.cleaned_imports}/{species_id}/{genome_id}/{genome_id}.{component}",
-
 
         # pangenomes/100001/{genes.ffn, centroids.ffn, gene_info.txt}.lz4
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
@@ -57,6 +53,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
         self.local_toc = _fetch_file_from_s3((outputs.genomes, self.get_target_layout("genomes_toc", "", "", "", False)))
         self.uhgg = UHGG(self.local_toc)
         self.igg = igg
+
 
     def get_target_layout(self, filename, remote, component="", species_id="", genome_id=""):
         local_path = get_uhgg_layout(species_id, component, genome_id)[filename]
@@ -99,7 +96,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
                     dest_file = self.get_target_layout("marker_centroids", False, "", species_id)
                 args_list.append((s3_file, dest_file))
 
-            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=num_physical_cores)
+            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=10)
             for species_index, species_id in enumerate(list_of_species_ids):
                 fetched_files[species_id] = _fetched_files[species_index]
             return fetched_files

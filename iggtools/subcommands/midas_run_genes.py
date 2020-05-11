@@ -127,6 +127,12 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
     return main_func
 
 
@@ -219,7 +225,7 @@ def process_chunk_of_genes(packed_args):
     chunk_id = packed_args[1]
     tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
     ret = compute_coverage_per_chunk(packed_args)
-    tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    tsprint(f"  CZ::process_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
     return ret
 
 
@@ -318,7 +324,6 @@ def merge_chunks_per_species(species_id):
         args.append((chunk_file, awk_command, marker_genes_depth))
     multithreading_map(get_marker_coverage_from_chunk, args, 4)
     tsprint(f"      CZ::get_marker_coverage_from_chunk::{species_id}::finish")
-    tsprint(f"=============================== {marker_genes_depth}")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     tsprint(f"      CZ::rewrite_chunk_coverage_file::{species_id}::start")
@@ -350,7 +355,6 @@ def get_marker_coverage_from_chunk(my_args):
     chunk_file, awk_command, marker_genes_depth = my_args
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            tsprint("=============================== %s - %s" % (row["gene_id"], row["total_depth"]))
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
 
 
@@ -483,7 +487,7 @@ def midas_run_genes(args):
         tsprint(f"CZ::design_chunks::finish")
 
         tsprint(f"CZ::multiprocessing_map::start")
-        chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_physical_cores)
+        chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, args.num_cores)
         tsprint(f"CZ::multiprocessing_map::finish")
 
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))

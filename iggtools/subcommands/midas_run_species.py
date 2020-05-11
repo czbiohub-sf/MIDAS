@@ -64,6 +64,12 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Number of reads to use from input file(s).  (All)")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
     return main_func
 
 
@@ -123,7 +129,7 @@ def parse_reads(filename, max_reads=None):
 def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
     assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit."
 
-    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_physical_cores} -evalue 1e-3"
+    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {args.num_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
