@@ -126,10 +126,10 @@ def parse_reads(filename, max_reads=None):
     tsprint(f"parse_reads:: parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads):
+def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads, num_cores):
     assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit."
 
-    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {args.num_cores} -evalue 1e-3"
+    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
@@ -189,7 +189,7 @@ def assign_unique(alns, species_info, marker_info):
         else:
             non_unique += 1
     tsprint(f" uniquely mapped reads: {unique}")
-    tsprint(f"  ambiguously mapped reads: {non_unique}")
+    tsprint(f" ambiguously mapped reads: {non_unique}")
     return unique_alns
 
 
@@ -273,7 +273,7 @@ def midas_run_species(args):
         # Align reads to marker-genes database
         tsprint(f"CZ::map_reads_hsblast::start")
         m8_file = sample.get_target_layout("species_alignments_m8")
-        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads)
+        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
         tsprint(f"CZ::map_reads_hsblast::finish")
 
         # Classify reads
