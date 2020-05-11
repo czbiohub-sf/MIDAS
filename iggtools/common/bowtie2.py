@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 import numpy as np
-from iggtools.common.utils import tsprint, num_physical_cores, command, split, OutputStream
+from iggtools.common.utils import tsprint, command, split, OutputStream
 
 
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
@@ -12,7 +12,7 @@ def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
     return False
 
 
-def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
+def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, num_cores):
     """ Build Bowtie2 database for the collections of fasta files """
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
@@ -27,7 +27,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files):
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
-            command(f"bowtie2-build --threads {num_physical_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")
+            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
             command(f"rm -f {bt2_db_prefix}.1.bt2")
@@ -59,24 +59,24 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
         r1 = f"-U {args.r1}"
 
     try:
-        bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_reads} --{aln_mode} --{aln_speed} --threads {num_physical_cores} -q {r1} {r2}"
+        bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_reads} --{aln_mode} --{aln_speed} --threads {args.num_cores} -q {r1} {r2}"
         command(f"set -o pipefail; {bt2_command} | \
-                samtools view --threads {num_physical_cores} -b - | \
-                samtools sort --threads {num_physical_cores} -o {bamfile_path}")
+                samtools view --threads {args.num_cores} -b - | \
+                samtools sort --threads {args.num_cores} -o {bamfile_path}")
     except:
         tsprint(f"Bowtie2 align to {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}")
         raise
 
 
-def samtools_index(bamfile_path, debug):
+def samtools_index(bamfile_path, debug, num_cores):
 
     if debug and os.path.exists(f"{bamfile_path}.bai"):
         tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_path}.bai")
         return
 
     try:
-        command(f"samtools index -@ {num_physical_cores} {bamfile_path}")
+        command(f"samtools index -@ {num_cores} {bamfile_path}")
     except:
         tsprint(f"Samtools index {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}.bai")

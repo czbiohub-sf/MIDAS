@@ -264,7 +264,7 @@ def midas_run_species(args):
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
         marker_db_files = midas_iggdb.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_iggdb.fetch_files("marker_db_hmm_cutoffs")
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:

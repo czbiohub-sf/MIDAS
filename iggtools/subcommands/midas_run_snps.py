@@ -457,14 +457,14 @@ def midas_run_snps(args):
         tsprint(species_ids_of_interest)
 
         # Fetch representative genome fastas for each species (multiprocessing)
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
         contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
         tsprint(contigs_files)
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files)
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish ({species_counts}) species counts")
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
@@ -474,7 +474,7 @@ def midas_run_snps(args):
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
-        samtools_index(repgenome_bamfile, args.debug)
+        samtools_index(repgenome_bamfile, args.debug, args.num_cores)
         tsprint(f"CZ::bowtie2_align::finish")
 
         # Use mpileup to call SNPs

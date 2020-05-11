@@ -458,7 +458,7 @@ def midas_run_genes(args):
         tsprint(species_ids_of_interest)
 
         # Fetch centroids_99 fastas for each species (multiprocessing)
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"))
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
         centroids_files = midas_iggdb.fetch_files("centroids", species_ids_of_interest)
         tsprint(centroids_files)
 
@@ -470,7 +470,7 @@ def midas_run_genes(args):
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
         if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
+            build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish ({species_counts}) species counts")
 
         # Align reads to pangenome database
@@ -478,7 +478,7 @@ def midas_run_genes(args):
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
-        samtools_index(pangenome_bamfile, args.debug)
+        samtools_index(pangenome_bamfile, args.debug, args.num_cores)
         tsprint(f"CZ::bowtie2_align::finish")
 
         # Compute coverage of genes in pangenome database
