@@ -328,6 +328,7 @@ def merge_chunks_per_species(species_id):
             args.append((chunk_file, median_marker_depth))
         multithreading_map(rewrite_chunk_coverage_file, args, 4)
     tsprint(f"      CZ::rewrite_chunk_coverage_file::{species_id}::finish")
+    tsprint(f"=============================== {median_marker_depth}")
 
     # Merge chunks' results to files genes_coverage
     with OutputStream(species_gene_coverage_path) as stream:
@@ -349,6 +350,7 @@ def get_marker_coverage_from_chunk(my_args):
     chunk_file, awk_command, marker_genes_depth = my_args
     with InputStream(chunk_file, awk_command) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
+            tsprint("=============================== %s - %s" % (row["gene_id"], row["total_depth"]))
             marker_genes_depth[row["gene_id"]] += row["total_depth"]
 
 
