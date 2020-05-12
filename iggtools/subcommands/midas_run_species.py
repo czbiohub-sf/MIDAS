@@ -299,11 +299,11 @@ def midas_run_species(args):
 
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
         tsprint("CZ::midas_run_species::finish for %s" % (sample.sample_name))
-    except:
+    except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
             sample.remove_dirs(["outdir", "tempdir"])
-        raise
+        raise error
 
 
 @register_args

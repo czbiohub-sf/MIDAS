@@ -488,13 +488,13 @@ def midas_run_snps(args):
 
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
 
-    except:
+    except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
             sample.remove_dirs(["outdir", "tempdir"])
         if not args.prebuilt_bowtie2_indexes:
             sample.remove_dirs(["bt2_indexes_dir"])
-        raise
+        raise error
 
 
 @register_args
