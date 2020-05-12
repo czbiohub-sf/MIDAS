@@ -215,11 +215,11 @@ def midas_merge_genes(args):
         # Collect copy_numbers, coverage and read counts across ALl the samples
         arguments_list = prepare_chunks(dict_of_species, genes_info_files)
         multiprocessing_map(per_species_worker, arguments_list, num_physical_cores)
-    except:
+    except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            pool_of_samples.remove_dirs(["outdir", "dbsdir"])
-        raise
+            pool_of_samples.remove_dirs(["outdir"])
+        raise error
 
 
 @register_args

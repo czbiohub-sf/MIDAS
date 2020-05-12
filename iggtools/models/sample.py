@@ -25,7 +25,7 @@ def get_single_layout(sample_name, dbtype=""):
             "species_alignments_m8":  f"{sample_name}/temp/species/alignments.m8",
 
             # snps workflow output
-            "snps_summary":           f"{sample_name}/snps/summary.tsv",
+            "snps_summary":           f"{sample_name}/snps/snps_summary.tsv",
             "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
             "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
             "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",

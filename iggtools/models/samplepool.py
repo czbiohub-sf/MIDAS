@@ -17,7 +17,7 @@ def get_pool_layout(dbtype=""):
             "dbsdir":                f"dbs/{dbtype}",
             "dbsdir_by_species":     f"dbs/{dbtype}/{species_id}",
 
-            "bt2_indexes_dir":       f"bowtie2_indexes",
+            "bt2_indexes_dir":       f"bt2_indexes",
 
             # species
             "species_prevalence":    f"species/species_prevalence.tsv",

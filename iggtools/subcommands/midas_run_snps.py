@@ -246,12 +246,12 @@ def process_chunk_of_sites(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_snps_path[species_id]) - 1
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait for all chunks to be processed")
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait merge_chunks_per_species")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish")
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish merge_chunks_per_species")
         return ret
 
     species_id = packed_args[0]

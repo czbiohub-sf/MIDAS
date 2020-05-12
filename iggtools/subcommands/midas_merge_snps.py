@@ -449,11 +449,11 @@ def midas_merge_snps(args):
         argument_list = design_chunks(contigs_files, args.chunk_size)
         proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
         assert all(s == "worked" for s in proc_flags)
-    except:
+    except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            pool_of_samples.remove_dirs(["outdir", "tempdir", "dbsdir"])
-        raise
+            pool_of_samples.remove_dirs(["outdir", "tempdir"])
+        raise error
 
 
 @register_args
