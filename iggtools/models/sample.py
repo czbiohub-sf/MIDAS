@@ -70,7 +70,7 @@ class Sample: # pylint: disable=too-few-public-methods
             _create_dir(species_subdir, debug, quiet)
 
 
-    def select_species(self, genome_coverage, species_list=[]):
+    def select_species(self, marker_depth, species_list=[]):
         """ Parse species_summary and return list of species for pileup/pangenome analysis """
         schema = fetch_schema_by_dbtype("species")
         species_ids = []
@@ -80,7 +80,7 @@ class Sample: # pylint: disable=too-few-public-methods
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if record["coverage"] >= genome_coverage:
+                if record["coverage"] >= marker_depth:
                     species_ids.append(record["species_id"])
         return species_ids
 

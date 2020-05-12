@@ -17,7 +17,7 @@ from iggtools.models.sample import Sample
 
 
 DEFAULT_ALN_COV = 0.75
-DEFAULT_GENOME_COVERAGE = 3.0
+DEFAULT_MARKER_DEPTH = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
@@ -59,12 +59,12 @@ def register_args(main_func):
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
 
-    subparser.add_argument('--genome_coverage',
+    subparser.add_argument('--marker_depth',
                            type=float,
-                           dest='genome_coverage',
+                           dest='marker_depth',
                            metavar='FLOAT',
-                           default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Include species with >X coverage ({DEFAULT_GENOME_COVERAGE})")
+                           default=DEFAULT_MARKER_DEPTH,
+                           help=f"Include species with >X marker coverage ({DEFAULT_MARKER_DEPTH})")
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
@@ -453,7 +453,7 @@ def midas_run_genes(args):
             bt2_db_name = "pangenomes"
 
         # Select abundant species present in the sample for SNPs calling
-        species_ids_of_interest = species_list if args.genome_coverage == -1 else sample.select_species(args.genome_coverage, species_list)
+        species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
         species_counts = len(species_ids_of_interest)
         tsprint(species_ids_of_interest)
 
