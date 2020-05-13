@@ -330,7 +330,6 @@ def compute_pileup_per_chunk(packed_args):
 
         nz_sites = aln_stats["contig_covered_bases"]
         tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::finish with nz-sites {nz_sites} out of chunk_size {current_chunk_size}")
-
         return aln_stats
     finally:
         semaphore_for_species[species_id].release() # no deadlock

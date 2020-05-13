@@ -17,6 +17,7 @@ def get_pool_layout(dbtype=""):
             "dbsdir":                f"dbs/{dbtype}",
             "dbsdir_by_species":     f"dbs/{dbtype}/{species_id}",
 
+            "midas_iggdb_dir":       f"midas_iggdb",
             "bt2_indexes_dir":       f"bt2_indexes",
 
             # species

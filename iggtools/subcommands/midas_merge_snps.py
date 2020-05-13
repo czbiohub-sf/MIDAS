@@ -5,10 +5,9 @@ import multiprocessing
 from math import ceil
 
 from iggtools.models.samplepool import SamplePool
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, download_reference, select_from_tsv
-from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, snps_info_schema, DECIMALS, format_data
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv
+from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
 from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 from iggtools.common.argparser import add_subcommand
 
@@ -45,6 +44,18 @@ def register_args(main_func):
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
 
     # Species and sample filters
     subparser.add_argument('--species_list',
@@ -125,7 +136,7 @@ def register_args(main_func):
                                     tri: keep sites with 3 alleles > DEFAULT_SNP_MAF
                                     quad: keep sites with 4 alleles > DEFAULT_SNP_MAF
                                     any: keep sites regardless of observed alleles
-                                    (Default: {DEFAULT_SNP_TYPE})""")
+                                    (Default: {%s})""" % DEFAULT_SNP_TYPE)
 
     return main_func
 
@@ -136,7 +147,8 @@ def acgt_string(A, C, G, T):
 
 def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     """ Compute the pooled allele frequencies and call SNPs """
-    # Once you see all the samples, you can call SNPs
+
+    # Only when you have seen all the revelant samples, you can call SNPs
     # keep alleles passing the min allele frequency
     alleles_above_cutoff = tuple(al for al in tuple_of_alleles if al[1] / site_depth >= snp_maf)
 
@@ -167,11 +179,10 @@ def design_chunks(contigs_files, chunk_size):
     species_sliced_pileup_path = defaultdict(dict)
     species_samples_dict = defaultdict(dict)
 
-    # TODO: can we parallel this? write simultaneouly to the same global variable?
     argument_list = []
-    for species_index, species in enumerate(dict_of_species.values()):
+    for species in dict_of_species.values():
         species_id = species.id
-        contigs = scan_contigs(contigs_files[species_index], species_id)
+        contigs = scan_contigs(contigs_files[species_id], species_id)
 
         samples_depth = species.samples_depth
         samples_snps_pileup = [sample.get_target_layout("snps_pileup", species_id) for sample in list(species.samples)]
@@ -227,6 +238,8 @@ def design_chunks(contigs_files, chunk_size):
 
 def merge_chunks_by_species(species_id):
 
+    tsprint(f"    CZ::merge_chunks_by_species::{species_id}::start")
+
     global global_args
     global species_sliced_pileup_path
     global dict_of_species
@@ -255,6 +268,7 @@ def merge_chunks_by_species(species_id):
     if not global_args.debug:
         for s_file in snps_info_files + snps_freq_files + snps_depth_files:
             command(f"rm -rf {s_file}", quiet=True)
+    tsprint(f"    CZ::merge_chunks_by_species::{species_id}::finish")
     return True
 
 
@@ -324,6 +338,8 @@ def accumulate(accumulator, proc_args):
 def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
 
+    tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::start")
+
     global global_args
     args = global_args
 
@@ -376,13 +392,35 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
 
             # Write
             out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
+            out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")
+            out_depth.write(f"{site_id}\t" + "\t".join(map(str, sample_depths)) + "\n")
 
-            write_mafs = "\t".join((str(format(maf, DECIMALS)) for maf in sample_mafs))
-            out_freq.write(f"{site_id}\t" + write_mafs + "\n")
-
-            write_depths = "\t".join((str(depth) for depth in sample_depths))
-            out_depth.write(f"{site_id}\t" + write_depths + "\n")
+    tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::finish")
     return True
+
+
+def pool_one_chunk_across_samples(packed_args):
+    """ For genome sites from one chunk, scan across all the sample, compute pooled SNPs and write to file """
+
+    global semaphore_for_species
+    global species_sliced_pileup_path
+    global species_samples_dict
+
+    species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
+    tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start")
+
+    list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
+    list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
+
+    try:
+        accumulator = dict()
+        for sample_index in range(total_samples_count):
+            proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
+            accumulate(accumulator, proc_args)
+        compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
+        tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish")
+    finally:
+        semaphore_for_species[species_id].release() # no deadlock
 
 
 def process_chunk_of_sites(packed_args):
@@ -395,30 +433,20 @@ def process_chunk_of_sites(packed_args):
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_pileup_path[species_id])
-
-        print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ wait {species_id}")
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait merge_chunks_by_species")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        print(f"+++++++++++++++++++++++++++++++++++++++++++++++++++++ start {species_id}")
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::start merge_chunks_by_species")
         merge_chunks_by_species(species_id)
+        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish merge_chunks_by_species")
         return "worked"
 
-    # For each process, scan over all the samples
-    species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
-    list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
-    list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
-
-    try:
-        accumulator = dict()
-        for sample_index in range(total_samples_count):
-            proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
-            accumulate(accumulator, proc_args)
-
-        # Compute and write pooled SNPs for each chunk of genomic sites
-        compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
-        return "worked"
-    finally:
-        semaphore_for_species[species_id].release() # no deadlock
+    species_id = packed_args[0]
+    chunk_id = packed_args[1]
+    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start pool_one_chunk_across_samples")
+    pool_one_chunk_across_samples(packed_args)
+    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish pool_one_chunk_across_samples")
+    return "worked"
 
 
 def midas_merge_snps(args):
@@ -437,18 +465,18 @@ def midas_merge_snps(args):
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
-        pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
 
         pool_of_samples.write_summary_files(dict_of_species, "snps")
 
-        # Download representative genomes for every species into dbs/temp/{species}/
-        local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-        contigs_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="contigs")
+        # Download representative genomes for every species into midas_iggdb
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), args.num_cores)
+        contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
 
         # Compute pooled SNPs by the unit of chunks_of_sites
         argument_list = design_chunks(contigs_files, args.chunk_size)
-        proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, num_physical_cores)
+        proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, args.num_cores)
         assert all(s == "worked" for s in proc_flags)
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
