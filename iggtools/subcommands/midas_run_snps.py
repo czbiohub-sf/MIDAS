@@ -453,6 +453,7 @@ def midas_run_snps(args):
         # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
         species_counts = len(species_ids_of_interest)
+        assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(species_ids_of_interest)
 
         # Fetch representative genome fastas for each species (multiprocessing)

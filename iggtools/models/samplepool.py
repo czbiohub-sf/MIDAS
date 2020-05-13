@@ -14,9 +14,6 @@ def get_pool_layout(dbtype=""):
             "tempdir":               f"temp/{dbtype}",
             "tempdir_by_species":    f"temp/{dbtype}/{species_id}",
 
-            "dbsdir":                f"dbs/{dbtype}",
-            "dbsdir_by_species":     f"dbs/{dbtype}/{species_id}",
-
             "midas_iggdb_dir":       f"midas_iggdb",
             "bt2_indexes_dir":       f"bt2_indexes",
 
@@ -99,7 +96,7 @@ class SamplePool: # pylint: disable=too-few-public-methods
         list_of_species = list(species.values())
         # Sort list_of_species by samples_count in descending order
         list_of_species = _sort_species(list_of_species)
-        # Second round of filters based on prevalence
+        # Second round of filters based on prevalence (sample_counts)
         list_of_species = _filter_species(list_of_species, args)
         return {species.id:species for species in list_of_species}
 
@@ -130,8 +127,8 @@ class SamplePool: # pylint: disable=too-few-public-methods
             for species in dict_of_species.values():
                 for sample in species.samples:
                     row = list(sample.profile[species.id].values())
-                    row.insert(1, sample.sample_name)
-                    stream.write("\t".join(map(format_data, row)) + "\n")
+                    stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t".join(map(format_data, row[1:])) + "\n")
+
 
     def remove_dirs(self, list_of_dirnames):
         for dirname in list_of_dirnames:
