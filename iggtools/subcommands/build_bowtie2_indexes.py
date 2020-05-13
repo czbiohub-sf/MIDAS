@@ -61,6 +61,7 @@ def build_bowtie2_indexes(args):
             species_ids_of_interest = []
             with InputStream(args.species_profile) as stream:
                 for row in select_from_tsv(stream, selected_columns=["species_id", args.select_by], schema=species_prevalence_schema, result_structure=dict):
+                    print(row)
                     if row["mean_coverage"] >= args.select_threshold:
                         species_ids_of_interest.append(row["species_id"])
         else:
