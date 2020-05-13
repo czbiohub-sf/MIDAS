@@ -1,19 +1,19 @@
 import json
-import os
-from collections import defaultdict
-import numpy as np
 
-from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, OutputStream, download_reference, num_physical_cores
-from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, fetch_default_genome_depth
-from iggtools.params import outputs
-from iggtools.common.bowtie2 import build_bowtie2_db
-from iggtools.models.uhgg import UHGG
+from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
+from iggtools.params.schemas import species_prevalence_schema
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
+from iggtools.models.uhgg import MIDAS_IGGDB
 
 
 def register_args(main_func):
     subparser = add_subcommand('build_bowtie2_indexes', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
+
+    subparser.add_argument('bt2_indexes_dir',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"built bowtie2 indexes directory")
 
     subparser.add_argument('--midas_iggdb',
                            dest='midas_iggdb',
@@ -21,13 +21,6 @@ def register_args(main_func):
                            metavar="CHAR",
                            required=True,
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
-    subparser.add_argument('--bt2_indexes_dir',
-                           dest='bt2_indexes_dir',
-                           type=str,
-                           metavar="CHAR",
-                           required=True,
-                           help=f"built bowtie2 indexes directory")
-
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
@@ -56,28 +49,24 @@ def register_args(main_func):
                            metavar="INT",
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
-
     return main_func
 
 
 def build_bowtie2_indexes(args):
 
     try:
-
-
         if args.species_list:
             species_ids_of_interest = args.species_list.split(",")
         elif args.species_profile and args.select_by and args.select_threshold:
             species_ids_of_interest = []
             with InputStream(args.species_profile) as stream:
-                for row in select_from_tsv(stream, selected_columns=["species_id", args.select_by], schema=species_prevalence_schema,  result_structure=dict):
+                for row in select_from_tsv(stream, selected_columns=["species_id", args.select_by], schema=species_prevalence_schema, result_structure=dict):
                     if row["mean_coverage"] >= args.select_threshold:
                         species_ids_of_interest.append(row["species_id"])
         else:
             tsprint(f"Need to provide either species_list or species_profile as input arguments")
             exit(0)
         tsprint(species_ids_of_interest)
-        species_counts = len(species_ids_of_interest)
 
         # Fetch UHGG related files
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb, args.num_cores)
