@@ -17,8 +17,8 @@ DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
 DEFAULT_CHUNK_SIZE = 50000
 
-DEFAULT_SITE_DEPTH = 1
-DEFAULT_SITE_RATIO = 2.0
+DEFAULT_SITE_DEPTH = 2
+DEFAULT_SITE_RATIO = 5.0
 
 DEFAULT_SITE_PREV = 0.80
 DEFAULT_SITE_TYPE = "common"
@@ -461,6 +461,7 @@ def midas_merge_snps(args):
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
+        tsprint(species_ids_of_interest)
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
