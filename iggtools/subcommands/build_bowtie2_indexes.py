@@ -65,6 +65,7 @@ def build_bowtie2_indexes(args):
                         species_ids_of_interest.append(row["species_id"])
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
+        tsprint(species_ids_of_interest)
 
         # Fetch UHGG related files
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb, args.num_cores)

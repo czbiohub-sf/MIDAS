@@ -17,6 +17,11 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, num_cores):
 
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
     if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
+        # Primarily for build_bowtie2_indexes.py
+        if not os.path.exists(bt2_db_dir):
+            tsprint(f"Create bt2_db_dir: {bt2_db_dir}")
+            command(f"mkdir -p {bt2_db_dir}")
+
         # Write the species_id to file, that used to build the bowtie2 indexes
         with OutputStream(f"{bt2_db_prefix}.species") as stream:
             stream.write("\n".join(map(str, downloaded_files.keys())))
