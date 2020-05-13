@@ -41,7 +41,6 @@ def register_args(main_func):
                            dest='select_threshold',
                            type=float,
                            metavar="FLOAT",
-                           default=1,
                            help=f"Minimum threshold values of for selected columns.")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
