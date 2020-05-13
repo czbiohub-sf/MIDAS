@@ -64,10 +64,8 @@ def build_bowtie2_indexes(args):
                     if float(row[args.select_by]) >= args.select_threshold:
                         species_ids_of_interest.append(row["species_id"])
         else:
-            tsprint(f"Need to provide either species_list or species_profile as input arguments")
-            exit(1)
-        tsprint(species_ids_of_interest)
-        exit(0)
+            raise Exception(f"Need to provide either species_list or species_profile as input arguments")
+
         # Fetch UHGG related files
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb, args.num_cores)
 
