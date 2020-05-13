@@ -60,9 +60,8 @@ def build_bowtie2_indexes(args):
         elif args.species_profile and args.select_by and args.select_threshold:
             species_ids_of_interest = []
             with InputStream(args.species_profile) as stream:
-                for row in select_from_tsv(stream, selected_columns=["species_id", "sample_counts"], result_structure=dict):
-                    print(row)
-                    if row[args.select_by] >= args.select_threshold:
+                for row in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
+                    if float(row[args.select_by]) >= args.select_threshold:
                         species_ids_of_interest.append(row["species_id"])
         else:
             tsprint(f"Need to provide either species_list or species_profile as input arguments")
