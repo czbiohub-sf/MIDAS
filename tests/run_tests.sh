@@ -42,4 +42,5 @@ python -m iggtools midas_merge_genes --samples_list samples_list.tsv --num_cores
 
 
 echo "test midas_run_snps with prebuilt bowtie indexes"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_species_w_bowtie2.log"
 cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 --prebuilt_bowtie2_indexes ${merge_midas_outdir}/bt2_indexes/repgenomes --prebuilt_bowtie2_species ${merge_midas_outdir}/bt2_indexes/repgenomes.species ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_snps_w_bowtie2.log"
