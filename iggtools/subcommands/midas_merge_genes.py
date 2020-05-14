@@ -4,9 +4,9 @@ from collections import defaultdict
 from iggtools.models.samplepool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
+from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -95,7 +95,7 @@ def read_cluster_map(gene_info_path, pid):
 
 def collect(accumulator, my_args):
 
-    species_id, sample_index, midas_genes_dir, total_sample_counts, centroids_map = my_args
+    sample_index, midas_genes_dir, total_sample_counts, centroids_map = my_args
 
     with InputStream(midas_genes_dir) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
@@ -155,7 +155,7 @@ def per_species_worker(species_id):
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
-        my_args = (species_id, sample_index, midas_genes_path, len(species_samples), centroids_map)
+        my_args = (sample_index, midas_genes_path, len(species_samples), centroids_map)
         collect(accumulator, my_args)
 
     for gene_id, copynum in accumulator["copynum"].items():

@@ -2,7 +2,6 @@ import json
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
-from iggtools.params.schemas import species_prevalence_schema
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
 from iggtools.models.uhgg import MIDAS_IGGDB
 

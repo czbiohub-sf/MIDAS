@@ -1,9 +1,7 @@
 import os
-from collections import defaultdict
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star, download_reference
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
 from iggtools.models.uhgg import MIDAS_IGGDB, MARKER_FILE_EXTS, get_uhgg_layout
-from iggtools.params import inputs, outputs
 from iggtools.params.schemas import MARKER_INFO_SCHEMA, PAN_GENE_INFO_SCHEMA
 
 
@@ -18,7 +16,7 @@ def map_marker_to_centroids(args):
     representatives = midas_iggdb.uhgg.representatives
 
     # Alternatively, you can also fetch the collated phyeco.map for all species
-    fetched_marker_genes_mapfile = midas_iggdb.fetch_files(get_uhgg_layout(species_id="", component="map")["marker_db"])
+    #fetched_marker_genes_mapfile = midas_iggdb.fetch_files(get_uhgg_layout(species_id="", component="map")["marker_db"])
 
     log_remote = midas_iggdb.get_target_layout("marker_centroids_log", remote=True)
     msg = f"Finding centroids genes for marker genes."

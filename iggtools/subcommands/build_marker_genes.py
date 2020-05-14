@@ -6,7 +6,6 @@ from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
 from iggtools.models.uhgg import UHGG
 from iggtools.params import inputs, outputs
-from iggtools.models.uhgg import MIDAS_IGGDB
 
 
 CONCURRENT_MARKER_GENES_IDENTIFY = num_physical_cores

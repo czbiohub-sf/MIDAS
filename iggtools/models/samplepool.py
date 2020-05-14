@@ -33,7 +33,7 @@ def get_pool_layout(dbtype=""):
             "snps_depth_by_chunk":   f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv",
 
             # genes
-            "genes_summary":         f"genes/summary.tsv",
+            "genes_summary":         f"genes/genes_summary.tsv",
             "genes_presabs":         f"genes/{species_id}/{species_id}.genes_presabs.tsv",
             "genes_copynum":         f"genes/{species_id}/{species_id}.genes_copynum.tsv",
             "genes_depth":           f"genes/{species_id}/{species_id}.genes_depth.tsv",

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import os
-from collections import defaultdict
-from iggtools.params.schemas import fetch_schema_by_dbtype, species_profile_schema
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
+from iggtools.params.schemas import fetch_schema_by_dbtype
+from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
 
 
 # Executable Documentation
