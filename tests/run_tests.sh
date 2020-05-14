@@ -34,11 +34,11 @@ python -m iggtools build_bowtie2_indexes --midas_iggdb ${merge_midas_outdir} --s
 
 
 echo "test midas_merge_snps default"
-python -m iggtools midas_merge_snps --samples_list samples_list.tsv --num_cores ${num_cores} ${merged_midas_output} &>  ${logs_dir}/merge_snps.log
+python -m iggtools midas_merge_snps --samples_list samples_list.tsv --num_cores ${num_cores} ${merge_midas_outdir} &>  ${logs_dir}/merge_snps.log
 
 
 echo "test midas_merge_genes default"
-python -m iggtools midas_merge_genes --samples_list samples_list.tsv --num_cores ${num_cores} ${merged_midas_output} &> ${logs_dir}/merge_genes.log
+python -m iggtools midas_merge_genes --samples_list samples_list.tsv --num_cores ${num_cores} ${merge_midas_outdir} &> ${logs_dir}/merge_genes.log
 
 
 echo "test midas_run_snps with prebuilt bowtie indexes"
