@@ -26,7 +26,7 @@ cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sampl
 
 
 echo "test midas_merge_species"
-python -m iggtools midas_merge_species --samples_list samples_list.tsv --num_cores $num_cores ${merge_midas_outdir} &> ${logs_dir}/merge_species.log
+python -m iggtools midas_merge_species --samples_list samples_list.tsv ${merge_midas_outdir} &> ${logs_dir}/merge_species.log
 
 
 echo "test build_bowtie2: select species by prevalence"
