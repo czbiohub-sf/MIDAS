@@ -1,24 +1,8 @@
 import os
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star, download_reference
-from iggtools.models.uhgg import UHGG
-from iggtools.params import inputs, outputs
-
-
-CONCURRENT_MARKER_GENES_DOWNLOAD = num_physical_cores
-
-
-def input_marker_genes_file(genome_id, species_id, filename):
-    # s3://{igg}/marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}
-    return f"{outputs.marker_genes}/temp/{species_id}/{genome_id}/{filename}"
-
-
-def output_all_rep_marker_genes(component):
-    return f"{outputs.marker_genes}/{inputs.marker_set}.{component}"
-
-
-def destpath(local_file):
-    return f"{outputs.marker_genes}/{local_file}.lz4"
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
+from iggtools.models.uhgg import MIDAS_IGGDB, MARKER_FILE_EXTS, get_uhgg_layout
+from iggtools.params.schemas import MARKER_INFO_SCHEMA, PAN_GENE_INFO_SCHEMA
 
 
 @retry
@@ -26,82 +10,145 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-def collate_repgenome_markers(args):
+def map_marker_to_centroids(args):
+    """ Identify which gene clusters have repgenome's marker genes """
+    midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)
+    representatives = midas_iggdb.uhgg.representatives
 
-    db = UHGG()
-    species = db.species
-    representatives = db.representatives
+    # Alternatively, you can also fetch the collated phyeco.map for all species
+    #fetched_marker_genes_mapfile = midas_iggdb.fetch_files(get_uhgg_layout(species_id="", component="map")["marker_db"])
 
-    collate_log = "collate_repgenome_markers.log"
-    collate_subdir = f"collate_repgenome_markers"
-
-    dest_file = destpath(collate_log)
-    msg = f"Collating marker genes sequences."
-    if find_files_with_retry(dest_file):
+    log_remote = midas_iggdb.get_target_layout("marker_centroids_log", remote=True)
+    msg = f"Finding centroids genes for marker genes."
+    if find_files_with_retry(log_remote):
         if not args.force:
-            tsprint(f"Destination {dest_file} already exists.  Specify --force to overwrite.")
+            tsprint(f"Destination {log_remote} already exists.  Specify --force to overwrite.")
             return
         msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
-
     tsprint(msg)
-    if not args.debug:
-        command(f"rm -rf {collate_subdir}")
-    if not os.path.isdir(collate_subdir):
-        command(f"mkdir {collate_subdir}")
-    with open(f"{collate_subdir}/{collate_log}", "w") as slog:
+
+    log_local = midas_iggdb.get_target_layout("marker_centroids_log", remote=False)
+    subdir = os.path.dirname(log_local)
+    if not os.path.isdir(subdir):
+        command(f"mkdir -p {subdir}")
+    with open(log_local, "w") as slog:
         slog.write(msg + "\n")
 
-    # Download
-    download_seq_tasks = []
-    download_map_tasks = []
-    for species_id in species.keys():
-        rep_id = representatives[species_id]
-        remote_path_seq = input_marker_genes_file(rep_id, species_id, f"{rep_id}.markers.fa.lz4")
-        remote_path_map = input_marker_genes_file(rep_id, species_id, f"{rep_id}.markers.map.lz4")
-        download_seq_tasks.append((remote_path_seq, collate_subdir))
-        download_map_tasks.append((remote_path_map, collate_subdir))
-    downloaded_marker_seqs = multithreading_map(download_reference, download_seq_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
-    downloaded_marker_maps = multithreading_map(download_reference, download_map_tasks, num_threads=CONCURRENT_MARKER_GENES_DOWNLOAD)
+    def species_work(species_id):
+        # Fetch per-species marker_genes_mapfile
+        fetched_marker_map = midas_iggdb.fetch_files(get_uhgg_layout(species_id, "markers.map", representatives[species_id])["marker_genes"])
+        fetched_gene_info = midas_iggdb.fetch_files(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"])
 
-    ## Collate
-    collated_rep_marker_seqs = output_all_rep_marker_genes("fa")
-    collated_genes = os.path.basename(collated_rep_marker_seqs)
-    for marker_fa_files in split(downloaded_marker_seqs, 20):
-        command("cat " + " ".join(marker_fa_files) + f" >> {collate_subdir}/{collated_genes}")
+        # Parse the marker gene id of the representative genomes from the phyeco.mapfile. Refer to collate_repgenome_markers.
+        markers = dict()
+        awk_command = f"awk \'$1 == \"{species_id}\"\'"
+        with InputStream(fetched_marker_map, awk_command) as stream:
+            for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
+                assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
+                markers[gene_id] = marker_id
 
-    collated_rep_marker_maps = output_all_rep_marker_genes("map")
-    collated_maps = os.path.basename(collated_rep_marker_maps)
-    for marker_map_files in split(downloaded_marker_maps, 20):
-        command("cat " + " ".join(marker_map_files) + f" >> {collate_subdir}/{collated_maps}")
+        mc_file_local = midas_iggdb.get_target_layout("marker_centroids", remote=False, component="", species_id=species_id)
+        mc_file_remote = midas_iggdb.get_target_layout("marker_centroids", remote=True, component="", species_id=species_id)
 
-    ## Index
-    cmd_index = f"cd {collate_subdir}; hs-blastn index {collated_genes} &>> {collate_log}"
-    with open(f"{collate_subdir}/{collate_log}", "a") as slog:
+        marker_centroids_subdir = os.path.dirname(mc_file_local)
+        if not os.path.isdir(os.path.dirname(mc_file_local)):
+            command(f"mkdir -p {marker_centroids_subdir}")
+
+        # Filter gene_info.txt by marker_ids
+        with OutputStream(mc_file_local) as ostream:
+            ostream.write("\t".join(["marker_id"] + list(PAN_GENE_INFO_SCHEMA.keys())) + "\n")
+            with InputStream(fetched_gene_info) as stream:
+                for row in select_from_tsv(stream, selected_columns=PAN_GENE_INFO_SCHEMA, result_structure=dict):
+                    if row["gene_id"] in markers.keys():
+                        ostream.write("\t".join([markers[row["gene_id"]]] + list(row.values())) + "\n")
+
+        # Update to s3
+        upload(mc_file_local, mc_file_remote, check=False)
+
+        with open(f"{log_local}", "a") as slog:
+            slog.write(f"Species {species_id} finished" + "\n")
+
+    multithreading_map(species_work, midas_iggdb.uhgg.species.keys(), num_physical_cores)
+
+    # Upload log_local log file in the last
+    upload(log_local, log_remote, check=False)
+
+
+def collate_repgenome_markers(args):
+    """ Collate marker genes of repgenomes into phyeco.fa and phyeco.map """
+    midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)
+    species = midas_iggdb.uhgg.species
+
+    collate_log_remote = midas_iggdb.get_target_layout("marker_collate_log", remote=True)
+    msg = f"Collating marker genes sequences."
+    if find_files_with_retry(collate_log_remote):
+        if not args.force:
+            tsprint(f"Destination {collate_log_remote} already exists.  Specify --force to overwrite.")
+            return
+        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
+    tsprint(msg)
+
+    collate_log = midas_iggdb.get_target_layout("marker_collate_log", remote=False)
+    collate_subdir = os.path.dirname(collate_log)
+    if not os.path.isdir(collate_subdir):
+        command(f"mkdir -p {collate_subdir}")
+    with open(collate_log, "w") as slog:
+        slog.write(msg + "\n")
+
+    # Fetch marker genes fasta-file and map-file from s3
+    marker_genes_fasta = midas_iggdb.fetch_files("marker_genes_fa", species.keys())
+    marker_genes_maps = midas_iggdb.fetch_files("marker_genes_map", species.keys())
+
+    # Collate to phyeco.fa and phyeco.map
+    collated_genes_fa = midas_iggdb.get_target_layout("marker_db", remote=False, component="fa")
+    for marker_fa_files in split(marker_genes_fasta.values(), 20):
+        command("cat " + " ".join(marker_fa_files) + f" >> {collated_genes_fa}")
+
+    collaged_genes_map = midas_iggdb.get_target_layout("marker_db", remote=False, component="map")
+    for marker_map_files in split(marker_genes_maps.values(), 20):
+        command("cat " + " ".join(marker_map_files) + f" >> {collaged_genes_map}")
+
+    # Build hs-blastn index for the collated phyeco sequences
+    cmd_index = f"hs-blastn index {collated_genes_fa} &>> {collate_log}"
+    with open(f"{collate_log}", "a") as slog:
         slog.write(cmd_index + "\n")
     command(cmd_index)
-    index_suffix = ["fa", "map", "fa.bwt", "fa.header", "fa.sa", "fa.sequence"]
-    output_files = [f"{collate_subdir}/{inputs.marker_set}.{isuffix}" for isuffix in index_suffix]
 
-    ## Upload
+    # Upload generated fasta and index files
     upload_tasks = []
-    for o in output_files:
-        upload_tasks.append((o, destpath(os.path.basename(o))))
+    for ext in MARKER_FILE_EXTS:
+        local_file = midas_iggdb.get_target_layout("marker_db", remote=False, component=ext)
+        s3_file = midas_iggdb.get_target_layout("marker_db", remote=True, component=ext)
+        upload_tasks.append((local_file, s3_file))
     multithreading_map(upload_star, upload_tasks)
 
     # Upload the log file in the last
-    upload(f"{collate_subdir}/{collate_log}", destpath(collate_log), check=False)
-
-    ## Clean up
-    if not args.debug:
-        command(f"rm -rf {collate_subdir}", check=False)
+    upload(collate_log, collate_log_remote, check=False)
 
 
 def register_args(main_func):
-    add_subcommand('collate_repgenome_markers', main_func, help='collate marker genes for repgresentative genomes')
+    subparser = add_subcommand('collate_repgenome_markers', main_func, help='collate marker genes for repgresentative genomes')
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           required=True,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--collate_repgenome_markers',
+                           action='store_true',
+                           default=False,
+                           help=f"collate marker genes and mapfile for the repgenomes")
+    subparser.add_argument('--map_marker_to_centroids',
+                           action='store_true',
+                           default=False,
+                           help=f"Identify the centroids genes for rep marker genes")
     return main_func
 
 
 @register_args
 def main(args):
     tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
-    collate_repgenome_markers(args)
+    if args.collate_repgenome_markers:
+        collate_repgenome_markers(args)
+    if args.map_marker_to_centroids:
+        map_marker_to_centroids(args)

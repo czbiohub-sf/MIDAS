@@ -1,8 +1,7 @@
+#!/usr/bin/env python3
 import os
-from collections import defaultdict
-from iggtools.params.schemas import fetch_schema_by_dbtype, species_profile_schema
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.uhgg import MARKER_FILE_EXTS
+from iggtools.params.schemas import fetch_schema_by_dbtype
+from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
 
 
 # Executable Documentation
@@ -10,30 +9,22 @@ from iggtools.models.uhgg import MARKER_FILE_EXTS
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
+            "sample_dir":             f"{sample_name}",
             "outdir":                 f"{sample_name}/{dbtype}",
             "output_subdir":          f"{sample_name}/{dbtype}/{species_id}",
 
             "tempdir":                f"{sample_name}/temp/{dbtype}",
             "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            # uhgg-related files
-            "dbsdir":                 f"{sample_name}/dbs/{dbtype}",
-            "dbs_subdir":             f"{sample_name}/dbs/{dbtype}/{species_id}",
-
-            "bt2_indexes_dir":        f"{sample_name}/bowtie2_indexes/{dbtype}",
-
-            "marker_genes_file":      [f"{sample_name}/dbs/species/phyeco.fa{ext}" for ext in MARKER_FILE_EXTS] + \
-                                      [f"{sample_name}/dbs/species/phyeco.map"],
-            "local_toc":              f"{sample_name}/dbs/genomes.tsv",
-            "repgenomes_bt2_index":   f"{sample_name}/dbs/snps/repgenomes",
-            "pangenomes_bt2_index":   f"{sample_name}/dbs/genes/pangenomes",
+            "midas_iggdb_dir":        f"midas_iggdb",
+            "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
 
             # species workflow output
             "species_summary":        f"{sample_name}/species/species_profile.tsv",
             "species_alignments_m8":  f"{sample_name}/temp/species/alignments.m8",
 
             # snps workflow output
-            "snps_summary":           f"{sample_name}/snps/summary.tsv",
+            "snps_summary":           f"{sample_name}/snps/snps_summary.tsv",
             "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
             "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
             "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
@@ -42,8 +33,7 @@ def get_single_layout(sample_name, dbtype=""):
             "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
             "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
-            "marker_genes_mapping":   f"{sample_name}/temp/genes/{species_id}/marker_to_centroid.tsv",
+            "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4"
         }
     return per_species
 
@@ -79,15 +69,17 @@ class Sample: # pylint: disable=too-few-public-methods
             _create_dir(species_subdir, debug, quiet)
 
 
-    def select_species(self, genome_coverage, species_list=[]):
-        """ Read in species_summary and filter species """
+    def select_species(self, marker_depth, species_list=[]):
+        """ Parse species_summary and return list of species for pileup/pangenome analysis """
         schema = fetch_schema_by_dbtype("species")
         species_ids = []
+
+        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run midas_run_species before midas_run_snps for {self.sample_name}"
         with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if record["coverage"] >= genome_coverage:
+                if record["coverage"] >= marker_depth:
                     species_ids.append(record["species_id"])
         return species_ids
 

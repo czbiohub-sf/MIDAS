@@ -1,13 +1,12 @@
 import json
 from collections import defaultdict
 
-from iggtools.models.pool import Pool
+from iggtools.models.samplepool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, download_reference
-from iggtools.params import outputs
-from iggtools.models.uhgg import UHGG
-from iggtools.params.schemas import genes_summary_schema, genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
+from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -55,6 +54,18 @@ def register_args(main_func):
                            default=DEFAULT_SAMPLE_COUNTS,
                            help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
+    subparser.add_argument('--midas_iggdb',
+                           dest='midas_iggdb',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
+
     # Presence/Absence
     subparser.add_argument('--min_copy',
                            dest='min_copy',
@@ -72,78 +83,23 @@ def register_args(main_func):
     return main_func
 
 
-def read_cluster_map(packed_args):
+def read_cluster_map(gene_info_path, pid):
     """ convert centroid99_gene to centroin_{pid}_gene """
-    gene_info_path, pid = packed_args
-
-    genes_map_dict = {}
+    centroids_map = {}
     cols = ['gene_id', 'centroid_99', f"centroid_{pid}"]
     with InputStream(gene_info_path) as stream:
         for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
-            genes_map_dict[r['centroid_99']] = r[f"centroid_{pid}"]
-    return genes_map_dict
-
-
-def prepare_chunks(dict_of_species, genes_info_files):
-
-    global pool_of_samples
-    global global_args
-
-    global species_sliced_coverage_path
-    species_sliced_coverage_path = defaultdict(dict)
-
-    # Parse the centroid_genes_mapping
-    args_list = []
-    for species_index, species_id in enumerate(dict_of_species.keys()):
-        genes_info_path = genes_info_files[species_index]
-        args_list.append((genes_info_path, global_args.cluster_pid))
-    list_of_genes_map_dict = multiprocessing_map(read_cluster_map, args_list, num_physical_cores)
-
-    for species_index, species_id in enumerate(dict_of_species.keys()):
-        species_sliced_coverage_path[species_id]["genes_map"] = list_of_genes_map_dict[species_index]
-
-
-    arguments_list = []
-    for species in dict_of_species.values():
-        species_id = species.id
-
-        species_samples = dict()
-        for sample in species.samples:
-            sample_name = sample.sample_name
-            midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
-            assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
-            species_samples[sample_name] = midas_genes_path
-
-        species_sliced_coverage_path[species_id]["species_samples"] = species_samples
-        arguments_list.append(species_id)
-    return arguments_list
-
-
-def write_matrices_per_species(accumulator, species_id):
-
-    global species_sliced_coverage_path
-    global pool_of_samples
-
-    sample_names = list(species_sliced_coverage_path[species_id]["species_samples"].keys())
-
-    for file_type in list(genes_info_schema.keys())[:-1]:
-        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
-        with OutputStream(outfile) as stream:
-            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
-            for gene_id, gene_vals in accumulator[file_type].items():
-                stream.write("\t".join(map(format_data, [gene_id] + gene_vals)) + "\n")
+            centroids_map[r['centroid_99']] = r[f"centroid_{pid}"]
+    return centroids_map
 
 
 def collect(accumulator, my_args):
 
-    species_id, sample_index, midas_genes_dir, total_sample_counts = my_args
-
-    global species_sliced_coverage_path
-    genes_map_dict = species_sliced_coverage_path[species_id]["genes_map"]
+    sample_index, midas_genes_dir, total_sample_counts, centroids_map = my_args
 
     with InputStream(midas_genes_dir) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
-            gene_id = genes_map_dict[r["gene_id"]]
+            gene_id = centroids_map[r["gene_id"]]
 
             acc_copynum = accumulator["copynum"].get(gene_id)
             if not acc_copynum:
@@ -164,29 +120,49 @@ def collect(accumulator, my_args):
             acc_reads[sample_index] += r["mapped_reads"]
 
 
-def per_species_worker(species_id):
+def write_matrices_per_species(accumulator, species_id, sample_names):
 
     global pool_of_samples
+
+    for file_type in list(genes_info_schema.keys())[:-1]:
+        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            for gene_id, gene_vals in accumulator[file_type].items():
+                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals)) + "\n")
+
+
+def per_species_worker(species_id):
+
+    global dict_of_species
     global global_args
-    global species_sliced_coverage_path
+    global genes_info_files
 
-    # Read in genes_info for each species
-    #genes_info_path = pool_of_samples.get_target_layout("genes_info_file", species_id)
-    #genes_map_dict = read_cluster_map(genes_info_path, global_args.cluster_pid)
+    # Prepare centroid_99 to centroid_pid mapping
+    centroids_map = read_cluster_map(genes_info_files[species_id], global_args.cluster_pid)
 
-    species_samples = species_sliced_coverage_path[species_id]["species_samples"]
+    # For given species, get the list of samples and check the per-sample genes coverage file
+    species = dict_of_species[species_id]
+    species_samples = dict()
+    for sample in species.samples:
+        sample_name = sample.sample_name
+        midas_genes_path = sample.get_target_layout("genes_coverage", species_id)
+        assert midas_genes_path, f"Missing MIDAS genes output {midas_genes_path} for sample {sample_name}"
+        species_samples[sample_name] = midas_genes_path
+
+    # Merge results from per-sample pangenome profiling
     sample_names = list(species_samples.keys())
-
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
-        my_args = (species_id, sample_index, midas_genes_path, len(species_samples))
+        my_args = (sample_index, midas_genes_path, len(species_samples), centroids_map)
         collect(accumulator, my_args)
 
     for gene_id, copynum in accumulator["copynum"].items():
         accumulator["presabs"][gene_id] = [1 if cn > global_args.min_copy else 0 for cn in copynum]
 
-    write_matrices_per_species(accumulator, species_id)
+    write_matrices_per_species(accumulator, species_id, sample_names)
+    return "worked"
 
 
 def midas_merge_genes(args):
@@ -197,29 +173,34 @@ def midas_merge_genes(args):
         global_args = args
 
         global pool_of_samples
+        global dict_of_species
 
-        pool_of_samples = Pool(args.samples_list, args.midas_outdir, "genes")
+        pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "genes")
         dict_of_species = pool_of_samples.select_species("genes", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
+        assert len(species_ids_of_interest) > 0, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
+        tsprint(species_ids_of_interest)
 
         pool_of_samples.create_dirs(["outdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
-        pool_of_samples.create_species_subdirs(species_ids_of_interest, "dbsdir", args.debug)
 
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
         # Download genes_info for every species in the restricted species profile.
-        local_toc = download_reference(outputs.genomes, pool_of_samples.get_target_layout("dbsdir"))
-        genes_info_files = UHGG(local_toc).fetch_files(species_ids_of_interest, pool_of_samples.get_target_layout("dbsdir"), filetype="genes_info")
+        global genes_info_files
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), args.num_cores)
+        genes_info_files = midas_iggdb.fetch_files("genes_info", species_ids_of_interest)
+        tsprint(genes_info_files)
 
-        # Collect copy_numbers, coverage and read counts across ALl the samples
-        arguments_list = prepare_chunks(dict_of_species, genes_info_files)
-        multiprocessing_map(per_species_worker, arguments_list, num_physical_cores)
-    except:
+        # Merge copy_numbers, coverage and read counts across ALl the samples
+        proc_flags = multiprocessing_map(per_species_worker, species_ids_of_interest, args.num_cores)
+        assert all(s == "worked" for s in proc_flags)
+
+    except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            pool_of_samples.remove_dirs(["outdir", "dbsdir"])
-        raise
+            pool_of_samples.remove_dirs(["outdir"])
+        raise error
 
 
 @register_args

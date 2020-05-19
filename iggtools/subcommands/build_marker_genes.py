@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import Bio.SeqIO
@@ -119,6 +120,7 @@ def identify_marker_genes(genome_id, species_id, marker_genes_hmm):
     assert output_files[-1] == lastoutput(genome_id)
 
     return output_files
+
 
 def build_marker_genes(args):
     if args.zzz_slave_toc:
