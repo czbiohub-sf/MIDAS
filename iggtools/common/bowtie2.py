@@ -32,7 +32,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, num_cores):
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
-            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")
+            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build-{bt2_db_name}.log")
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
             command(f"rm -f {bt2_db_prefix}.1.bt2")
