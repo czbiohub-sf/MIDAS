@@ -69,7 +69,7 @@ def build_bowtie2_indexes(args):
             species_ids_of_interest = []
             with InputStream(args.species_list) as stream:
                 for species_id in select_from_tsv(stream, schema={"species_id": str}):
-                    species_ids_of_interest.append(species_id)
+                    species_ids_of_interest.append(species_id[0])
         # this part is under development
         elif args.species_profile and args.select_by and args.select_threshold:
             species_ids_of_interest = []
