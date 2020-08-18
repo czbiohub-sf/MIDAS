@@ -54,6 +54,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
     aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
     aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
+    tsprint(f"==={aln_speed}, {aln_mode}===============")
     r2 = ""
     if args.r2:
         r1 = f"-1 {args.r1}"
