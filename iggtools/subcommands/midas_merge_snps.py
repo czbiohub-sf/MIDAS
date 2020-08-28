@@ -384,10 +384,10 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
                 # for each <site, sample> pair
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
 
-                sample_depth_by_sample = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
+                sample_depth = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
                 maf_by_sample = -1.0 if sample_depth == 0 else (0.0 if major_index == minor_index else rc_ACGT[minor_index] / sample_depth)
 
-                sample_depths.append(sample_depth_by_sample)
+                sample_depths.append(sample_depth)
                 sample_mafs.append(maf_by_sample)
 
             # Write
