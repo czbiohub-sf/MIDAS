@@ -127,7 +127,7 @@ class SamplePool: # pylint: disable=too-few-public-methods
             for species in dict_of_species.values():
                 for sample in species.samples:
                     row = list(sample.profile[species.id].values())
-                    stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t".join(map(format_data, row[1:])) + "\n")
+                    stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t" + "\t".join(map(format_data, row[1:])) + "\n")
 
 
     def remove_dirs(self, list_of_dirnames):
