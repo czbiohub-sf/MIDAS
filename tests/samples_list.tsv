@@ -1,4 +1,4 @@
 sample_name	midas_outdir
-sample1	/mnt/chunyu_6TB/tests/my_midas_output_default
-sample2	/mnt/chunyu_6TB/tests/my_midas_output_default
-sample3	/mnt/chunyu_6TB/tests/my_midas_output_default
+sample1	/mnt/chunyu/iggtools/tests/my_midas_output_default
+sample2	/mnt/chunyu/iggtools/tests/my_midas_output_default
+sample3	/mnt/chunyu/iggtools/tests/my_midas_output_default

@@ -32,7 +32,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, num_cores):
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
-            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build.log")
+            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build-{bt2_db_name}.log")
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
             command(f"rm -f {bt2_db_prefix}.1.bt2")
@@ -53,7 +53,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     # Construct bowtie2 align input arguments
     max_reads = f"-u {args.max_reads}" if args.max_reads else ""
     aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
-    aln_speed = args.aln_speed if aln_mode == "end_to_end" else args.aln_speed + "-local"
+    aln_speed = args.aln_speed if aln_mode == "end-to-end" else args.aln_speed + "-local"
     r2 = ""
     if args.r2:
         r1 = f"-1 {args.r1}"

@@ -1,3 +1,4 @@
+import sys
 import json
 from collections import defaultdict
 from operator import itemgetter
@@ -382,13 +383,12 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             for sample_index in range(9, len(site_info)):
                 # for each <site, sample> pair
                 rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
-                if major_index == minor_index:
-                    sample_depth = rc_ACGT[major_index]
-                    sample_mafs.append(0.0)
-                else:
-                    sample_depth = rc_ACGT[major_index] + rc_ACGT[minor_index]
-                    sample_mafs.append(rc_ACGT[minor_index] / sample_depth)
+
+                sample_depth = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
+                maf_by_sample = -1.0 if sample_depth == 0 else (0.0 if major_index == minor_index else rc_ACGT[minor_index] / sample_depth)
+
                 sample_depths.append(sample_depth)
+                sample_mafs.append(maf_by_sample)
 
             # Write
             out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")

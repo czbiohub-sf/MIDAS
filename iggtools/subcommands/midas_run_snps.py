@@ -463,8 +463,7 @@ def midas_run_snps(args):
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
-        if not bowtie2_index_exists(bt2_db_dir, bt2_db_name):
-            build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files, args.num_cores)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish ({species_counts}) species counts")
         # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
         # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
