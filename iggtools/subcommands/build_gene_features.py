@@ -5,7 +5,7 @@ from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, download_reference, InputStream, OutputStream
 from iggtools.models.uhgg import UHGG
 from iggtools.params import outputs
-from iggtools.import_uhgg import decode_genomes_arg
+from iggtools.subcommands.import_uhgg import decode_genomes_arg
 import gffutils
 import Bio.SeqIO
 
@@ -43,14 +43,14 @@ def read_gene_sequence(fasta_file, species_id):
 #gff3_file = "/Users/chunyu.zhao/Desktop/20210104_test/GUT_GENOME000001/GUT_GENOME000001.gff"
 def reformat_gene_features(gff3_file, genes_file):
     # Convert GFF3 features into format desired by MIDAS
-    db = gffutils.create_db(gff3_file, ':memory')
+    db = gffutils.create_db(gff3_file, f"{gff3_file}.db")
 
     with OutputStream(genes_file) as stream:
         stream.write("\t".join(["gene_id", "contig_id", "start", "end", "strand", "gene_type"]) + "\n")
         for feature in db.all_features():
             if feature.source == "prokka":
                 continue
-            scaffold_id = feature.id.replace(">gnl|Prokka|", "")
+            seqid = feature.seqid.replace("gnl|Prokka|", "")
             start = feature.start - 1
             stop = feature.stop
             strand = feature.strand
@@ -58,7 +58,7 @@ def reformat_gene_features(gff3_file, genes_file):
             locus_tag = feature.attributes['locus_tag'][0]
             assert gene_id == locus_tag
             gene_type = feature.featuretype
-            stream.write("\t".join([gene_id, scaffold_id, str(start), str(end), strand, gene_type]) + "\n")
+            stream.write("\t".join([gene_id, seqid, str(start), str(stop), strand, gene_type]) + "\n")
     return True
 
 
@@ -140,8 +140,7 @@ def build_gene_features_slave(args):
 
     out_file = f"{genome_id}.genes"
     dest_file = annotations_file(genome_id, species_id, f"{out_file}.lz4")
-    tsprint(dest_file)
-    command(f"aws s3 rm --recursive {dest_file.rsplit('/', 1)[0]}")
+    #command(f"aws s3 rm --recursive {dest_file.rsplit('/', 1)[0]}")
 
     assert reformat_gene_features(annot_file, out_file)
     upload(out_file, dest_file)

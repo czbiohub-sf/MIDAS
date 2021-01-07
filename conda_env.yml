@@ -21,3 +21,4 @@ dependencies:
  - r-tidyverse
  - lz4
  - art
+ - gffutils
