@@ -11,7 +11,7 @@ import Bio.SeqIO
 
 
 # Up to this many concurrent species builds.
-CONCURRENT_GENOME_BUILDS = Semaphore(20)
+CONCURRENT_GENOME_BUILDS = Semaphore(48)
 
 
 def annotations_file(genome_id, species_id, filename):
@@ -49,6 +49,8 @@ def reformat_gene_features(gff3_file, genes_file):
         stream.write("\t".join(["gene_id", "contig_id", "start", "end", "strand", "gene_type"]) + "\n")
         for feature in db.all_features():
             if feature.source == "prokka":
+                continue
+            if "ID" not in feature.attributes: #CRISPR
                 continue
             seqid = feature.seqid.replace("gnl|Prokka|", "")
             start = feature.start - 1
@@ -117,7 +119,7 @@ def build_gene_features_master(args):
                     command(f"rm -rf {slave_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
-    multithreading_map(genome_work, genome_id_list, num_threads=20)
+    multithreading_map(genome_work, genome_id_list, num_threads=48)
 
 
 def build_gene_features_slave(args):
