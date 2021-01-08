@@ -24,23 +24,6 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-## Where should I put this read in sequence file depends on the usage, let's circle back this on Thursday
-#fasta_file = "/Users/chunyu.zhao/Desktop/20210104_test/GUT_GENOME000001/GUT_GENOME000001.ffn"
-def read_gene_sequence(fasta_file, species_id):
-    """ Scan the genome file to get contig_id and contig_seq as ref_seq """
-    contigs = {}
-    with InputStream(fasta_file) as file:
-        for rec in Bio.SeqIO.parse(file, 'fasta'):
-            contigs[rec.id] = {
-                "species_id": species_id,
-                "contig_id": rec.id,
-                "contig_len": len(rec.seq),
-                "contig_seq": str(rec.seq),
-            }
-    return contigs
-
-
-#gff3_file = "/Users/chunyu.zhao/Desktop/20210104_test/GUT_GENOME000001/GUT_GENOME000001.gff"
 def reformat_gene_features(gff3_file, genes_file):
     # Convert GFF3 features into format desired by MIDAS
     db = gffutils.create_db(gff3_file, f"{gff3_file}.db")

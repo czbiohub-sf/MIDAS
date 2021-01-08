@@ -4,11 +4,12 @@ from collections import defaultdict
 from operator import itemgetter
 import multiprocessing
 from math import ceil
+import Bio.SeqIO
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
+from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data, genes_feature_schema
 from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 from iggtools.common.argparser import add_subcommand
 
@@ -144,6 +145,161 @@ def register_args(main_func):
 
 def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
+
+
+## Where should I put this read in sequence file depends on the usage, let's circle back this on Thursday
+#fasta_file = "/Users/chunyu.zhao/Desktop/20210104_test/GUT_GENOME000001/GUT_GENOME000001.ffn"
+def read_gene_sequence(fasta_file):
+    """ Scan the genome file to get contig_id and contig_seq as ref_seq """
+    contigs = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            contigs[rec.id] = {
+                "contig_id": rec.id,
+                "contig_len": len(rec.seq),
+                "contig_seq": str(rec.seq),
+            }
+    ## need to pay attention to reverse strand, probably by using scan_contigs()
+    return contigs
+
+
+def read_gene_features(features_file):
+    features = defaultdict(dict)
+    with InputStream(features_file) as stream:
+        for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
+            features[r['contig_id']][r['gene_id']] = r
+    return features
+
+
+def generate_boundaries(features_file):
+    # Read gene features
+    features = read_gene_features(features_file)
+    gene_boundaries = defaultdict(dict)
+    for contig_id in features.keys():
+        feature_per_contig = features[contig_id]
+        # Sort features by starting position
+        feature_per_contig_sorted = dict(sorted(feature_per_contig.items(), key = feature_per_contig.get("start"), reverse=False))
+        ## Temp fix: we don't need python index, we need actual range boundaries
+        feature_ranges = { gf['gene_id']: (gf['start'] + 1, gf['end']) for gf in feature_per_contig_sorted.values() }
+        # TODO: double check non-overlapping ranges before flatten
+        feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges.values()) for _ in rt)
+        # Convert ranges into half-open intervals.
+        boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
+        gene_boundaries[contig_id] = {"genes": list(feature_ranges.keys()), "boundaries": boundaries, "ranges": feature_ranges}
+        """
+        sorted(gene_ranges, key=lambda x: gene_ranges[x][0], reverse=False)
+        sorted(a, key = a.get("start"), reverse=False)
+        alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1)[1], reverse=True)[:2]
+        """
+    return gene_boundaries
+
+
+import numpy
+from bisect import bisect
+gene_boundaries = generate_boundaries(features_file)
+gene_seqs = read_gene_sequence(fasta_file)
+## TODO: make sure the gene_seqs is the same with compute with contig sequences, so that our index are correct
+features = read_gene_features(features_file)
+contig_seqs = scan_contigs("/Users/chunyu.zhao/Desktop/20210104_test/GUT_GENOME000001/GUT_GENOME000001.fna", 100001)
+def binary_search_site(site_id, gene_boundaries):
+    ## Binary search the boundaries, if return odd than within-ranges otherwise between-ranges
+    ref_id, ref_pos, ref_allele = site_id.split("|")
+    ref_pos = int(ref_pos) # ref_pos is 1-based
+    assert ref_id in gene_boundaries
+    curr_contig = gene_boundaries[ref_id]
+    flag = bisect(curr_contig["boundaries"], ref_pos)
+    if flag % 2:
+        # even: intergenic
+        locus_type = "IGR"
+        return None, locus_type
+    index = int((flag + 1) / 2)
+    curr_gene_id = curr_contig["genes"][index-1]
+    curr_gene = features[ref_id][curr_gene_id]
+    curr_gene["start"] = curr_gene["start"] + 1 # this is temp fix
+    locus_type = curr_gene["gene_type"]
+    if locus_type != "CDS":
+        return curr_gene_id, locus_type
+    curr_seq = gene_seqs[curr_gene_id]["contig_seq"]
+    assert len(curr_seq) % 3 == 0
+    ref_codon, within_codon_site_pos = fetch_ref_codon(ref_pos, curr_gene, gene_seqs)
+    assert all(_ in ['A','T','C','G'] for _ in ref_codon) # codon can't contain weird characters
+    amino_acids = []
+    for allele in ['A','C','G','T']: # + strand
+        codon = index_replace(ref_codon, allele, within_codon_site_pos, curr_gene['strand']) # +/- strand
+        amino_acid = translate(codon)
+        amino_acids.append(amino_acid)
+    unique_aa = set(amino_acids)
+    degeneracy = 4 - len(unique_aa) + 1
+    site_type = '%sD' % degeneracy
+    amino_acids = ','.join(amino_acids)
+    # TODO: what information is needed as the output to write to file
+    return curr_gene_id, locus_type, site_type, amino_acids
+
+
+## simply copied, work on me tomorrow
+def complement(base):
+    """ Complement nucleotide """
+    d = {'A':'T', 'T':'A', 'G':'C', 'C':'G'}
+    if base in d: return d[base]
+    else: return base
+
+def index_replace(codon, allele, pos, strand):
+    """ Replace character at index i in string x with y"""
+    bases = list(codon)
+    bases[pos] = allele if strand == '+' else complement(allele)
+    return(''.join(bases))
+
+
+def fetch_ref_codon(ref_pos, gene, gene_seqs):
+    """ Fetch codon within gene for given site """
+    # position of site in gene
+    within_gene_site_pos = ref_pos - gene['start'] if gene['strand'] == '+' else gene['end'] - ref_pos
+    # position of site in codon
+    within_codon_site_pos = within_gene_site_pos % 3
+    # gene sequence (oriented start to stop)
+    ref_codon = gene_seqs[gene["gene_id"]]["contig_seq"][within_codon_site_pos-within_codon_site_pos:within_codon_site_pos-within_codon_site_pos+3]
+    return ref_codon, within_codon_site_pos
+
+
+def translate(codon):
+    """ Translate individual codon """
+    codontable = {
+    'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+    'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+    'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+    'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+    'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+    'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+    'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+    'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+    'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+    'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+    'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+    'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+    'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+    'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+    'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+    'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+    }
+    return codontable[str(codon)]
+
+
+
+
+
+
+
+
+def annotate_sites(site_id, gene_boundaries):
+    # There are two ways to annotate sites: (1) per site (2) multiple annotate_sites
+
+    return True
+
+
+
+
+
+
 
 
 def call_alleles(tuple_of_alleles, site_depth, snp_maf):
@@ -390,6 +546,9 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
                 sample_depths.append(sample_depth)
                 sample_mafs.append(maf_by_sample)
 
+            ######
+
+            ######
             # Write
             out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
             out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")

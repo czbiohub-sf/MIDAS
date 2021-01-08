@@ -183,3 +183,14 @@ def fetch_schema_by_dbtype(dbtype):
 
 def format_data(x):
     return format(x, DECIMALS) if isinstance(x, float) else str(x)
+
+
+
+genes_feature_schema = {
+    "gene_id": str,
+    "contig_id": str,
+    "start": int,
+    "end": int,
+    "strand": str,
+    "gene_type": str,
+}
