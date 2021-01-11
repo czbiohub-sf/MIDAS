@@ -94,6 +94,15 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
                 if filetype == "marker_centroids":
                     s3_file = self.get_target_layout("marker_centroids", True, "", species_id)
                     dest_file = self.get_target_layout("marker_centroids", False, "", species_id)
+                if filetype == "gene_feature":
+                    s3_file = self.get_target_layout("annotation_file", True, "genes", species_id, self.uhgg.representatives[species_id])
+                    dest_file = self.get_target_layout("annotation_file", False, "genes", species_id, self.uhgg.representatives[species_id])
+                if filetype == "gene_seq":
+                    s3_file = self.get_target_layout("annotation_file", True, "ffn", species_id, self.uhgg.representatives[species_id])
+                    dest_file = self.get_target_layout("annotation_file", False, "ffn", species_id, self.uhgg.representatives[species_id])
+                if filetype == "prokka_genome":
+                    s3_file = self.get_target_layout("annotation_file", True, "fna", species_id, self.uhgg.representatives[species_id])
+                    dest_file = self.get_target_layout("annotation_file", False, "fna", species_id, self.uhgg.representatives[species_id])
                 args_list.append((s3_file, dest_file))
 
             _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=self.num_cores)
