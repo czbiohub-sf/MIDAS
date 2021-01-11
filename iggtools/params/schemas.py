@@ -125,7 +125,12 @@ snps_info_schema = {
     "sc_C": int,
     "sc_G": int,
     "sc_T": int,
+    "locus_type": str,
+    "gene_id": str,
+    "site_type": str,
+    "amino_acids": str
 }
+
 
 ## merge_midas_genes
 DEFAULT_SAMPLE_DEPTH = 1.0
