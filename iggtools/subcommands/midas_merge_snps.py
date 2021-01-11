@@ -297,22 +297,26 @@ def compute_degenracy(ref_codon, within_codon_position, strand):
 
 
 def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs):
-    tsprint(f"    CZ::annotate_site::{ref_id}-{ref_pos}::start")
+    # Annotate one genomic site
+    # Binary search the range of the given genomic site position
     index = binary_search_site(curr_contig["boundaries"], ref_pos)
     if index is None:
         locus_type = "IGR" # even: intergenic
         return locus_type,
+
     curr_gene_id = curr_contig["genes"][index-1]
     curr_gene = curr_feature[curr_gene_id]
     locus_type = curr_gene["gene_type"]
+
     if locus_type != "CDS":
         return locus_type, curr_gene_id
+
     curr_seq = gene_seqs[curr_gene_id]["gene_seq"]
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
     ref_codon, within_codon_position = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
     assert all(_ in ['A','T','C','G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+
     site_type, amino_acids = compute_degenracy(ref_codon, within_codon_position, curr_gene['strand'])
-    tsprint(f"    CZ::annotate_site::{ref_id}-{ref_pos}::end")
     return locus_type, curr_gene_id, site_type, amino_acids
 
 
@@ -571,7 +575,6 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             curr_contig = gene_boundaries[ref_id]
             curr_feature = features_by_contig[ref_id]
             annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
-            tsprint(f"============= {site_id} - {annots} =========")
             locus_type = annots[0]
             gene_id = annots[1] if len(annots) > 1 else None
             site_type = annots[2] if len(annots) > 2 else None
@@ -670,11 +673,12 @@ def midas_merge_snps(args):
         def check_annotation_setup(species_id):
             features_file = gene_features_files[species_id]
             gene_seq_file = gene_seqs_files[species_id]
+            genome_file = contigs_files[species_id]
+
             features = read_gene_features(features_file)
             gene_seqs = read_gene_sequence(gene_seq_file)
-            assert check_feature_counts(features, gene_seqs), f"Gene feature counts disagree with Prokka gene ffn file for species {species_id}"
 
-            genome_file = prokka_genomes_files[species_id]
+            assert check_feature_counts(features, gene_seqs), f"Gene feature counts disagree with Prokka gene ffn file for species {species_id}"
             assert check_gene_sequences(genome_file, features, gene_seqs, species_id), f"Prokka gene sequences disagree with gene ranges computation for species {species_id}"
 
             return True
