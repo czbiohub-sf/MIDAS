@@ -35,8 +35,8 @@ def reformat_gene_features(gff3_file, genes_file):
                 continue
             if "ID" not in feature.attributes: #CRISPR
                 continue
-            seqid = feature.seqid.replace("gnl|Prokka|", "")
-            start = feature.start - 1
+            seqid = feature.seqid.replace("gnl|Prokka|", "") ## TODO: remove this replace
+            start = feature.start
             stop = feature.stop
             strand = feature.strand
             gene_id = feature.attributes['ID'][0]
