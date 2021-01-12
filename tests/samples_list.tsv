@@ -1,4 +1,4 @@
 sample_name	midas_outdir
-sample1	/Users/cz/Desktop/iggtools/tests/my_midas_output_default
-sample2	/Users/cz/Desktop/iggtools/tests/my_midas_output_default
-sample3	/Users/cz/Desktop/iggtools/tests/my_midas_output_default
+sample1	/mnt/cz/iggtools/tests/my_midas_output_default
+sample2	/mnt/cz/iggtools/tests/my_midas_output_default
+sample3	/mnt/cz/iggtools/tests/my_midas_output_default
