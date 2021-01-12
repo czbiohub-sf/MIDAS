@@ -658,9 +658,6 @@ def midas_merge_snps(args):
         assert len(species_ids_of_interest) > 0, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(species_ids_of_interest)
 
-        species_ids_of_interest = species_ids_of_interest[:1]
-        dict_of_species = {species_ids_of_interest[0]: dict_of_species[species_ids_of_interest[0]]}
-
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
