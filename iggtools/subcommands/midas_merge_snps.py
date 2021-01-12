@@ -571,10 +571,13 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             # Annotate one site
             ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
             ref_pos = int(ref_pos) # ref_pos is 1-based
-            assert ref_id in gene_boundaries, f"Contig {ref_id} is not in the boundaries dict"
-            curr_contig = gene_boundaries[ref_id]
-            curr_feature = features_by_contig[ref_id]
-            annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
+            if ref_id not in gene_boundaries:
+                annots = "IGR", ## short contigs may not carry any gene
+            else:
+                curr_contig = gene_boundaries[ref_id]
+                curr_feature = features_by_contig[ref_id]
+                annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
+
             locus_type = annots[0]
             gene_id = annots[1] if len(annots) > 1 else None
             site_type = annots[2] if len(annots) > 2 else None
