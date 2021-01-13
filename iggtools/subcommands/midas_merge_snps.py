@@ -224,6 +224,7 @@ def read_gene_sequence(fasta_file):
 
 
 def read_gene_features(features_file):
+    """ Read TAB-delimited *.genes files from gene_annotations """
     features = defaultdict(dict)
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
@@ -234,7 +235,7 @@ def read_gene_features(features_file):
 
 
 def check_feature_counts(features, gene_seqs):
-    ## Check if the parsed gene feature file is consistent with the Prokka gene ffn file
+    """ Check if the parsed gene feature file is consistent with the Prokka gene ffn file """
     counts = 0
     genes = []
     for _ in features.keys():
@@ -245,7 +246,7 @@ def check_feature_counts(features, gene_seqs):
 
 
 def check_gene_sequences(contig_file, features, gene_seqs, species_id):
-    ## Check if the
+    """ Check if the prokka gene sequences is same with extracting from genome"""
     contig_seqs = scan_contigs(contig_file, species_id)
     flags = dict()
     for ref_id, c in contig_seqs.items():
@@ -256,7 +257,7 @@ def check_gene_sequences(contig_file, features, gene_seqs, species_id):
 
 
 def binary_search_site(list_of_boundaries, ref_pos):
-    ## Binary search the boundaries, if return odd than within-ranges otherwise between-ranges
+    """ Binary search the boundaries, if return odd than within-ranges otherwise between-ranges """
     flag = bisect(list_of_boundaries, ref_pos)
     if flag % 2: # even: intergenic
         return None
@@ -266,12 +267,12 @@ def binary_search_site(list_of_boundaries, ref_pos):
 
 
 def generate_boundaries(features):
+    """ Given list of gene ranges, generate the desired, half-open boundaries by binary search """
     gene_boundaries = defaultdict(dict)
     for contig_id in features.keys():
         feature_per_contig = features[contig_id]
         # Sort features by starting position
         feature_per_contig_sorted = dict(sorted(feature_per_contig.items(), key=feature_per_contig.get("start"), reverse=False))
-        ## Temp fix: we don't need python index, we need actual range boundaries
         feature_ranges = {gf['gene_id']: (gf['start'], gf['end']) for gf in feature_per_contig_sorted.values()} ## +1 double check
         # TODO: double check non-overlapping ranges before flatten
         feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges.values()) for _ in rt)
@@ -283,6 +284,7 @@ def generate_boundaries(features):
 
 
 def compute_degenracy(ref_codon, within_codon_position, strand):
+    """ Compute degenracy """
     amino_acids = []
     for allele in ['A', 'C', 'G', 'T']: # + strand
         codon = index_replace(ref_codon, allele, within_codon_position, strand) # +/- strand
@@ -296,7 +298,7 @@ def compute_degenracy(ref_codon, within_codon_position, strand):
 
 
 def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs):
-    # Annotate one genomic site
+    """ Annotate one genomic site, search against all genes for given species """
     # Binary search the range of the given genomic site position
     index = binary_search_site(curr_contig["boundaries"], ref_pos)
     if index is None:
