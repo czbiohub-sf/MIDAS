@@ -1,14 +1,16 @@
-import sys
+
 import json
 from collections import defaultdict
 from operator import itemgetter
 import multiprocessing
 from math import ceil
+from bisect import bisect
+import Bio.SeqIO
 
 from iggtools.models.samplepool import SamplePool
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
+from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data, genes_feature_schema
 from iggtools.subcommands.midas_run_snps import cat_files, scan_contigs
 from iggtools.common.argparser import add_subcommand
 
@@ -146,6 +148,179 @@ def acgt_string(A, C, G, T):
     return ','.join(map(str, (A, C, G, T)))
 
 
+def translate(codon):
+    """ Translate individual codon """
+    codontable = {
+        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+    }
+    return codontable[str(codon)]
+
+
+def complement(base):
+    """ Complement nucleotide """
+    d = {'A':'T', 'T':'A', 'G':'C', 'C':'G'}
+    if base in d:
+        return d[base]
+    return base
+
+
+def rev_comp(seq):
+    """ Reverse complement sequence """
+    return ''.join([complement(base) for base in list(seq[::-1])])
+
+
+def get_gen_seq(genome_seq, start, end, strand):
+    seq = genome_seq[start-1 : end]
+    if strand == "-":
+        return rev_comp(seq)
+    return seq
+
+
+def index_replace(codon, allele, pos, strand):
+    """ Replace character at index i in string x with y"""
+    bases = list(codon)
+    bases[pos] = allele if strand == '+' else complement(allele)
+    return ''.join(bases)
+
+
+def fetch_ref_codon(ref_pos, curr_gene, curr_seq):
+    """ Fetch codon within gene for given site """
+    # position of site in gene
+    within_gene_position = ref_pos - curr_gene['start'] if curr_gene['strand'] == '+' else curr_gene['end'] - ref_pos
+    # position of site in codon
+    within_codon_position = within_gene_position % 3
+    # gene sequence (oriented start to stop)
+    ref_codon = curr_seq[within_codon_position-within_codon_position:within_codon_position-within_codon_position+3]
+    return ref_codon, within_codon_position
+
+
+def read_gene_sequence(fasta_file):
+    """ Scan the genome file to get contig_id and contig_seq as ref_seq """
+    contigs = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            contigs[rec.id] = {
+                "gene_id": rec.id,
+                "gene_len": len(rec.seq),
+                "gene_seq": str(rec.seq),
+            }
+    ## need to pay attention to reverse strand, probably by using scan_contigs()
+    return contigs
+
+
+def read_gene_features(features_file):
+    """ Read TAB-delimited *.genes files from gene_annotations """
+    features = defaultdict(dict)
+    with InputStream(features_file) as stream:
+        for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
+            cid = r['contig_id']
+            r['contig_id'] = f"gnl|Prokka|{cid}" ## TODO: build gene feature should not have replaced the prefix in the first place
+            features[r['contig_id']][r['gene_id']] = r
+    return features
+
+
+def check_feature_counts(features, gene_seqs):
+    """ Check if the parsed gene feature file is consistent with the Prokka gene ffn file """
+    counts = 0
+    genes = []
+    for _ in features.keys():
+        counts += len(features[_])
+        genes.extend(list(features[_].keys()))
+    assert len(gene_seqs) == counts
+    return sorted(genes) == sorted(list(gene_seqs.keys()))
+
+
+def check_gene_sequences(contig_file, features, gene_seqs, species_id):
+    """ Check if the prokka gene sequences is same with extracting from genome"""
+    contig_seqs = scan_contigs(contig_file, species_id)
+    flags = dict()
+    for ref_id, c in contig_seqs.items():
+        f = features[ref_id]
+        for gid, gdict in f.items():
+            flags[gid] = gene_seqs[gid]["gene_seq"] == get_gen_seq(c["contig_seq"], gdict['start'], gdict['end'], gdict['strand'])
+    return all(list(flags.values()))
+
+
+def binary_search_site(list_of_boundaries, ref_pos):
+    """ Binary search the boundaries, if return odd than within-ranges otherwise between-ranges """
+    flag = bisect(list_of_boundaries, ref_pos)
+    if flag % 2: # even: intergenic
+        return None
+    index = int((flag + 1) / 2)
+    ## Return the index of the ranges (1-based)
+    return index
+
+
+def generate_boundaries(features):
+    """ Given list of gene ranges, generate the desired, half-open boundaries by binary search """
+    gene_boundaries = defaultdict(dict)
+    for contig_id in features.keys():
+        feature_per_contig = features[contig_id]
+        # Sort features by starting position
+        feature_per_contig_sorted = dict(sorted(feature_per_contig.items(), key=feature_per_contig.get("start"), reverse=False))
+        feature_ranges = {gf['gene_id']: (gf['start'], gf['end']) for gf in feature_per_contig_sorted.values()} ## +1 double check
+        # TODO: double check non-overlapping ranges before flatten
+        feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges.values()) for _ in rt)
+        # Convert ranges into half-open intervals.
+        boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
+        gene_boundaries[contig_id] = {"genes": list(feature_ranges.keys()), "boundaries": boundaries} #, "ranges": feature_ranges}
+        ## REMOVE ranges later after debugging mode
+    return gene_boundaries
+
+
+def compute_degenracy(ref_codon, within_codon_position, strand):
+    """ Compute degenracy """
+    amino_acids = []
+    for allele in ['A', 'C', 'G', 'T']: # + strand
+        codon = index_replace(ref_codon, allele, within_codon_position, strand) # +/- strand
+        amino_acid = translate(codon)
+        amino_acids.append(amino_acid)
+    unique_aa = set(amino_acids)
+    degeneracy = 4 - len(unique_aa) + 1
+    site_type = f"{degeneracy}D"
+    amino_acids = ','.join(amino_acids)
+    return site_type, amino_acids
+
+
+def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs):
+    """ Annotate one genomic site, search against all genes for given species """
+    # Binary search the range of the given genomic site position
+    index = binary_search_site(curr_contig["boundaries"], ref_pos)
+    if index is None:
+        locus_type = "IGR" # even: intergenic
+        return (locus_type,)
+
+    curr_gene_id = curr_contig["genes"][index-1]
+    curr_gene = curr_feature[curr_gene_id]
+    locus_type = curr_gene["gene_type"]
+
+    if locus_type != "CDS":
+        return locus_type, curr_gene_id
+
+    curr_seq = gene_seqs[curr_gene_id]["gene_seq"]
+    assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
+    ref_codon, within_codon_position = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
+    assert all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+
+    site_type, amino_acids = compute_degenracy(ref_codon, within_codon_position, curr_gene['strand'])
+    return locus_type, curr_gene_id, site_type, amino_acids
+
+
 def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     """ Compute the pooled allele frequencies and call SNPs """
 
@@ -166,7 +341,7 @@ def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     return (major_allele, minor_allele, snp_type)
 
 
-def design_chunks(contigs_files, chunk_size):
+def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_size):
 
     # dict of semaphore and acquire before
     global semaphore_for_species
@@ -199,7 +374,7 @@ def design_chunks(contigs_files, chunk_size):
 
             # pileup is 1-based index
             if contig_length <= chunk_size:
-                my_args = (species_id, chunk_id, contig_id, 1, contig_length, total_samples_count)
+                my_args = (species_id, chunk_id, contig_id, 1, contig_length, total_samples_count, gene_features_files[species_id], gene_seqs_files[species_id]) ##cz
                 argument_list.append(my_args)
 
                 snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
@@ -211,9 +386,9 @@ def design_chunks(contigs_files, chunk_size):
                 number_of_chunks = ceil(contig_length/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, chunk_size)):
                     if ni == number_of_chunks:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, total_samples_count)
+                        my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, total_samples_count, gene_features_files[species_id], gene_seqs_files[species_id]) ##cz
                     else:
-                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, total_samples_count)
+                        my_args = (species_id, chunk_id, contig_id, ci+1, ci+chunk_size, total_samples_count, gene_features_files[species_id], gene_seqs_files[species_id]) ##cz
                     argument_list.append(my_args)
 
                     snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
@@ -336,9 +511,8 @@ def accumulate(accumulator, proc_args):
             acc[9 + sample_index] = acgt_str
 
 
-def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id):
+def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
-
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::start")
 
     global global_args
@@ -346,6 +520,11 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
 
     global species_sliced_pileup_path
     snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
+
+    # TODO: how to pass on these two dictionaries, instead in parse it over and over again in each chunk ...?
+    features_by_contig = read_gene_features(gene_feature_file)
+    gene_boundaries = generate_boundaries(features_by_contig)
+    gene_seqs = read_gene_sequence(gene_seq_file)
 
     with OutputStream(snps_info_fp) as out_info, \
             OutputStream(snps_freq_fp) as out_freq, \
@@ -390,10 +569,26 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
                 sample_depths.append(sample_depth)
                 sample_mafs.append(maf_by_sample)
 
+            # Annotate one site
+            ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
+            ref_pos = int(ref_pos) # ref_pos is 1-based
+            if ref_id not in gene_boundaries:
+                annots = ("IGR",) ## short contigs may not carry any gene
+            else:
+                curr_contig = gene_boundaries[ref_id]
+                curr_feature = features_by_contig[ref_id]
+                annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
+
+            locus_type = annots[0]
+            gene_id = annots[1] if len(annots) > 1 else None
+            site_type = annots[2] if len(annots) > 2 else None
+            amino_acids = annots[3] if len(annots) > 2 else None
+
             # Write
-            out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\n")
+            out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\t{locus_type}\t{gene_id}\t{site_type}\t{amino_acids}\n")
             out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")
             out_depth.write(f"{site_id}\t" + "\t".join(map(str, sample_depths)) + "\n")
+
 
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::finish")
     return True
@@ -406,7 +601,7 @@ def pool_one_chunk_across_samples(packed_args):
     global species_sliced_pileup_path
     global species_samples_dict
 
-    species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count = packed_args
+    species_id, chunk_id, contig_id, contig_start, contig_end, total_samples_count, gene_feature_file, gene_seq_file = packed_args
     tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start")
 
     list_of_snps_pileup_path = species_samples_dict["samples_snps_pileup"][species_id]
@@ -417,7 +612,7 @@ def pool_one_chunk_across_samples(packed_args):
         for sample_index in range(total_samples_count):
             proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
-        compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id)
+        compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file)
         tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish")
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -461,7 +656,7 @@ def midas_merge_snps(args):
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
-        assert len(species_ids_of_interest) > 0, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
+        assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(species_ids_of_interest)
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
@@ -472,10 +667,27 @@ def midas_merge_snps(args):
 
         # Download representative genomes for every species into midas_iggdb
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), args.num_cores)
-        contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
+        contigs_files = midas_iggdb.fetch_files("prokka_genome", species_ids_of_interest) #contigs
+        gene_features_files = midas_iggdb.fetch_files("gene_feature", species_ids_of_interest)
+        gene_seqs_files = midas_iggdb.fetch_files("gene_seq", species_ids_of_interest)
+
+        def check_annotation_setup(species_id):
+            features_file = gene_features_files[species_id]
+            gene_seq_file = gene_seqs_files[species_id]
+            genome_file = contigs_files[species_id]
+
+            features = read_gene_features(features_file)
+            gene_seqs = read_gene_sequence(gene_seq_file)
+
+            assert check_feature_counts(features, gene_seqs), f"Gene feature counts disagree with Prokka gene ffn file for species {species_id}"
+            assert check_gene_sequences(genome_file, features, gene_seqs, species_id), f"Prokka gene sequences disagree with gene ranges computation for species {species_id}"
+
+            return True
+
+        assert all(multithreading_map(check_annotation_setup, species_ids_of_interest, num_threads=10))
 
         # Compute pooled SNPs by the unit of chunks_of_sites
-        argument_list = design_chunks(contigs_files, args.chunk_size)
+        argument_list = design_chunks(contigs_files, gene_features_files, gene_seqs_files, args.chunk_size)
         proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, args.num_cores)
         assert all(s == "worked" for s in proc_flags)
 

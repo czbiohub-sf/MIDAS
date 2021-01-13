@@ -458,7 +458,7 @@ def midas_run_snps(args):
 
         # Fetch representative genome fastas for each species (multiprocessing)
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
-        contigs_files = midas_iggdb.fetch_files("contigs", species_ids_of_interest)
+        contigs_files = midas_iggdb.fetch_files("prokka_genome", species_ids_of_interest) #contigs
         tsprint(contigs_files)
 
         # Build Bowtie indexes for species in the restricted species profile

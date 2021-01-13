@@ -125,7 +125,12 @@ snps_info_schema = {
     "sc_C": int,
     "sc_G": int,
     "sc_T": int,
+    "locus_type": str,
+    "gene_id": str,
+    "site_type": str,
+    "amino_acids": str
 }
+
 
 ## merge_midas_genes
 DEFAULT_SAMPLE_DEPTH = 1.0
@@ -183,3 +188,14 @@ def fetch_schema_by_dbtype(dbtype):
 
 def format_data(x):
     return format(x, DECIMALS) if isinstance(x, float) else str(x)
+
+
+
+genes_feature_schema = {
+    "gene_id": str,
+    "contig_id": str,
+    "start": int,
+    "end": int,
+    "strand": str,
+    "gene_type": str,
+}

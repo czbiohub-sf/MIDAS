@@ -30,7 +30,7 @@ python -m iggtools midas_merge_species --samples_list samples_list.tsv ${merge_m
 
 
 echo "test build_bowtie2: select species by prevalence"
-python -m iggtools build_bowtie2_indexes --midas_iggdb ${merge_midas_outdir} --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 2 --num_cores ${num_cores}  --debug ${merge_midas_outdir}/bt2_indexes &> ${logs_dir}/build_bowtie2.log
+python -m iggtools build_bowtie2_indexes --midas_iggdb ${merge_midas_outdir} --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 2 --num_cores ${num_cores} --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes --debug &> ${logs_dir}/build_bowtie2.log
 
 
 echo "test midas_merge_snps default"
