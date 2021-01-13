@@ -1,11 +1,11 @@
-import sys
+
 import json
 from collections import defaultdict
 from operator import itemgetter
 import multiprocessing
 from math import ceil
-import Bio.SeqIO
 from bisect import bisect
+import Bio.SeqIO
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv
@@ -151,22 +151,22 @@ def acgt_string(A, C, G, T):
 def translate(codon):
     """ Translate individual codon """
     codontable = {
-    'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
-    'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
-    'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
-    'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
-    'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
-    'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
-    'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
-    'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
-    'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
-    'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
-    'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
-    'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
-    'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
-    'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
-    'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
-    'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
+        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
+        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
+        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
+        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
+        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
+        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
+        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
+        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
+        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
+        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
+        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
+        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
+        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
+        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
+        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
+        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
     }
     return codontable[str(codon)]
 
@@ -174,21 +174,21 @@ def translate(codon):
 def complement(base):
     """ Complement nucleotide """
     d = {'A':'T', 'T':'A', 'G':'C', 'C':'G'}
-    if base in d: return d[base]
-    else: return base
+    if base in d:
+        return d[base]
+    return base
 
 
 def rev_comp(seq):
     """ Reverse complement sequence """
-    return(''.join([complement(base) for base in list(seq[::-1])]))
+    return ''.join([complement(base) for base in list(seq[::-1])])
 
 
 def get_gen_seq(genome_seq, start, end, strand):
     seq = genome_seq[start-1 : end]
     if strand == "-":
         return rev_comp(seq)
-    else:
-        return seq
+    return seq
 
 
 def index_replace(codon, allele, pos, strand):
@@ -248,8 +248,7 @@ def check_gene_sequences(contig_file, features, gene_seqs, species_id):
     ## Check if the
     contig_seqs = scan_contigs(contig_file, species_id)
     flags = dict()
-    for ref_id in contig_seqs.keys():
-        c = contig_seqs[ref_id]
+    for ref_id, c in contig_seqs.items():
         f = features[ref_id]
         for gid, gdict in f.items():
             flags[gid] = gene_seqs[gid]["gene_seq"] == get_gen_seq(c["contig_seq"], gdict['start'], gdict['end'], gdict['strand'])
@@ -271,9 +270,9 @@ def generate_boundaries(features):
     for contig_id in features.keys():
         feature_per_contig = features[contig_id]
         # Sort features by starting position
-        feature_per_contig_sorted = dict(sorted(feature_per_contig.items(), key = feature_per_contig.get("start"), reverse=False))
+        feature_per_contig_sorted = dict(sorted(feature_per_contig.items(), key=feature_per_contig.get("start"), reverse=False))
         ## Temp fix: we don't need python index, we need actual range boundaries
-        feature_ranges = { gf['gene_id']: (gf['start'], gf['end']) for gf in feature_per_contig_sorted.values() } ## +1 double check
+        feature_ranges = {gf['gene_id']: (gf['start'], gf['end']) for gf in feature_per_contig_sorted.values()} ## +1 double check
         # TODO: double check non-overlapping ranges before flatten
         feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges.values()) for _ in rt)
         # Convert ranges into half-open intervals.
@@ -285,7 +284,7 @@ def generate_boundaries(features):
 
 def compute_degenracy(ref_codon, within_codon_position, strand):
     amino_acids = []
-    for allele in ['A','C','G','T']: # + strand
+    for allele in ['A', 'C', 'G', 'T']: # + strand
         codon = index_replace(ref_codon, allele, within_codon_position, strand) # +/- strand
         amino_acid = translate(codon)
         amino_acids.append(amino_acid)
@@ -302,7 +301,7 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs):
     index = binary_search_site(curr_contig["boundaries"], ref_pos)
     if index is None:
         locus_type = "IGR" # even: intergenic
-        return locus_type,
+        return (locus_type,)
 
     curr_gene_id = curr_contig["genes"][index-1]
     curr_gene = curr_feature[curr_gene_id]
@@ -314,7 +313,7 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs):
     curr_seq = gene_seqs[curr_gene_id]["gene_seq"]
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
     ref_codon, within_codon_position = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
-    assert all(_ in ['A','T','C','G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+    assert all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
 
     site_type, amino_acids = compute_degenracy(ref_codon, within_codon_position, curr_gene['strand'])
     return locus_type, curr_gene_id, site_type, amino_acids
@@ -572,7 +571,7 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
             ref_pos = int(ref_pos) # ref_pos is 1-based
             if ref_id not in gene_boundaries:
-                annots = "IGR", ## short contigs may not carry any gene
+                annots = ("IGR",) ## short contigs may not carry any gene
             else:
                 curr_contig = gene_boundaries[ref_id]
                 curr_feature = features_by_contig[ref_id]
@@ -655,7 +654,7 @@ def midas_merge_snps(args):
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
-        assert len(species_ids_of_interest) > 0, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
+        assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(species_ids_of_interest)
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
