@@ -691,6 +691,11 @@ def midas_merge_snps(args):
         proc_flags = multiprocessing_map(process_chunk_of_sites, argument_list, args.num_cores)
         assert all(s == "worked" for s in proc_flags)
 
+    except AssertionError as error:
+        tsprint(f"Bugs in the codes, keep the outputs for debugging purpose.")
+        # ideally exiting the program, logging the issue, and notifying the user.
+        raise error
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
