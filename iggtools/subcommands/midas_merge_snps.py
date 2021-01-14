@@ -1,4 +1,3 @@
-
 import json
 from collections import defaultdict
 from operator import itemgetter
@@ -408,13 +407,14 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
         semaphore_for_species[species_id] = multiprocessing.Semaphore(chunk_id)
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
-
     return argument_list
 
 
 def merge_chunks_by_species(species_id):
 
     tsprint(f"    CZ::merge_chunks_by_species::{species_id}::start")
+    #raise ValueError(f"Error 4: merge_chunks_by_species for {species_id}")
+    return True
 
     global global_args
     global species_sliced_pileup_path
@@ -453,6 +453,7 @@ def accumulate(accumulator, proc_args):
     at the same time remember <site, sample>'s A, C, G, T read counts."""
 
     contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args
+    #raise ValueError(f"Error 2: accumulate for {contig_id}-{sample_index}")
 
     global global_args
     args = global_args
@@ -514,6 +515,9 @@ def accumulate(accumulator, proc_args):
 def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::start")
+    #raise ValueError(f"Error 3: compute_and_write_pooled_snps for {species_id}-{chunk_id}")
+    #return False
+    return True
 
     global global_args
     args = global_args
@@ -589,7 +593,6 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")
             out_depth.write(f"{site_id}\t" + "\t".join(map(str, sample_depths)) + "\n")
 
-
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::finish")
     return True
 
@@ -608,11 +611,16 @@ def pool_one_chunk_across_samples(packed_args):
     list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
 
     try:
+        #raise ValueError(f"Error 1: pool_one_chunk_across_samples for {species_id}-{chunk_id}")
+        tsprint(f"    CZ::pool_one_chunk_across_samples::accumulate::{species_id}-{chunk_id}::start")
         accumulator = dict()
         for sample_index in range(total_samples_count):
             proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
-        compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file)
+        tsprint(f"    CZ::pool_one_chunk_across_samples::accumulate::{species_id}-{chunk_id}::finish")
+        tsprint(f"    CZ::pool_one_chunk_across_samples::compute_and_write_pooled_snps::{species_id}-{chunk_id}::start")
+        assert compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file)
+        tsprint(f"    CZ::pool_one_chunk_across_samples::compute_and_write_pooled_snps::{species_id}-{chunk_id}::finish")
         tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish")
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -625,20 +633,21 @@ def process_chunk_of_sites(packed_args):
     global species_samples_dict
 
     if packed_args[1] == -1:
+        #raise ValueError(f"Error 3: compute_and_write_pooled_snps for {contig_id}-{sample_index}")
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_pileup_path[species_id])
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait merge_chunks_by_species")
+        tsprint(f"  \nCZ::process_chunk_of_sites::{species_id}::wait merge_chunks_by_species\n")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}::start merge_chunks_by_species")
+        tsprint(f"  \nCZ::process_chunk_of_sites::{species_id}::start merge_chunks_by_species")
         merge_chunks_by_species(species_id)
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish merge_chunks_by_species")
         return "worked"
 
-    species_id = packed_args[0]
-    chunk_id = packed_args[1]
-    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start pool_one_chunk_across_samples")
+    # If exceptions happen here, then the semaphore will not be release
+    species_id, chunk_id = packed_args[:2]
+    tsprint(f"  \nCZ::process_chunk_of_sites::{species_id}-{chunk_id}::start pool_one_chunk_across_samples")
     pool_one_chunk_across_samples(packed_args)
     tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish pool_one_chunk_across_samples")
     return "worked"
@@ -658,6 +667,9 @@ def midas_merge_snps(args):
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
         assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(species_ids_of_interest)
+
+        species_ids_of_interest = [species_ids_of_interest[1]]
+        dict_of_species = {species_ids_of_interest[0]: dict_of_species[species_ids_of_interest[0]]}
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
