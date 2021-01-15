@@ -246,6 +246,7 @@ def process_chunk_of_sites(packed_args):
     if packed_args[1] == -1:
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_snps_path[species_id]) - 1
+
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait merge_chunks_per_species")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
@@ -254,11 +255,11 @@ def process_chunk_of_sites(packed_args):
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish merge_chunks_per_species")
         return ret
 
-    species_id = packed_args[0]
-    chunk_id = packed_args[1]
+    species_id, chunk_id = packed_args[:2]
     tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
     ret = compute_pileup_per_chunk(packed_args)
     tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+
     return ret
 
 
@@ -266,8 +267,8 @@ def compute_pileup_per_chunk(packed_args):
     """ actual pileup compute for one chunk """
 
     global semaphore_for_species
-    species_id = packed_args[0]
-    chunk_id = packed_args[1]
+
+    species_id, chunk_id = packed_args[:2]
     tsprint(f"    CZ::compute_pileup_per_chunk::{species_id}-{chunk_id}::start")
 
     try:

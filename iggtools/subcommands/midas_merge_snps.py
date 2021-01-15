@@ -342,6 +342,9 @@ def call_alleles(tuple_of_alleles, site_depth, snp_maf):
 
 
 def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_size):
+    """ Chunks_of_continuous_genomic_sites and each chunk is indexed by (species_id, chunk_id) """
+
+    tsprint("CZ::design_chunks::start species_counts: %s" % (len(contigs_files)))
 
     # dict of semaphore and acquire before
     global semaphore_for_species
@@ -396,9 +399,10 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
                     snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
                     species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
                     chunk_id += 1
-        # submit merge jobs
-        argument_list.append((species_id, -1))
+        tsprint(f"  CZ::design_chunks::{species_id}::finish for loop with {chunk_id} chunks")
 
+        # Submit the merge jobs
+        argument_list.append((species_id, -1))
         snps_info_fp = pool_of_samples.get_target_layout("snps_info", species_id)
         snps_freq_fp = pool_of_samples.get_target_layout("snps_freq", species_id)
         snps_depth_fp = pool_of_samples.get_target_layout("snps_depth", species_id)
@@ -409,6 +413,7 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
         for _ in range(chunk_id):
             semaphore_for_species[species_id].acquire()
 
+    tsprint("CZ::design_chunks::finish species_counts: %s" % (len(contigs_files)))
     return argument_list
 
 
@@ -419,7 +424,6 @@ def merge_chunks_by_species(species_id):
     global global_args
     global species_sliced_pileup_path
     global dict_of_species
-
 
     snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[-1][species_id]
     sliced_pileup_files = list(species_sliced_pileup_path[species_id].values())
@@ -444,6 +448,7 @@ def merge_chunks_by_species(species_id):
     if not global_args.debug:
         for s_file in snps_info_files + snps_freq_files + snps_depth_files:
             command(f"rm -rf {s_file}", quiet=True)
+
     tsprint(f"    CZ::merge_chunks_by_species::{species_id}::finish")
     return True
 
@@ -453,6 +458,7 @@ def accumulate(accumulator, proc_args):
     at the same time remember <site, sample>'s A, C, G, T read counts."""
 
     contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args
+    tsprint(f"    CZ::accumulate::{contig_id}-{contig_start}-{sample_index}::start")
 
     global global_args
     args = global_args
@@ -510,9 +516,12 @@ def accumulate(accumulator, proc_args):
             assert acc[9 + sample_index] == '0,0,0,0' and acgt_str != '0,0,0,0', f"accumulate error::{site_id}:{acc}:{sample_index}"
             acc[9 + sample_index] = acgt_str
 
+    tsprint(f"    CZ::accumulate::{contig_id}-{contig_start}-{sample_index}::finish")
+
 
 def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
+
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::start")
 
     global global_args
@@ -577,7 +586,9 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             else:
                 curr_contig = gene_boundaries[ref_id]
                 curr_feature = features_by_contig[ref_id]
+                tsprint(f"    CZ::annotate_site::{ref_id}-{ref_pos}::start")
                 annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
+                tsprint(f"    CZ::annotate_site::{ref_id}-{ref_pos}::finish {annots[0]}") # running time depends on the locus_type
 
             locus_type = annots[0]
             gene_id = annots[1] if len(annots) > 1 else None
@@ -588,7 +599,6 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
             out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\t{locus_type}\t{gene_id}\t{site_type}\t{amino_acids}\n")
             out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")
             out_depth.write(f"{site_id}\t" + "\t".join(map(str, sample_depths)) + "\n")
-
 
     tsprint(f"    CZ::compute_and_write_pooled_snps::{species_id}-{chunk_id}::finish")
     return True
@@ -628,6 +638,7 @@ def process_chunk_of_sites(packed_args):
         # Merge chunks_of_sites' pileup results per species
         species_id = packed_args[0]
         number_of_chunks = len(species_sliced_pileup_path[species_id])
+
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::wait merge_chunks_by_species")
         for _ in range(number_of_chunks):
             semaphore_for_species[species_id].acquire()
@@ -636,11 +647,11 @@ def process_chunk_of_sites(packed_args):
         tsprint(f"  CZ::process_chunk_of_sites::{species_id}::finish merge_chunks_by_species")
         return "worked"
 
-    species_id = packed_args[0]
-    chunk_id = packed_args[1]
+    species_id, chunk_id = packed_args[:2]
     tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start pool_one_chunk_across_samples")
     pool_one_chunk_across_samples(packed_args)
     tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish pool_one_chunk_across_samples")
+
     return "worked"
 
 
