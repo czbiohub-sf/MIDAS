@@ -5,24 +5,23 @@ set -x
 
 set -o pipefail
 
-midas_outdir="my_midas_output"
+midas_outdir="midas_output_default"
 logs_dir="logs"
 merge_midas_outdir="merged_midas_output"
 num_cores=4
 
 mkdir -p ${logs_dir}
 
-
 echo "test midas_run_species"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir}_default &> ${logs_dir}/xx_species_default.log"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir}_${num_cores} &> ${logs_dir}/xx_species_${num_cores}.log"
 
 
 echo "test midas_run_snps default"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_snps_default.log"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_snps_${num_cores}.log"
 
 
 echo "test midas_run_genes default"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_genes_default.log"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_genes_${num_cores}.log"
 
 
 echo "test midas_merge_species"
