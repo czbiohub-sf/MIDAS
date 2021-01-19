@@ -468,7 +468,7 @@ def midas_run_genes(args):
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
-        build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files)
+        build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish")
 
         # Align reads to pangenome database
@@ -482,7 +482,7 @@ def midas_run_genes(args):
 
         # Compute coverage of genes in pangenome database
         tsprint(f"CZ::design_chunks::start")
-        arguments_list = design_chunks(species_ids_of_interest, centroids_files, args.chunk_size)
+        arguments_list = design_chunks(species_ids_of_interest, centroids_files)
         tsprint(f"CZ::design_chunks::finish")
 
 
