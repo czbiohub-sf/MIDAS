@@ -17,11 +17,11 @@ cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sam
 
 
 echo "test midas_run_snps default"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_snps_${num_cores}.log"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_${num_cores} &> ${logs_dir}/xx_snps_${num_cores}.log"
 
 
 echo "test midas_run_genes default"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_default &> ${logs_dir}/xx_genes_${num_cores}.log"
+cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir}_${num_cores} &> ${logs_dir}/xx_genes_${num_cores}.log"
 
 
 echo "test midas_merge_species"
