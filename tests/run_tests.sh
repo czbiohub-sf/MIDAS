@@ -33,15 +33,15 @@ cat ${samples_fp} | awk -v OFS='\t' -v dir=$midas_outdir '{print $1, dir}' >> ${
 
 
 echo "test midas_run_species"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir} &> ${logs_dir}/xx_species_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir} &> ${logs_dir}/xx_species_${num_cores}.log"
 
 
 echo "test midas_run_snps"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir} &> ${logs_dir}/xx_snps_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir} &> ${logs_dir}/xx_snps_${num_cores}.log"
 
 
 echo "test midas_run_genes"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir} &> ${logs_dir}/xx_genes_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python -m iggtools midas_run_genes --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 ${midas_outdir} &> ${logs_dir}/xx_genes_${num_cores}.log"
 
 
 echo "test midas_merge_species"
@@ -61,7 +61,7 @@ python -m iggtools midas_merge_genes --samples_list ${pool_fp} --num_cores ${num
 
 
 echo "test midas_run_snps with prebuilt bowtie indexes"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_species_w_bowtie2_${num_cores}.log"
-cat samples.txt | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 --prebuilt_bowtie2_indexes ${merge_midas_outdir}/bt2_indexes/repgenomes --prebuilt_bowtie2_species ${merge_midas_outdir}/bt2_indexes/repgenomes.species ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_snps_w_bowtie2_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python -m iggtools midas_run_species --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_species_${num_cores}_w_bowtie2.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python -m iggtools midas_run_snps --sample_name xx -1 reads/xx_R1.fastq.gz --num_cores ${num_cores} --debug --marker_depth 1.0 --prebuilt_bowtie2_indexes ${merge_midas_outdir}/bt2_indexes/repgenomes --prebuilt_bowtie2_species ${merge_midas_outdir}/bt2_indexes/repgenomes.species ${midas_outdir}_w_bowtie2 &> ${logs_dir}/xx_snps_${num_cores}_w_bowtie2.log"
 
 echo "DONE"
