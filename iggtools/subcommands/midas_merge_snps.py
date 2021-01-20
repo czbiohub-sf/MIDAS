@@ -610,14 +610,14 @@ def pool_one_chunk_across_samples(packed_args):
     list_of_sample_depths = species_samples_dict["samples_depth"][species_id]
 
     try:
-        tsprint(f"  CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start accumulate")
+        tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start accumulate")
         accumulator = dict()
         for sample_index in range(total_samples_count):
             proc_args = (contig_id, contig_start, contig_end, sample_index, list_of_snps_pileup_path[sample_index], total_samples_count, list_of_sample_depths[sample_index])
             accumulate(accumulator, proc_args)
-        tsprint(f"  CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish accumulate")
+        tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish accumulate")
 
-        tsprint(f"  CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start compute_and_write_pooled_snps")
+        tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::start compute_and_write_pooled_snps")
         compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, chunk_id, gene_feature_file, gene_seq_file)
         tsprint(f"    CZ::pool_one_chunk_across_samples::{species_id}-{chunk_id}::finish compute_and_write_pooled_snps")
     finally:

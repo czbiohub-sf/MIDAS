@@ -139,9 +139,9 @@ def per_species_worker(species_id):
     global genes_info_files
 
     # Prepare centroid_99 to centroid_pid mapping
-    tsprint(f"    CZ2::per_species_worker::{species_id}::start read_cluster_map")
+    tsprint(f"    CZ::per_species_worker::{species_id}::start read_cluster_map")
     centroids_map = read_cluster_map(genes_info_files[species_id], global_args.cluster_pid)
-    tsprint(f"    CZ2::per_species_worker::{species_id}::finish read_cluster_map")
+    tsprint(f"    CZ::per_species_worker::{species_id}::finish read_cluster_map")
 
     # For given species, get the list of samples and check the per-sample genes coverage file
     species = dict_of_species[species_id]
@@ -153,21 +153,21 @@ def per_species_worker(species_id):
         species_samples[sample_name] = midas_genes_path
 
     # Merge results from per-sample pangenome profiling
-    tsprint(f"    CZ2::per_species_worker::{species_id}::start collect")
+    tsprint(f"    CZ::per_species_worker::{species_id}::start collect")
     sample_names = list(species_samples.keys())
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
         my_args = (sample_index, midas_genes_path, len(species_samples), centroids_map)
         collect(accumulator, my_args)
-    tsprint(f"    CZ2::per_species_worker::{species_id}::finish collect")
+    tsprint(f"    CZ::per_species_worker::{species_id}::finish collect")
 
     for gene_id, copynum in accumulator["copynum"].items():
         accumulator["presabs"][gene_id] = [1 if cn > global_args.min_copy else 0 for cn in copynum]
 
-    tsprint(f"    CZ2::per_species_worker::{species_id}::start write_matrices_per_species")
+    tsprint(f"    CZ::per_species_worker::{species_id}::start write_matrices_per_species")
     write_matrices_per_species(accumulator, species_id, sample_names)
-    tsprint(f"    CZ2::per_species_worker::{species_id}::finish write_matrices_per_species")
+    tsprint(f"    CZ::per_species_worker::{species_id}::finish write_matrices_per_species")
 
     return "worked"
 
