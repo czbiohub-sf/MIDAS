@@ -112,14 +112,19 @@ def midas_merge_species(args):
         pool_of_samples.init_samples("species")
         pool_of_samples.create_dirs(["outdir"], args.debug)
 
+        tsprint(f"CZ::write_species_results::start")
         # Slice the across-samples species profile matrix by species_id
         cols = list(species_profile_schema.keys())[1:]
         transposed = transpose(pool_of_samples, cols)
         write_species_results(pool_of_samples, transposed)
+        tsprint(f"CZ::write_species_results::finish")
 
+
+        tsprint(f"CZ::write_stats::start")
         # Calculate summary statistics for coverage and relative abundance
         stats = compute_stats(transposed["rel_abundance"], transposed["coverage"])
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
+        tsprint(f"CZ::write_stats::finish")
 
     except Exception as error:
         if not args.debug:
