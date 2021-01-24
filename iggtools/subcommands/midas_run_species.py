@@ -259,14 +259,16 @@ def write_abundance(species_profile_path, species_abundance):
 def midas_run_species(args):
 
     try:
-        tsprint(f"CZ::midas_run_species::start")
 
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
+        tsprint(f"CZ::fetch_iggdb_files::start")
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
         marker_db_files = midas_iggdb.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_iggdb.fetch_files("marker_db_hmm_cutoffs")
+        tsprint(f"CZ::fetch_iggdb_files::finish")
+
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
@@ -298,7 +300,7 @@ def midas_run_species(args):
         tsprint(f"CZ::normalize_counts::finish")
 
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
-        tsprint("CZ::midas_run_species::finish for %s" % (sample.sample_name))
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
