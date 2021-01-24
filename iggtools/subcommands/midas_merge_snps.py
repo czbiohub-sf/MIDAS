@@ -398,7 +398,7 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
                     snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
                     species_sliced_pileup_path[species_id][chunk_id] = (snps_info_fp, snps_freq_fp, snps_depth_fp)
                     chunk_id += 1
-        tsprint(f"design_chunks::{species_id}::finish for loop with {chunk_id} chunks")
+        tsprint(f"design_chunks::{species_id}::finish chunksnum.{chunk_id}")
 
         # Submit the merge jobs
         argument_list.append((species_id, -1))
