@@ -528,71 +528,97 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
     gene_boundaries = generate_boundaries(features_by_contig)
     gene_seqs = read_gene_sequence(gene_seq_file)
 
-    with OutputStream(snps_info_fp) as out_info, \
-            OutputStream(snps_freq_fp) as out_freq, \
-                OutputStream(snps_depth_fp) as out_depth:
 
-        for site_id, site_info in accumulator.items():
-            rcA, rcC, rcG, rcT, count_samples, scA, scC, scG, scT = site_info[:9]
+    info_dict = {}
+    list_of_freqs = []
+    list_of_depths = []
 
-            # Skip site with low prevalence for core sites and vice versa for rare sites
-            prevalence = count_samples / total_samples_count
-            if args.site_type == "common" and prevalence < args.site_prev:
-                continue
-            if args.site_type == "rare" and prevalence > args.site_prev:
-                continue
+    for site_id, site_info in accumulator.items():
+        rcA, rcC, rcG, rcT, count_samples, scA, scC, scG, scT = site_info[:9]
 
-            # compute the pooled major allele based on the pooled-read-counts (abundance) or pooled-sample-counts (prevalence)
-            if args.snp_pooled_method == "abundance":
-                site_depth = sum((rcA, rcC, rcG, rcT))
-                tuple_of_alleles = (('A', rcA), ('C', rcC), ('G', rcG), ('T', rcT))
-            else:
-                site_depth = count_samples
-                tuple_of_alleles = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
+        # Skip site with low prevalence for core sites and vice versa for rare sites
+        prevalence = count_samples / total_samples_count
+        if args.site_type == "common" and prevalence < args.site_prev:
+            continue
+        if args.site_type == "rare" and prevalence > args.site_prev:
+            continue
 
-            major_allele, minor_allele, snp_type = call_alleles(tuple_of_alleles, site_depth, args.snp_maf)
-            major_index = 'ACGT'.index(major_allele)
-            minor_index = 'ACGT'.index(minor_allele)
+        # compute the pooled major allele based on the pooled-read-counts (abundance) or pooled-sample-counts (prevalence)
+        if args.snp_pooled_method == "abundance":
+            site_depth = sum((rcA, rcC, rcG, rcT))
+            tuple_of_alleles = (('A', rcA), ('C', rcC), ('G', rcG), ('T', rcT))
+        else:
+            site_depth = count_samples
+            tuple_of_alleles = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
 
-            # Keep sites with desired snp_type
-            if ('any' not in args.snp_type and snp_type not in args.snp_type):
-                continue
+        major_allele, minor_allele, snp_type = call_alleles(tuple_of_alleles, site_depth, args.snp_maf)
+        major_index = 'ACGT'.index(major_allele)
+        minor_index = 'ACGT'.index(minor_allele)
 
-            # Extract the read counts of pooled major alleles for samples
-            sample_depths = [] # only accounts for reads matching either major or minor allele
-            sample_mafs = [] # frequency of minor allele frequency
-            for sample_index in range(9, len(site_info)):
-                # for each <site, sample> pair
-                rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
+        # Keep sites with desired snp_type
+        if ('any' not in args.snp_type and snp_type not in args.snp_type):
+            continue
 
-                sample_depth = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
-                maf_by_sample = -1.0 if sample_depth == 0 else (0.0 if major_index == minor_index else rc_ACGT[minor_index] / sample_depth)
+        # Extract the read counts of pooled major alleles for samples
+        sample_depths = [] # only accounts for reads matching either major or minor allele
+        sample_mafs = [] # frequency of minor allele frequency
+        for sample_index in range(9, len(site_info)):
+            # for each <site, sample> pair
+            rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
 
-                sample_depths.append(sample_depth)
-                sample_mafs.append(maf_by_sample)
+            sample_depth = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
+            maf_by_sample = -1.0 if sample_depth == 0 else (0.0 if major_index == minor_index else rc_ACGT[minor_index] / sample_depth)
 
-            # Annotate one site
-            ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
-            ref_pos = int(ref_pos) # ref_pos is 1-based
-            if ref_id not in gene_boundaries:
-                annots = ("IGR",) ## short contigs may not carry any gene
-            else:
-                curr_contig = gene_boundaries[ref_id]
-                curr_feature = features_by_contig[ref_id]
-                # TODO: if the binary search is the bottle neck of the performance, then benchmark first and then try batch binery search
-                tsprint(f"    CZ2::compute_and_write_pooled_snps::{ref_id}-{ref_pos}::start annotate_site")
-                annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
-                tsprint(f"    CZ2::compute_and_write_pooled_snps::{ref_id}-{ref_pos}::finish annotate_site {annots[0]}") # running time depends on the locus_type
+            sample_depths.append(sample_depth)
+            sample_mafs.append(maf_by_sample)
 
-            locus_type = annots[0]
-            gene_id = annots[1] if len(annots) > 1 else None
-            site_type = annots[2] if len(annots) > 2 else None
-            amino_acids = annots[3] if len(annots) > 2 else None
+        # Annotate one site
+        ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
+        ref_pos = int(ref_pos) # ref_pos is 1-based
+        if ref_id not in gene_boundaries:
+            annots = ("IGR",) ## short contigs may not carry any gene
+        else:
+            curr_contig = gene_boundaries[ref_id]
+            curr_feature = features_by_contig[ref_id]
+            # TODO: if the binary search is the bottle neck of the performance, then benchmark first and then try batch binery search
+            #tsprint(f"    CZ2::compute_and_write_pooled_snps::{ref_id}-{ref_pos}::start annotate_site")
+            annots = annotate_site(ref_id, ref_pos, curr_contig, curr_feature, gene_seqs)
+            #tsprint(f"    CZ2::compute_and_write_pooled_snps::{ref_id}-{ref_pos}::finish annotate_site {annots[0]}") # running time depends on the locus_type
 
-            # Write
-            out_info.write(f"{site_id}\t{major_allele}\t{minor_allele}\t{count_samples}\t{snp_type}\t{rcA}\t{rcC}\t{rcG}\t{rcT}\t{scA}\t{scC}\t{scG}\t{scT}\t{locus_type}\t{gene_id}\t{site_type}\t{amino_acids}\n")
-            out_freq.write(f"{site_id}\t" + "\t".join(map(format_data, sample_mafs)) + "\n")
-            out_depth.write(f"{site_id}\t" + "\t".join(map(str, sample_depths)) + "\n")
+        locus_type = annots[0]
+        gene_id = annots[1] if len(annots) > 1 else None
+        site_type = annots[2] if len(annots) > 2 else None
+        amino_acids = annots[3] if len(annots) > 2 else None
+
+
+        info_dict[site_id] = {
+            "site_id": site_id,
+            "major_allele": major_allele,
+            "minor_allele": minor_allele,
+            "count_samples": count_samples,
+            "snp_type": snp_type,
+            "rcA": rcA, "rcC": rcC, "rcG": rcG, "rcT": rcT,
+             "scA": scA, "scC": scC, "scG": scG, "scT":scT,
+             "locus_type": locus_type,
+             "gene_id": gene_id,
+             "site_type": site_type,
+             "amino_acids": amino_acids
+        }
+        list_of_freqs.append([site_id] + sample_mafs)
+        list_of_depths.append([site_id] + sample_depths)
+
+
+    with OutputStream(snps_info_fp) as out_info:
+        for vals in info_dict.values():
+            out_info.write("\t".join(map(format_data, vals)) + "\n")
+
+    with OutputStream(snps_freq_fp) as out_freq:
+        for line in list_of_freqs:
+            out_freq.write("\t".join(map(format_data, line)) + "\n")
+
+    with OutputStream(snps_depth_fp) as out_depth:
+        for line in list_of_depths:
+            out_depth.write("\t".join(map(str, line)) + "\n")
 
     return True
 
