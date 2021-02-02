@@ -172,7 +172,6 @@ def design_chunks(species_ids_of_interest, centroids_files):
             # TODO: we should generate the centroids_info.txt
             # while the gene_length should be merged with genes_info for next round of database build
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the gene_length separately
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -260,7 +259,7 @@ def compute_coverage_per_chunk(packed_args):
                     gene_length = gene_length_dict[gene_id]
                     aligned_reads = bamfile.count(gene_id)
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
-                    gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+                    gene_depth = sum((len(aln.query_alignment_sequence) if keep_read(aln) else 0.0 for aln in bamfile.fetch(gene_id))) / gene_length
 
                     chunk_genome_size += 1
                     if gene_depth == 0: # Sparse by default.
