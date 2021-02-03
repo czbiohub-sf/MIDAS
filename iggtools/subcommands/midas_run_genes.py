@@ -470,12 +470,11 @@ def midas_run_genes(args):
 
         # Fetch marker's centroids cluster info per species
         global marker_centroids_files
-        marker_centroids_files = midas_iggdb.fetch_files("marker_centroid_99", species_ids_of_interest)
-        tsprint(f"CZ::fetch_iggdb_files::finish")
+        marker_centroids_files = midas_iggdb.fetch_files("marker_centroids_99", species_ids_of_interest)
 
         tsprint(centroids_files)
         tsprint(marker_centroids_files)
-
+        tsprint(f"CZ::fetch_iggdb_files::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")
