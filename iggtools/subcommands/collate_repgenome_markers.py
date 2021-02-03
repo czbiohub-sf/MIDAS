@@ -167,8 +167,8 @@ def map_marker_to_centroids_99(args):
             for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
                 markers[gene_id] = marker_id
 
-        mc_file_local = midas_iggdb.get_target_layout("marker_centroid_99", remote=False, component="", species_id=species_id)
-        mc_file_remote = midas_iggdb.get_target_layout("marker_centroid_99", remote=True, component="", species_id=species_id)
+        mc_file_local = midas_iggdb.get_target_layout("marker_centroids_99", remote=False, component="", species_id=species_id)
+        mc_file_remote = midas_iggdb.get_target_layout("marker_centroids_99", remote=True, component="", species_id=species_id)
         marker_centroids_subdir = os.path.dirname(mc_file_local)
 
         if not os.path.isdir(os.path.dirname(mc_file_local)):
