@@ -1,77 +1,36 @@
 import os
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, retry, command, multithreading_map, cat_files, find_files, upload, num_physical_cores, split, upload_star
-from iggtools.models.uhgg import MIDAS_IGGDB, MARKER_FILE_EXTS, get_uhgg_layout
+import sys
+from collections import defaultdict
+from multiprocessing import Semaphore
+from iggtools.common.argparser import add_subcommand, SUPPRESS
+from iggtools.common.utils import tsprint, InputStream, OutputStream, download_reference, select_from_tsv, retry, command, multithreading_map, multiprocessing_map, cat_files, find_files, upload, num_physical_cores, split, upload_star, pythonpath
+from iggtools.models.uhgg import UHGG, MIDAS_IGGDB, MARKER_FILE_EXTS, get_uhgg_layout
 from iggtools.params.schemas import MARKER_INFO_SCHEMA, PAN_GENE_INFO_SCHEMA
+from iggtools.subcommands.build_pangenome import decode_species_arg
+from iggtools.params import outputs
+
+
+CONCURRENT_SPECIES_BUILDS = Semaphore(32)
+
+
+def pangenome_file(species_id, component):
+    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
+    return f"{outputs.pangenomes}/{species_id}/{component}"
+
+
+def species_mc_file(species_id, component):
+    #.txt.lz4
+    return f"{outputs.marker_centroids}/{species_id}.{component}"
+
+
+def genome_marker_mapfile(species_id, genome_id, component):
+    # markers.map.lz4
+    return f"{outputs.marker_genes}/temp/{species_id}/{genome_id}/{genome_id}.{component}"
 
 
 @retry
 def find_files_with_retry(f):
     return find_files(f)
-
-
-def map_marker_to_centroids(args):
-    """ Identify which gene clusters have repgenome's marker genes """
-    midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)
-    representatives = midas_iggdb.uhgg.representatives
-
-    # Alternatively, you can also fetch the collated phyeco.map for all species
-    #fetched_marker_genes_mapfile = midas_iggdb.fetch_files(get_uhgg_layout(species_id="", component="map")["marker_db"])
-
-    log_remote = midas_iggdb.get_target_layout("marker_centroids_log", remote=True)
-    msg = f"Finding centroids genes for marker genes."
-    if find_files_with_retry(log_remote):
-        if not args.force:
-            tsprint(f"Destination {log_remote} already exists.  Specify --force to overwrite.")
-            return
-        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
-    tsprint(msg)
-
-    log_local = midas_iggdb.get_target_layout("marker_centroids_log", remote=False)
-    subdir = os.path.dirname(log_local)
-    if not os.path.isdir(subdir):
-        command(f"mkdir -p {subdir}")
-    with open(log_local, "w") as slog:
-        slog.write(msg + "\n")
-
-    def species_work(species_id):
-        # Fetch per-species marker_genes_mapfile
-        fetched_marker_map = midas_iggdb.fetch_files(get_uhgg_layout(species_id, "markers.map", representatives[species_id])["marker_genes"])
-        fetched_gene_info = midas_iggdb.fetch_files(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"])
-
-        # Parse the marker gene id of the representative genomes from the phyeco.mapfile. Refer to collate_repgenome_markers.
-        markers = dict()
-        awk_command = f"awk \'$1 == \"{species_id}\"\'"
-        with InputStream(fetched_marker_map, awk_command) as stream:
-            for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-                assert marker_id not in markers, f"marker {marker_id} for species {species_id} corresponds to multiple gene_ids."
-                markers[gene_id] = marker_id
-
-        mc_file_local = midas_iggdb.get_target_layout("marker_centroids", remote=False, component="", species_id=species_id)
-        mc_file_remote = midas_iggdb.get_target_layout("marker_centroids", remote=True, component="", species_id=species_id)
-
-        marker_centroids_subdir = os.path.dirname(mc_file_local)
-        if not os.path.isdir(os.path.dirname(mc_file_local)):
-            command(f"mkdir -p {marker_centroids_subdir}")
-
-        # Filter gene_info.txt by marker_ids
-        with OutputStream(mc_file_local) as ostream:
-            ostream.write("\t".join(["marker_id"] + list(PAN_GENE_INFO_SCHEMA.keys())) + "\n")
-            with InputStream(fetched_gene_info) as stream:
-                for row in select_from_tsv(stream, selected_columns=PAN_GENE_INFO_SCHEMA, result_structure=dict):
-                    if row["gene_id"] in markers.keys():
-                        ostream.write("\t".join([markers[row["gene_id"]]] + list(row.values())) + "\n")
-
-        # Update to s3
-        upload(mc_file_local, mc_file_remote, check=False)
-
-        with open(f"{log_local}", "a") as slog:
-            slog.write(f"Species {species_id} finished" + "\n")
-
-    multithreading_map(species_work, midas_iggdb.uhgg.species.keys(), num_physical_cores)
-
-    # Upload log_local log file in the last
-    upload(log_local, log_remote, check=False)
 
 
 def collate_repgenome_markers(args):
@@ -126,73 +85,114 @@ def collate_repgenome_markers(args):
     upload(collate_log, collate_log_remote, check=False)
 
 
-def map_marker_to_centroids_99(args):
-    """ Map marker genes to ALL centroid 99 genes """
-    midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)
-    species_info = midas_iggdb.uhgg.species
-
-    log_remote = midas_iggdb.get_target_layout("marker_centroids_99_log", remote=True)
-    msg = f"Finding all centroid_99 genes for marker genes."
-    if find_files_with_retry(log_remote):
-        if not args.force:
-            tsprint(f"Destination {log_remote} already exists.  Specify --force to overwrite.")
-            return
-        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
-    tsprint(msg)
-
-    log_local = midas_iggdb.get_target_layout("marker_centroids_99_log", remote=False)
-    subdir = os.path.dirname(log_local)
-    if not os.path.isdir(subdir):
-        command(f"mkdir -p {subdir}")
-    with open(log_local, "w") as slog:
-        slog.write(msg + "\n")
+def parse_marker_by_genome(packed_ids):
+    species_id, genome_id = packed_ids
+    marker_by_genome = dict()
+    with InputStream(genome_marker_mapfile(species_id, genome_id, "markers.map.lz4")) as stream:
+        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
+            marker_by_genome[gene_id] = marker_id
+    return marker_by_genome
 
 
-    def fetch_marker_mapfile(pargs):
-        species_id, genome_id = pargs
-        return midas_iggdb.fetch_files(get_uhgg_layout(species_id, "markers.map", genome_id)["marker_genes"])
+def build_marker_centroids_mapping(args):
+    if args.zzz_slave_toc:
+        build_mc_slave(args)
+    else:
+        build_mc_master(args)
+
+
+def build_mc_master(args):
+
+    # Fetch table of contents from s3.
+    # This will be read separately by each species build subcommand, so we make a local copy.
+    local_toc = download_reference(outputs.genomes)
+
+    db = UHGG(local_toc)
+    species = db.species
+
+    #midas_iggdb = MIDAS_IGGDB(args.midas_iggdb)
+    #species = midas_iggdb.uhgg.species
 
     def species_work(species_id):
-        genome_ids = list(species_info[species_id].keys())
+        assert species_id in species, f"Species {species_id} is not in the database."
+        species_genomes = species[species_id]
 
-        # Fetch per-species marker_genes_mapfile from all the genomes
-        files_of_marker_map = multithreading_map(fetch_marker_mapfile, list(zip([species_id] * len(genome_ids), genome_ids)), 20)
-        cat_files(files_of_marker_map, f"{species_id}.map", 20)
+        dest_file = species_mc_file(species_id, "txt.lz4")
+        msg = f"Building marker genes to centroids for species {species_id} with {len(species_genomes)} total genomes."
+        if find_files_with_retry(dest_file):
+            if not args.force:
+                tsprint(f"Destination {dest_file} for species {species_id} pangenome already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Building", "Rebuilding")
 
-        fetched_gene_info = midas_iggdb.fetch_files(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"])
+        with CONCURRENT_SPECIES_BUILDS:
+            tsprint(msg)
+            slave_log = "mc_build.log"
+            slave_subdir = f"marker_centroids_99/{species_id}"
+            if not args.debug:
+                command(f"rm -rf {slave_subdir}")
+            if not os.path.isdir(slave_subdir):
+                command(f"mkdir -p {slave_subdir}")
+            # Recurisve call via subcommand.  Use subdir, redirect logs.
+            slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools collate_repgenome_markers --map_marker_to_centroids -s {species_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
 
-        # Parse the marker gene id of the ALL genomes from the phyeco.mapfile, not only representative genomes.
-        markers = dict()
-        with InputStream(f"{species_id}.map") as stream:
-            for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-                markers[gene_id] = marker_id
+            with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+                slog.write(msg + "\n")
+                slog.write(slave_cmd + "\n")
+            try:
+                command(slave_cmd)
+            finally:
+                # Cleanup should not raise exceptions of its own, so as not to interfere with any
+                # prior exceptions that may be more informative.  Hence check=False.
+                upload(f"{slave_subdir}/{slave_log}", species_mc_file(species_id, "log.lz4"), check=False)
+                if not args.debug:
+                    command(f"rm -rf {slave_subdir}", check=False)
 
-        mc_file_local = midas_iggdb.get_target_layout("marker_centroids_99", remote=False, component="", species_id=species_id)
-        mc_file_remote = midas_iggdb.get_target_layout("marker_centroids_99", remote=True, component="", species_id=species_id)
-        marker_centroids_subdir = os.path.dirname(mc_file_local)
+    # Check for destination presence in s3 with up to 10-way concurrency.
+    # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
+    species_id_list = decode_species_arg(args, species)
+    multithreading_map(species_work, species_id_list, 36)
 
-        if not os.path.isdir(os.path.dirname(mc_file_local)):
-            command(f"mkdir -p {marker_centroids_subdir}")
 
-        # Filter gene_info.txt by marker_ids
-        with OutputStream(mc_file_local) as ostream:
-            ostream.write("\t".join(["marker_id"] + list(PAN_GENE_INFO_SCHEMA.keys())) + "\n")
-            with InputStream(fetched_gene_info) as stream:
-                # Loop over the ALl the genes, locate those that are marker genes, and write the
-                for row in select_from_tsv(stream, selected_columns=PAN_GENE_INFO_SCHEMA, result_structure=dict):
-                    if row["gene_id"] in markers.keys():
-                        ostream.write("\t".join([markers[row["gene_id"]]] + list(row.values())) + "\n")
+def build_mc_slave(args):
+    violation = "Please do not call build_mc_slave directly.  Violation"
+    assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
+    assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
 
-        # Update to s3
-        upload(mc_file_local, mc_file_remote, check=False)
+    db = UHGG(args.zzz_slave_toc)
+    species = db.species
+    species_id = args.species
 
-        with open(f"{log_local}", "a") as slog:
-            slog.write(f"Species {species_id} finished" + "\n")
+    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
-    multithreading_map(species_work, species_info.keys(), num_physical_cores)
+    species_genomes = species[species_id]
+    species_genomes_ids = species_genomes.keys()
 
-    # Upload log_local log file in the last
-    upload(log_local, log_remote, check=False)
+    dest_file = species_mc_file(species_id, "txt.lz4")
+    local_file = f"{species_id}.txt"
+
+    command(f"aws s3 rm --recursive {dest_file}")
+
+    # Read in all genome's phyeco.mapfile
+    list_marker_dicts = multiprocessing_map(parse_marker_by_genome, ((species_id, genome_id) for genome_id in species_genomes_ids))
+    # flatten the list of dict
+    markers = {k: v for md in list_marker_dicts for k, v, in md.items()}
+
+    # Read in species/genomes/mapfile
+    gene_info_file = pangenome_file(species_id, "gene_info.txt.lz4")
+
+    # Filter gene_info.txt by marker_ids
+    # Option: can also write to dest_file directly with Outputstream
+    with OutputStream(local_file) as ostream:
+        ostream.write("\t".join(["marker_id"] + list(PAN_GENE_INFO_SCHEMA.keys())) + "\n")
+        with InputStream(gene_info_file) as stream:
+            # Loop over the ALl the genes, locate those that are marker genes, and write the
+            for row in select_from_tsv(stream, selected_columns=PAN_GENE_INFO_SCHEMA, result_structure=dict):
+                if row["gene_id"] in markers.keys():
+                    ostream.write("\t".join([markers[row["gene_id"]]] + list(row.values())) + "\n")
+
+    # Update to s3
+    upload(local_file, dest_file, check=False)
 
 
 def register_args(main_func):
@@ -200,9 +200,14 @@ def register_args(main_func):
     subparser.add_argument('--midas_iggdb',
                            dest='midas_iggdb',
                            type=str,
-                           required=True,
+                           required=False,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('-s',
+                           '--species',
+                           dest='species',
+                           required=False,
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
     subparser.add_argument('--collate_repgenome_markers',
                            action='store_true',
                            default=False,
@@ -211,6 +216,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Identify the centroids genes for rep marker genes")
+    subparser.add_argument('--zzz_slave_toc',
+                           dest='zzz_slave_toc',
+                           required=False,
+                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
     return main_func
 
 
@@ -220,4 +229,4 @@ def main(args):
     if args.collate_repgenome_markers:
         collate_repgenome_markers(args)
     if args.map_marker_to_centroids:
-        map_marker_to_centroids_99(args)
+        build_marker_centroids_mapping(args)

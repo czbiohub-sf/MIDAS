@@ -12,3 +12,4 @@ annotations = f"{igg}/gene_annotations"
 
 opsdir = f"{igg}/operations"
 marker_genes = f"{igg}/marker_genes/{inputs.marker_set}"
+marker_centroids = f"{marker_genes}/marker_centroids_99"
