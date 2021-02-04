@@ -609,8 +609,8 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
 
 
     with OutputStream(snps_info_fp) as out_info:
-        for vals in info_dict.values():
-            out_info.write("\t".join(map(format_data, vals)) + "\n")
+        for r in info_dict.values():
+            out_info.write("\t".join(map(format_data, r.values())) + "\n")
 
     with OutputStream(snps_freq_fp) as out_freq:
         for line in list_of_freqs:
@@ -706,6 +706,7 @@ def midas_merge_snps(args):
         gene_features_files = midas_iggdb.fetch_files("gene_feature", species_ids_of_interest)
         gene_seqs_files = midas_iggdb.fetch_files("gene_seq", species_ids_of_interest)
         tsprint(f"CZ::fetch_iggdb_files::finish")
+
 
         # TODO move this part to database build
         def check_annotation_setup(species_id):
