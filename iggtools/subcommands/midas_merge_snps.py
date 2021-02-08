@@ -209,7 +209,6 @@ def read_gene_sequence(fasta_file):
                 "gene_len": len(rec.seq),
                 "gene_seq": str(rec.seq),
             }
-    ## need to pay attention to reverse strand, probably by using scan_contigs()
     return contigs
 
 
@@ -218,19 +217,10 @@ def read_gene_features(features_file):
     features = defaultdict(dict)
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
-            features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
+            # Only read in CDS
+            if r['gene_type'] == "CDS":
+                features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
     return features
-
-
-def check_feature_counts(features, gene_seqs):
-    """ Check if the parsed gene feature file is consistent with the Prokka gene ffn file """
-    counts = 0
-    genes = []
-    for _ in features.keys():
-        counts += len(features[_])
-        genes.extend(list(features[_].keys()))
-    assert len(gene_seqs) == counts
-    return sorted(genes) == sorted(list(gene_seqs.keys()))
 
 
 def check_gene_sequences(contig_file, features, gene_seqs, species_id):
@@ -250,7 +240,7 @@ def binary_search_site(list_of_boundaries, ref_pos):
     if flag % 2 == 0: # even: intergenic
         return None
     index = int((flag + 1) / 2)
-    ## Return the index of the ranges (1-based)
+    # Return the index of the ranges (1-based)
     return index
 
 
@@ -388,10 +378,8 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
         chunk_id = 0
         for contig_id, contig in contigs.items():
             contig_length = contig["contig_len"]
-            # pileup is 1-based index
+            # Pileup is 1-based index
             if contig_length <= chunk_size:
-                if chunk_id >= 1: ######################
-                    break
                 my_args = (species_id, chunk_id, contig_id, 1, contig_length, total_samples_count, gene_features_files[species_id], gene_seqs_files[species_id]) ##cz
                 argument_list.append(my_args)
 
@@ -403,8 +391,6 @@ def design_chunks(contigs_files, gene_features_files, gene_seqs_files, chunk_siz
             else:
                 number_of_chunks = ceil(contig_length/chunk_size) - 1
                 for ni, ci in enumerate(range(0, contig_length, chunk_size)):
-                    if chunk_id >= 1:  ######################
-                        break
                     if ni == number_of_chunks:
                         my_args = (species_id, chunk_id, contig_id, ci+1, contig_length, total_samples_count, gene_features_files[species_id], gene_seqs_files[species_id]) ##cz
                     else:
@@ -447,7 +433,7 @@ def merge_chunks_by_species(species_id):
     snps_depth_files = [fi[2] for fi in sliced_pileup_files]
     samples_names = dict_of_species[species_id].fetch_samples_names()
 
-    # Add header for the merged-chunks
+    # Add headers for the merged-chunks
     with OutputStream(snps_info_fp) as out_info:
         out_info.write("\t".join(list(snps_info_schema.keys())) + "\n")
     cat_files(snps_info_files, snps_info_fp, 20)
@@ -500,7 +486,7 @@ def accumulate(accumulator, proc_args):
             # Compute derived columns
             site_id = f"{ref_id}|{ref_pos}|{ref_allele}"
 
-            # sample counts for A, C, G, T
+            # Sample counts for A, C, G, T
             sc_ACGT = [0, 0, 0, 0]
             for i, nt_count in enumerate((A, C, G, T)):
                 if nt_count > 0: # presence or absence
@@ -519,7 +505,7 @@ def accumulate(accumulator, proc_args):
                 acc[c_scG] += sc_ACGT[2]
                 acc[c_scT] += sc_ACGT[3]
             else:
-                # initialize each sample_index column with 0,0,0,0, particularly
+                # Initialize each sample_index column with 0,0,0,0, particularly
                 # for <site, sample> pair either absent or fail the site filters
                 acc = [A, C, G, T, 1, sc_ACGT[0], sc_ACGT[1], sc_ACGT[2], sc_ACGT[3]] + ([acgt_string(0, 0, 0, 0)] * total_samples_count)
                 accumulator[site_id] = acc
@@ -543,8 +529,6 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
     snps_info_fp, snps_freq_fp, snps_depth_fp = species_sliced_pileup_path[species_id][chunk_id]
 
     # TODO: how to pass on these two dictionaries, instead in parse it over and over again in each chunk ...?
-    print(gene_feature_file)
-    print(gene_seq_file)
     features_by_contig = read_gene_features(gene_feature_file)
     gene_boundaries = generate_boundaries(features_by_contig)
     gene_seqs = read_gene_sequence(gene_seq_file)
@@ -583,7 +567,7 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
         sample_depths = [] # only accounts for reads matching either major or minor allele
         sample_mafs = [] # frequency of minor allele frequency
         for sample_index in range(9, len(site_info)):
-            # for each <site, sample> pair
+            # For Each <Site, Sample> Pair
             rc_ACGT = [int(rc) for rc in site_info[sample_index].split(",")]
 
             sample_depth = rc_ACGT[major_index] if major_index == minor_index else rc_ACGT[major_index] + rc_ACGT[minor_index]
@@ -639,7 +623,6 @@ def compute_and_write_pooled_snps(accumulator, total_samples_count, species_id, 
     with OutputStream(snps_depth_fp) as out_depth:
         for line in list_of_depths:
             out_depth.write("\t".join(map(str, line)) + "\n")
-
     return True
 
 
@@ -729,6 +712,7 @@ def midas_merge_snps(args):
 
 
         # TODO move this part to database build
+        # Remove me after accuracy check
         def check_annotation_setup(species_id):
             features_file = gene_features_files[species_id]
             gene_seq_file = gene_seqs_files[species_id]
@@ -737,9 +721,7 @@ def midas_merge_snps(args):
             features = read_gene_features(features_file)
             gene_seqs = read_gene_sequence(gene_seq_file)
 
-            assert check_feature_counts(features, gene_seqs), f"Gene feature counts disagree with Prokka gene ffn file for species {species_id}"
             assert check_gene_sequences(genome_file, features, gene_seqs, species_id), f"Prokka gene sequences disagree with gene ranges computation for species {species_id}"
-
             return True
 
         assert all(multithreading_map(check_annotation_setup, species_ids_of_interest, num_threads=10))
