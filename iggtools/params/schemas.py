@@ -1,7 +1,7 @@
 # These are the schames for the outputs of MIDAS
 
 ## midas_merge_species
-DECIMALS = ".3f"
+DECIMALS = ".4f"
 
 
 MARKER_INFO_SCHEMA = {
@@ -83,8 +83,6 @@ DEFAULT_SITE_TYPE = "common"
 DEFAULT_SNP_POOLED_METHOD = "prevalence"
 DEFAULT_SNP_MAF = 0.05
 DEFAULT_SNP_TYPE = "mono, bi"
-
-DECIMALS = ".3f"
 
 
 snps_profile_schema = {

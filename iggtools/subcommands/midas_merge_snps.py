@@ -474,10 +474,11 @@ def accumulate(accumulator, proc_args):
             ref_id, ref_pos, ref_allele = row["ref_id"], row["ref_pos"], row["ref_allele"]
             A, C, G, T, depth = row["count_a"], row["count_c"], row["count_g"], row["count_t"], row["depth"]
 
-            # Per sample site filters:
-            # if the given <site.i, sample.j> fails the within-sample site filter,
+            # Per Sample Site Filters:
+            # if the given <site.i, sample.j> pair fails the within-sample site filter,
             # then sample.j should not be used for the calculation of site.i pooled statistics.
             site_ratio = depth / genome_coverage
+
             if depth < args.site_depth:
                 continue
             if site_ratio > args.site_ratio:
