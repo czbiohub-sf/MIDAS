@@ -269,7 +269,6 @@ def compute_coverage_per_chunk(packed_args):
 
                     chunk_num_covered_genes += 1
                     chunk_nz_gene_depth += gene_depth
-                    #chunk_aligned_reads += aligned_reads
                     chunk_mapped_reads += mapped_reads
 
                     vals = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
