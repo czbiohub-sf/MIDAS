@@ -172,7 +172,6 @@ def design_chunks(species_ids_of_interest, centroids_files):
             # TODO: we should generate the centroids_info.txt
             # while the gene_length should be merged with genes_info for next round of database build
             for centroid in Bio.SeqIO.parse(file, 'fasta'):
-
                 if not chunk_id*chunk_size <= gene_count < (chunk_id+1)*chunk_size:
                     # For each chunk, we need the dict to keep track of the gene_length separately
                     headerless_gene_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -259,8 +258,10 @@ def compute_coverage_per_chunk(packed_args):
                     # Basic compute unit for each gene
                     gene_length = gene_length_dict[gene_id]
                     aligned_reads = bamfile.count(gene_id)
+                    chunk_aligned_reads += aligned_reads
+
                     mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
-                    gene_depth = sum((len(aln.query_alignment_sequence) / gene_length for aln in bamfile.fetch(gene_id)))
+                    gene_depth = sum((len(aln.query_alignment_sequence) if keep_read(aln) else 0.0 for aln in bamfile.fetch(gene_id))) / gene_length
 
                     chunk_genome_size += 1
                     if gene_depth == 0: # Sparse by default.
@@ -268,7 +269,6 @@ def compute_coverage_per_chunk(packed_args):
 
                     chunk_num_covered_genes += 1
                     chunk_nz_gene_depth += gene_depth
-                    chunk_aligned_reads += aligned_reads
                     chunk_mapped_reads += mapped_reads
 
                     vals = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
@@ -292,11 +292,16 @@ def compute_coverage_per_chunk(packed_args):
 
 
 def get_marker_coverage_from_chunk(my_args):
-    chunk_file, awk_command, marker_genes_depth = my_args
+    chunk_file, centroids_of_markers = my_args
 
-    with InputStream(chunk_file, awk_command) as stream:
+    chunk_marker_coverage = defaultdict(dict)
+    list_of_genes_that_are_markers = tuple(centroids_of_markers.keys())
+    with InputStream(chunk_file) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            marker_genes_depth[row["gene_id"]] += row["total_depth"]
+            if row["gene_id"] in list_of_genes_that_are_markers:
+                chunk_marker_coverage[row["gene_id"]] = centroids_of_markers[row["gene_id"]]
+                chunk_marker_coverage[row["gene_id"]]["gene_depth"] = row["total_depth"]
+    return list(chunk_marker_coverage.values())
 
 
 def rewrite_chunk_coverage_file(my_args):
@@ -330,28 +335,33 @@ def merge_chunks_per_species(species_id):
     all_chunks = species_sliced_genes_path[species_id][:-1]
     species_gene_coverage_path = species_sliced_genes_path[species_id][-1]
 
-    # Extract marker gene reads coverage from all the non-zero covered genes.
+    # Find the corresponding centroid_99 genes for the marker genes
     tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start get_marker_coverage_from_chunk")
+    centroids_of_markers = defaultdict(dict)
+    marker_genes_by_species = []
     with InputStream(marker_centroids_files[species_id]) as stream:
-        centroids_of_marker = dict(select_from_tsv(stream, selected_columns=["marker_id", "centroid_99"]))
-    mc_genes = list(centroids_of_marker.values())
-    # TODO note: when centroid_70, multiple marker genes may correspond to one centroid_70 (T OR F)?
-    # then that centroin_70 would not be single copy anymore.
+        for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
+            centroids_of_markers[r["centroid_99"]] = r
+            if r["marker_id"] not in marker_genes_by_species:
+                marker_genes_by_species.append(r["marker_id"])
+    # The coordinate of the marker_centroid_99 file is based on pan-gene-id ~ marker-id ~ centroid_99, therefore
+    # there would be duplcated marker-id ~ centroid_99 mapping pairs
 
-    # Construct awk command for match marker_genes
-    pat_str = " || ".join([f"$1==\"{g}\"" for g in mc_genes])
-    awk_command = "awk \'%s\'" % pat_str
-
-    marker_genes_depth = dict(zip(mc_genes, [0.0]*len(mc_genes)))
-    args = []
+    my_args = []
     for chunk_file in all_chunks:
-        args.append((chunk_file, awk_command, marker_genes_depth))
-    multithreading_map(get_marker_coverage_from_chunk, args, 4)
+        my_args.append((chunk_file, centroids_of_markers))
+    marker_coverage_by_chunks = multithreading_map(get_marker_coverage_from_chunk, my_args, 4)
+
+    marker_coverage = dict(zip(marker_genes_by_species, [0.0]*len(marker_genes_by_species)))
+    for per_chunk_marker in marker_coverage_by_chunks:
+        if len(per_chunk_marker) > 0:
+            for r in per_chunk_marker:
+                marker_coverage[r["marker_id"]] += r["gene_depth"]
     tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish get_marker_coverage_from_chunk")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start rewrite_chunk_coverage_file")
-    median_marker_depth = np.median(list(marker_genes_depth.values()))
+    median_marker_depth = np.median(list(marker_coverage.values()))
     if median_marker_depth > 0:
         args = []
         for chunk_file in all_chunks:
@@ -459,12 +469,11 @@ def midas_run_genes(args):
 
         # Fetch marker's centroids cluster info per species
         global marker_centroids_files
-        marker_centroids_files = midas_iggdb.fetch_files("marker_centroids", species_ids_of_interest)
-        tsprint(f"CZ::fetch_iggdb_files::finish")
+        marker_centroids_files = midas_iggdb.fetch_files("marker_centroids_99", species_ids_of_interest)
 
         tsprint(centroids_files)
         tsprint(marker_centroids_files)
-
+        tsprint(f"CZ::fetch_iggdb_files::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"CZ::build_bowtie2_indexes::start")

@@ -123,7 +123,6 @@ def collect(accumulator, my_args):
 def write_matrices_per_species(accumulator, species_id, sample_names):
 
     global pool_of_samples
-
     for file_type in list(genes_info_schema.keys())[:-1]:
         outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
         with OutputStream(outfile) as stream:
@@ -163,7 +162,7 @@ def per_species_worker(species_id):
     tsprint(f"    CZ::per_species_worker::{species_id}::finish collect")
 
     for gene_id, copynum in accumulator["copynum"].items():
-        accumulator["presabs"][gene_id] = [1 if cn > global_args.min_copy else 0 for cn in copynum]
+        accumulator["presabs"][gene_id] = [1 if cn >= global_args.min_copy else 0 for cn in copynum]
 
     tsprint(f"    CZ::per_species_worker::{species_id}::start write_matrices_per_species")
     write_matrices_per_species(accumulator, species_id, sample_names)

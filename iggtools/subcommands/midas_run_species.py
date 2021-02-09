@@ -5,6 +5,7 @@ import random
 from collections import defaultdict
 from itertools import chain
 import numpy as np
+import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
@@ -210,8 +211,23 @@ def assign_non_unique(alns, unique_alns, marker_info):
 
 
 def read_marker_info_repgenomes(map_file):
+    """ Only when the map file only include representative marker genes"""
     with InputStream(map_file) as map_file_stream:
         return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict)}
+
+
+def read_marker_info(fasta_file, map_file):
+    """ Extract marker genes from the FA and MAP files """
+    info = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            info[rec.id] = None
+
+    with InputStream(map_file) as map_file_stream:
+        for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
+            if r['gene_id'] in info:
+                info[r["gene_id"]] = r
+    return info
 
 
 def sum_marker_gene_lengths(marker_info):
@@ -280,7 +296,8 @@ def midas_run_species(args):
 
         # Classify reads
         species_info = midas_iggdb.uhgg.species
-        marker_info = read_marker_info_repgenomes(marker_db_files["map"])
+        #marker_info = read_marker_info_repgenomes(marker_db_files["map"])
+        marker_info = read_marker_info(marker_db_files["fa"], marker_db_files["map"])
         tsprint(f"CZ::find_best_hits::start")
         best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
         tsprint(f"CZ::find_best_hits::finish")
