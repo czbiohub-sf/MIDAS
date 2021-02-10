@@ -11,7 +11,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
@@ -72,6 +72,10 @@ def register_args(main_func):
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
     return main_func
+
+
+def format_data(x):
+    return format(x, DECIMALS) if isinstance(x, float) else str(x)
 
 
 def readfq(fp):
