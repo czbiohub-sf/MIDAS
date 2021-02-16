@@ -3,7 +3,7 @@ import json
 import os
 import random
 from collections import defaultdict
-from itertools import chain
+from itertools import chain, repeat
 import numpy as np
 import Bio.SeqIO
 
@@ -11,12 +11,11 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data, DECIMALS6
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
-DECIMALS = ".6f"
 
 
 def register_args(main_func):
@@ -72,10 +71,6 @@ def register_args(main_func):
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
     return main_func
-
-
-def format_data(x):
-    return format(x, DECIMALS) if isinstance(x, float) else str(x)
 
 
 def readfq(fp):
@@ -221,12 +216,14 @@ def read_marker_info_repgenomes(map_file):
 
 
 def read_marker_info(fasta_file, map_file):
-    """ Extract marker genes from the FA and MAP files """
+    """ Extract gene_id_is_marker - marker_id mapping from fasta and map files """
+    # Read the gene_is_marker_id from phyeco.fa file
     info = {}
     with InputStream(fasta_file) as file:
         for rec in Bio.SeqIO.parse(file, 'fasta'):
             info[rec.id] = None
 
+    # Extract the corresponding marker_id, genome_id, and species_id from the phyeco.map file
     with InputStream(map_file) as map_file_stream:
         for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
             if r['gene_id'] in info:
@@ -235,11 +232,13 @@ def read_marker_info(fasta_file, map_file):
 
 
 def sum_marker_gene_lengths(marker_info):
-    """ Sum up total gene length of the marker genes in each species_id's representative genome """
+    """ Compute the total marker gene lengths per species """
     total_gene_length = defaultdict(int)
+    list_of_marker_genes = defaultdict(list)
     for r in marker_info.values():
         total_gene_length[r['species_id']] += int(r['gene_length'])
-    return total_gene_length
+        list_of_marker_genes[r['species_id']].append(r['gene_id'])
+    return total_gene_length, list_of_marker_genes
 
 
 def normalize_counts(species_alns, total_gene_length):
@@ -273,7 +272,8 @@ def write_abundance(species_profile_path, species_abundance):
             values = species_abundance[species_id]
             if values['count'] > 0:
                 record = [species_id, values['count'], values['cov'], values['rel_abun']]
-                outfile.write("\t".join(map(format_data, record)) + "\n")
+                #outfile.write("\t".join(map(format_data, record)) + "\n")
+                outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
 def midas_run_species(args):
@@ -316,11 +316,24 @@ def midas_run_species(args):
 
         # Estimate species abundance
         tsprint(f"CZ::normalize_counts::start")
-        total_gene_length = sum_marker_gene_lengths(marker_info)
+        total_gene_length, list_of_marker_genes = sum_marker_gene_lengths(marker_info)
         species_abundance = normalize_counts(species_alns, total_gene_length)
         tsprint(f"CZ::normalize_counts::finish")
 
-        write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+        outfile = sample.get_target_layout("species_summary")
+        write_abundance(outfile, species_abundance)
+
+        spids = [k for k, v in species_abundance.items() if v['count'] > 0 ]
+        with OutputStream(os.path.dirname(outfile) + '/marker_genes') as stream:
+            for k, d, in list_of_marker_genes.items():
+                if k in spids:
+                    for v in d:
+                        stream.write("\t".join([k, v]) + "\n")
+        with OutputStream(os.path.dirname(outfile) + '/marker_length') as stream:
+            for k, v, in total_gene_length.items():
+                if k in spids:
+                    stream.write("\t".join([k, str(v)]) + "\n")
+
 
     except Exception as error:
         if not args.debug:

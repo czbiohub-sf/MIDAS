@@ -1,7 +1,9 @@
 # These are the schames for the outputs of MIDAS
 
 ## midas_merge_species
-DECIMALS = ".4f"
+DECIMALS = ".3f"
+DECIMALS3 = ".3f"
+DECIMALS6 = ".6f"
 
 
 MARKER_INFO_SCHEMA = {
@@ -55,7 +57,7 @@ species_profile_schema = {
     "species_id": str,
     "read_counts": int,
     "coverage": float,
-    "rel_abundance": float
+    "relative_abundance": float
 }
 
 
@@ -184,9 +186,8 @@ def fetch_schema_by_dbtype(dbtype):
     return schema
 
 
-def format_data(x):
-    return format(x, DECIMALS) if isinstance(x, float) else str(x)
-
+def format_data(x, decimal = DECIMALS3):
+    return format(x, decimal) if isinstance(x, float) else str(x)
 
 
 genes_feature_schema = {
