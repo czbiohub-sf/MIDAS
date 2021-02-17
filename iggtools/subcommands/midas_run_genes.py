@@ -293,17 +293,58 @@ def compute_coverage_per_chunk(packed_args):
         semaphore_for_species[species_id].release()
 
 
-def get_marker_coverage_from_chunk(my_args):
+def get_marker_coverage_per_chunk(my_args):
+    """ Return covered centroid_99, marker_id, gene_depth dictionary"""
     chunk_file, centroids_of_markers = my_args
-
     chunk_marker_coverage = defaultdict(dict)
     list_of_genes_are_markers = tuple(centroids_of_markers.keys())
+
     with InputStream(chunk_file) as stream:
         for row in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
             if row["gene_id"] in list_of_genes_are_markers:
                 chunk_marker_coverage[row["gene_id"]] = centroids_of_markers[row["gene_id"]]
                 chunk_marker_coverage[row["gene_id"]]["gene_depth"] = row["total_depth"]
     return list(chunk_marker_coverage.values())
+
+
+def compute_marker_coverage_from_chunks(species_id):
+    """ Extract gene depth for mapped centroids_99 genes that are markers and Compute the median marker coverage """
+
+    global species_sliced_genes_path
+    global marker_centroids_files # we can deal with marker_centroids_files global or not later
+
+    all_chunks = species_sliced_genes_path[species_id][:-1]
+
+    # All known centroid_99 - marker_id mappings for giving species
+    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start get_marker_coverage_per_chunk")
+    centroids_of_markers = defaultdict(dict)
+    list_of_marker_genes = defaultdict(dict) ## CZ
+    with InputStream(marker_centroids_files[species_id]) as stream:
+        for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
+            centroids_of_markers[r["centroid_99"]] = r
+            list_of_marker_genes[r["centroid_99"]] = r["marker_id"]
+    # The coordinate of the marker_centroid_99 file is based on pan-gene-id ~ marker-id ~ centroid_99, therefore
+    # there would be duplcated marker-id ~ centroid_99 mapping pairs
+
+    # Extract read depth of centroind that are markers from all chunks
+    my_args = [(chunk_file, centroids_of_markers) for chunk_file in all_chunks]
+    marker_coverage_by_chunks = multithreading_map(get_marker_coverage_per_chunk, my_args, 4)
+
+    # Compute marker coverage across chunks
+    marker_coverage = dict()
+    list_of_marker_coverage = defaultdict(dict) ## CZ
+    for marker_one_chunk in marker_coverage_by_chunks:
+        if marker_one_chunk:
+            for r in marker_one_chunk:
+                if r["marker_id"] not in marker_coverage:
+                    marker_coverage[r["marker_id"]] = 0.0
+                marker_coverage[r["marker_id"]] += r["gene_depth"]
+                list_of_marker_coverage[r["centroid_99"]] = r
+
+    median_marker_depth = np.median(list(map(lambda x: float(format(x, DECIMALS6)), marker_coverage.values())))
+    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish get_marker_coverage_per_chunk")
+
+    return median_marker_depth, list_of_marker_genes, list_of_marker_coverage
 
 
 def rewrite_chunk_coverage_file(my_args):
@@ -324,46 +365,6 @@ def rewrite_chunk_coverage_file(my_args):
     with OutputStream(chunk_coverage_path) as stream:
         for vals in add_cn_to_write:
             stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
-
-
-def compute_marker_coverage_from_chunks(species_id):
-    """ Extract gene depth for mapped centroids_99 genes that are markers and Compute the median marker coverage """
-
-    global species_sliced_genes_path
-    global marker_centroids_files # we can deal with marker_centroids_files global or not later
-
-    all_chunks = species_sliced_genes_path[species_id][:-1]
-
-    # Find the corresponding centroid_99 genes for the marker genes
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start get_marker_coverage_from_chunk")
-    centroids_of_markers = defaultdict(dict)
-    list_of_marker_genes = defaultdict(dict) ## CZ
-    with InputStream(marker_centroids_files[species_id]) as stream:
-        for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
-            centroids_of_markers[r["centroid_99"]] = r
-            list_of_marker_genes[r["centroid_99"]] = r["marker_id"]
-    # The coordinate of the marker_centroid_99 file is based on pan-gene-id ~ marker-id ~ centroid_99, therefore
-    # there would be duplcated marker-id ~ centroid_99 mapping pairs
-
-    my_args = []
-    for chunk_file in all_chunks:
-        my_args.append((chunk_file, centroids_of_markers))
-    marker_coverage_by_chunks = multithreading_map(get_marker_coverage_from_chunk, my_args, 4)
-
-    marker_coverage = dict()
-    list_of_marker_coverage = defaultdict(dict) ## CZ
-    for per_chunk_marker in marker_coverage_by_chunks:
-        if per_chunk_marker:
-            for r in per_chunk_marker:
-                if r["marker_id"] not in marker_coverage:
-                    marker_coverage[r["marker_id"]] = 0.0
-                marker_coverage[r["marker_id"]] += r["gene_depth"]
-                list_of_marker_coverage[r["centroid_99"]] = r
-
-    median_marker_depth = np.median(list(map(lambda x: float(format(x, DECIMALS6)), marker_coverage.values())))
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish get_marker_coverage_from_chunk")
-
-    return median_marker_depth, list_of_marker_genes, list_of_marker_coverage
 
 
 def merge_chunks_per_species(species_id):
