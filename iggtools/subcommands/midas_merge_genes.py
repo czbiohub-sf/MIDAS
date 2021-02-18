@@ -120,17 +120,6 @@ def collect(accumulator, my_args):
             acc_reads[sample_index] += r["mapped_reads"]
 
 
-def write_matrices_per_species(accumulator, species_id, sample_names):
-
-    global pool_of_samples
-    for file_type in list(genes_info_schema.keys())[:-1]:
-        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
-        with OutputStream(outfile) as stream:
-            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
-            for gene_id, gene_vals in accumulator[file_type].items():
-                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals)) + "\n")
-
-
 def per_species_worker(species_id):
 
     global dict_of_species
@@ -169,6 +158,16 @@ def per_species_worker(species_id):
     tsprint(f"    CZ::per_species_worker::{species_id}::finish write_matrices_per_species")
 
     return "worked"
+
+
+def write_matrices_per_species(accumulator, species_id, sample_names):
+    global pool_of_samples
+    for file_type in list(genes_info_schema.keys())[:-1]:
+        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            for gene_id, gene_vals in accumulator[file_type].items():
+                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals)) + "\n")
 
 
 def midas_merge_genes(args):

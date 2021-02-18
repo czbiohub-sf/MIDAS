@@ -34,9 +34,10 @@ def get_pool_layout(dbtype=""):
 
             # genes
             "genes_summary":         f"genes/genes_summary.tsv",
-            "genes_presabs":         f"genes/{species_id}/{species_id}.genes_presabs.tsv",
-            "genes_copynum":         f"genes/{species_id}/{species_id}.genes_copynum.tsv",
+            "genes_reads":           f"genes/{species_id}/{species_id}.genes_reads.tsv",
             "genes_depth":           f"genes/{species_id}/{species_id}.genes_depth.tsv",
+            "genes_copynum":         f"genes/{species_id}/{species_id}.genes_copynum.tsv",
+            "genes_presabs":         f"genes/{species_id}/{species_id}.genes_presabs.tsv",
         }
     return per_species
 
