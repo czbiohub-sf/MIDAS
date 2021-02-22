@@ -1,12 +1,13 @@
 import json
 from collections import defaultdict
+from itertools import repeat
 
 from iggtools.models.samplepool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
+from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -162,12 +163,12 @@ def per_species_worker(species_id):
 
 def write_matrices_per_species(accumulator, species_id, sample_names):
     global pool_of_samples
-    for file_type in list(genes_info_schema.keys())[:-1]:
+    for file_type in list(genes_info_schema.keys()):
         outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
         with OutputStream(outfile) as stream:
             stream.write("\t".join(["gene_id"] + sample_names) + "\n")
             for gene_id, gene_vals in accumulator[file_type].items():
-                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals)) + "\n")
+                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals, repeat(DECIMALS6, len(gene_vals)))) + "\n")
 
 
 def midas_merge_genes(args):

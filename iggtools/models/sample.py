@@ -26,11 +26,13 @@ def get_single_layout(sample_name, dbtype=""):
             # snps workflow output
             "snps_summary":           f"{sample_name}/snps/snps_summary.tsv",
             "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
+            "snps_chunk_summary":          f"{sample_name}/snps/chunks_summary.tsv",
             "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
             "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
+            "genes_chunk_summary":    f"{sample_name}/genes/chunks_summary.tsv",
             "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
             "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
             "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4"
@@ -74,7 +76,7 @@ class Sample: # pylint: disable=too-few-public-methods
         schema = fetch_schema_by_dbtype("species")
         species_ids = []
 
-        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run midas_run_species before midas_run_snps for {self.sample_name}"
+        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
         with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:

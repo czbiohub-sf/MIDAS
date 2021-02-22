@@ -12,7 +12,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv
 from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema
 from iggtools.models.sample import Sample
 
 
@@ -190,7 +190,6 @@ def design_chunks(species_ids_of_interest, contigs_files):
     species_sliced_snps_path = defaultdict(list)
     species_sliced_snps_path["input_bamfile"] = sample.get_target_layout("snps_repgenomes_bam")
 
-    # TODO: this part can be done in parallel
     arguments_list = []
     for species_id in species_ids_of_interest:
         tsprint(f"design_chunks::{species_id}::start")
@@ -217,13 +216,14 @@ def design_chunks(species_ids_of_interest, contigs_files):
                     headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
                     species_sliced_snps_path[species_id].append(headerless_sliced_path)
 
-                    if ni == number_of_chunks:
-                        slice_args = (species_id, chunk_id, contig_id, ci, contig_length, contig, True)
+                    if ni == number_of_chunks: #last chunk
+                        slice_args = (species_id, chunk_id, contig_id, ci, contig_length, contig, False)
+                    elif ni == 0:
+                        slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig, True)
                     else:
                         slice_args = (species_id, chunk_id, contig_id, ci, ci+chunk_size, contig, False)
                     arguments_list.append(slice_args)
                     chunk_id += 1
-
 
         # Submit the merge jobs
         arguments_list.append((species_id, -1))
@@ -282,26 +282,24 @@ def compute_pileup_per_chunk(packed_args):
 
         zero_rows_allowed = not global_args.sparse
         current_chunk_size = contig_end - contig_start
+        aligned_reads =0
+        mapped_reads =0
 
         with AlignmentFile(repgenome_bamfile) as bamfile:
             counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
                                             quality_threshold=global_args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
                                             read_callback=keep_read) # select a call-back to ignore reads when counting
-
-        if count_flag:
-            # Designed chunk boundaries can cut reads into two chunks. To avoid overcount of boundary reads,
-            # we only compute the aligned_reads per contig once
-            with AlignmentFile(repgenome_bamfile) as bamfile:
+            if count_flag:
+                # Designed chunk boundaries can cut reads into two chunks. To avoid overcount of boundary reads,
+                # we only compute the aligned_reads per contig once
                 aligned_reads = bamfile.count(contig_id)
                 mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
-        else:
-            aligned_reads = 0
-            mapped_reads = 0
 
         # aln_stats need to be passed from child process back to parents
         aln_stats = {
             "species_id": species_id,
             "contig_id": contig_id,
+            "chunk_id": chunk_id,
             "chunk_length": current_chunk_size,
             "aligned_reads": aligned_reads,
             "mapped_reads": mapped_reads,
@@ -411,6 +409,15 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile):
             stream.write("\t".join(map(format_data, record.values())) + "\n")
 
 
+def write_chunk_pileup_summary(chunks_pileup_summary, outfile):
+    with OutputStream(outfile) as stream:
+        stream.write("\t".join(snps_chunk_summary_schema.keys()) + "\n")
+        for record in chunks_pileup_summary:
+            if record is True:
+                continue
+            stream.write("\t".join(map(format_data, record.values())) + "\n")
+
+
 def midas_run_snps(args):
 
     try:
@@ -489,6 +496,7 @@ def midas_run_snps(args):
 
         tsprint(f"CZ::write_species_pileup_summary::start")
         write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"))
+        write_chunk_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_chunk_summary"))
         tsprint(f"CZ::write_species_pileup_summary::finish")
 
     except Exception as error:

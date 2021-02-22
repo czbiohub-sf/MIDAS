@@ -13,7 +13,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, num_physical_cores, cat_files
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS3, DECIMALS6
+from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema
 from iggtools.models.sample import Sample
 
 
@@ -277,7 +277,7 @@ def compute_coverage_per_chunk(packed_args):
                             readq = np.mean(aln.query_qualities)
                             mapq = aln.mapping_quality
                             alncov = align_len / float(query_len)
-                            fo.write("\t".join(map(format_data, [qname, aln.qstart, aln.qend, pid, readq, mapq, alncov])) + "\n")
+                            fo.write("\t".join(map(format_data, [qname, aln.qstart, aln.qend, pid, readq, mapq, alncov, aln.is_secondary])) + "\n")
                         fo.close()
 
                         fg = open("/mnt/cz/20210129_midasdb_comp_val/20210215_accuracy/g2.txt", "w")
@@ -481,6 +481,15 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
                 stream.write("\t".join([spid, gid] +  list(line)) + "\n")
 
 
+def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
+    with OutputStream(outfile) as stream:
+        stream.write("\t".join(genes_chunk_summary_schema.keys()) + "\n")
+        for record in chunks_gene_coverage:
+            if record["chunk_id"] == -1:
+                continue
+            stream.write("\t".join(map(format_data, record.values())) + "\n")
+
+
 def midas_run_genes(args):
 
     try:
@@ -559,6 +568,7 @@ def midas_run_genes(args):
 
         tsprint(f"CZ::write_species_coverage_summary::start")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
+        write_chunk_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_chunk_summary"))
         tsprint(f"CZ::write_species_coverage_summary::finish")
 
     except Exception as error:

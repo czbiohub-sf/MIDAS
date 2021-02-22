@@ -70,6 +70,7 @@ species_prevalence_schema = {
     "sample_counts": float,
 }
 
+
 ## midas_merge_snps
 DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
@@ -96,6 +97,18 @@ snps_profile_schema = {
     "mapped_reads": int,
     "fraction_covered": float,
     "mean_coverage": float,
+}
+
+
+snps_chunk_summary_schema = {
+    "species_id": str,
+    "contig_id": str,
+    "chunk_id": int,
+    "chunk_length": int,
+    "aligned_reads": int,
+    "mapped_reads": int,
+    "contig_total_depth": int,
+    "contig_covered_bases": int
 }
 
 
@@ -150,6 +163,18 @@ genes_summary_schema = {
     "mapped_reads": int,
     "marker_depth": float
 }
+
+
+genes_chunk_summary_schema = {
+    "species_id": str,
+    "chunk_id": str,
+    "chunk_genome_size": int,
+    "chunk_num_covered_genes": int,
+    "chunk_nz_gene_depth": float,
+    "chunk_aligned_reads": float,
+    "chunk_mapped_reads": int,
+}
+
 
 
 genes_info_schema = {
