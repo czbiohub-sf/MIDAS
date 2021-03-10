@@ -2,7 +2,8 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.sample import Sample
+from iggtools.models.sample import Sample, _create_dir
+from iggtools.models.species import Species, sort_list_of_species
 
 
 def get_pool_layout(dbtype=""):
@@ -45,7 +46,7 @@ def get_pool_layout(dbtype=""):
 class SamplePool: # pylint: disable=too-few-public-methods
 
     def __init__(self, samples_list, midas_outdir, dbtype=None):
-        self.list_of_samples = samples_list
+        self.toc = samples_list
         self.midas_outdir = midas_outdir
         self.layout = get_pool_layout(dbtype)
         self.samples = self.init_samples(dbtype)
@@ -72,49 +73,55 @@ class SamplePool: # pylint: disable=too-few-public-methods
             _create_dir(f"{dir_to_create}/{species_id}", debug, quiet)
 
 
-    def select_species(self, dbtype, args):
-        schema = fetch_schema_by_dbtype(dbtype)
-        species = {}
-        for sample in self.samples:
-            with InputStream(sample.get_target_layout(f"{dbtype}_summary")) as stream:
-                for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
-                    species_id = record["species_id"]
-                    # Skip unspeficied species
-                    if (args.species_list and species_id not in args.species_list.split(",")):
-                        continue
-                    # Read in all the species_id in the species profile
-                    if species_id not in species:
-                        species[species_id] = Species(species_id)
-                    # Skip low-coverage <species, sample>
-                    if record['mean_coverage'] < args.genome_depth:
-                        continue
-                    # Skip low prevalent <species, sample>
-                    if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):
-                        continue
-                    # Select high quality sample-species pairs
-                    species[species_id].samples.append(sample)
-
-        list_of_species = list(species.values())
-        # Sort list_of_species by samples_count in descending order
-        list_of_species = _sort_species(list_of_species)
-        # Second round of filters based on prevalence (sample_counts)
-        list_of_species = _filter_species(list_of_species, args)
-        return {species.id:species for species in list_of_species}
-
-
     def init_samples(self, dbtype):
-        """ read in table-of-content: samples_list """
+        """ read in table-of-content: sample_name, midas_outdir """
         samples = []
-        with InputStream(self.list_of_samples) as stream:
+        with InputStream(self.toc) as stream:
             for row in select_from_tsv(stream, selected_columns=samples_pool_schema, result_structure=dict):
                 sample = Sample(row["sample_name"], row["midas_outdir"], dbtype)
-                # load profile_summary into memory for easy access
-                sample.load_profile_by_dbtype(dbtype)
+                sample.load_profile_by_dbtype(dbtype) # load profile_summary into memory for easy access
                 samples.append(sample)
         return samples
 
 
+    def select_species(self, dbtype, args):
+        """ Initialize dictionary of species given samples """
+        # Round One: filter <sample, species>
+        raw_species = {}
+        for sample in self.samples:
+            for record in sample.profile.values():
+                species_id = record["species_id"]
+                # Skip unspeficied species
+                if (args.species_list and species_id not in args.species_list.split(",")):
+                    continue
+                # Record all the dict_of_species from the profile summary
+                if species_id not in raw_species:
+                    raw_species[species_id] = Species(species_id)
+                # Skip low-coverage <species, sample>
+                if record['mean_coverage'] < args.genome_depth:
+                    continue
+                # Skip low prevalent <species, sample>
+                if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):
+                    continue
+                # Select high quality sample-species pairs
+                raw_species[species_id].list_of_samples.append(sample)
+                raw_species[species_id].samples_count += 1
+
+        # Round Two: after seeing all the <species, samples> pairs,
+        # filter low prevalent species based on sample_counts
+        species_keep = []
+        for sp in list(raw_species.values()):
+            if sp.samples_count < args.sample_counts:
+                continue
+            sp.fetch_samples_depth() # initialize list_of_samples_depth
+            species_keep.append(sp)
+        # Sort the species by descending prevalence
+        list_of_species = sort_list_of_species(species_keep)
+        return {sp.id:sp for sp in list_of_species}
+
+
     def fetch_samples_names(self):
+        # TODO: should be able to delete this
         return [sample.sample_name for sample in self.samples]
 
 
@@ -125,9 +132,9 @@ class SamplePool: # pylint: disable=too-few-public-methods
         summary_header = list(fetch_schema_by_dbtype(dbtype).keys())[1:]
         with OutputStream(summary_file) as stream:
             stream.write("\t".join(["species_id", "sample_name"] + summary_header) + "\n")
-            for species in dict_of_species.values():
-                for sample in species.samples:
-                    row = list(sample.profile[species.id].values())
+            for sp in dict_of_species.values():
+                for sample in sp.list_of_samples:
+                    row = list(sample.profile[sp.id].values())
                     stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t" + "\t".join(map(format_data, row[1:])) + "\n")
 
 
@@ -135,47 +142,3 @@ class SamplePool: # pylint: disable=too-few-public-methods
         for dirname in list_of_dirnames:
             dirpath = self.get_target_layout(dirname)
             command(f"rm -rf {dirpath}", check=False)
-
-
-class Species:
-    """ Base class for species """
-    def __init__(self, id):
-        self.id = id
-        self.samples = []
-        self.samples_depth = []
-
-
-    def fetch_samples_depth(self):
-        return [sample.profile[self.id]["mean_coverage"] for sample in self.samples]
-
-
-    def fetch_samples_names(self):
-        list_of_sample_objects = list(self.samples)
-        return [sample.sample_name for sample in list_of_sample_objects]
-
-
-def _sort_species(species):
-    """ Sort list_of_species by samples_count in descending order """
-    species_sorted = sorted(((sp, len(sp.samples)) for sp in species), key=lambda x: x[1], reverse=True)
-    return [sp[0] for sp in species_sorted]
-
-
-def _filter_species(species, args):
-    """ Filter out low prevalent species using samples_count cutoff """
-    species_keep = []
-    for sp in species:
-        sp.samples_count = len(sp.samples)
-        # skip low prevalent species
-        if sp.samples_count < args.sample_counts:
-            continue
-        sp.samples_depth = sp.fetch_samples_depth()
-        species_keep.append(sp)
-    return species_keep
-
-
-def _create_dir(dirname, debug, quiet=False):
-    if debug and os.path.exists(dirname):
-        tsprint(f"Use existing {dirname} according to --debug flag.")
-    else:
-        command(f"rm -rf {dirname}", quiet)
-        command(f"mkdir -p {dirname}", quiet)

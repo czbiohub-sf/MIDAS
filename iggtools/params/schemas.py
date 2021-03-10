@@ -102,8 +102,8 @@ snps_profile_schema = {
 
 snps_chunk_summary_schema = {
     "species_id": str,
-    "contig_id": str,
     "chunk_id": int,
+    "contig_id": str,
     "chunk_length": int,
     "aligned_reads": int,
     "mapped_reads": int,

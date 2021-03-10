@@ -112,7 +112,7 @@ class MIDAS_IGGDB: # pylint: disable=too-few-public-methods
                     dest_file = self.get_target_layout("annotation_file", False, "fna", species_id, self.uhgg.representatives[species_id])
                 args_list.append((s3_file, dest_file))
 
-            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=self.num_cores)
+            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=8) #self.num_cores)
             for species_index, species_id in enumerate(list_of_species_ids):
                 fetched_files[species_id] = _fetched_files[species_index]
             return fetched_files
