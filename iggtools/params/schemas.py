@@ -1,7 +1,9 @@
 # These are the schames for the outputs of MIDAS
 
 ## midas_merge_species
-DECIMALS = ".4f"
+DECIMALS = ".3f"
+DECIMALS3 = ".3f"
+DECIMALS6 = ".6f"
 
 
 MARKER_INFO_SCHEMA = {
@@ -55,7 +57,7 @@ species_profile_schema = {
     "species_id": str,
     "read_counts": int,
     "coverage": float,
-    "rel_abundance": float
+    "relative_abundance": float
 }
 
 
@@ -67,6 +69,7 @@ species_prevalence_schema = {
     "mean_coverage": float,
     "sample_counts": float,
 }
+
 
 ## midas_merge_snps
 DEFAULT_SAMPLE_COUNTS = 2
@@ -94,6 +97,18 @@ snps_profile_schema = {
     "mapped_reads": int,
     "fraction_covered": float,
     "mean_coverage": float,
+}
+
+
+snps_chunk_summary_schema = {
+    "species_id": str,
+    "chunk_id": int,
+    "contig_id": str,
+    "chunk_length": int,
+    "aligned_reads": int,
+    "mapped_reads": int,
+    "contig_total_depth": int,
+    "contig_covered_bases": int
 }
 
 
@@ -150,6 +165,18 @@ genes_summary_schema = {
 }
 
 
+genes_chunk_summary_schema = {
+    "species_id": str,
+    "chunk_id": str,
+    "chunk_genome_size": int,
+    "chunk_num_covered_genes": int,
+    "chunk_nz_gene_depth": float,
+    "chunk_aligned_reads": float,
+    "chunk_mapped_reads": int,
+}
+
+
+
 genes_info_schema = {
     "presabs": float,
     "copynum": float,
@@ -184,9 +211,8 @@ def fetch_schema_by_dbtype(dbtype):
     return schema
 
 
-def format_data(x):
-    return format(x, DECIMALS) if isinstance(x, float) else str(x)
-
+def format_data(x, decimal = DECIMALS3):
+    return format(x, decimal) if isinstance(x, float) else str(x)
 
 
 genes_feature_schema = {

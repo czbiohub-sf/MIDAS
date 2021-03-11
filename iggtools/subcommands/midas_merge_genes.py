@@ -1,12 +1,13 @@
 import json
 from collections import defaultdict
+from itertools import repeat
 
 from iggtools.models.samplepool import SamplePool
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
 from iggtools.models.uhgg import MIDAS_IGGDB
-from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth
+from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -83,8 +84,10 @@ def register_args(main_func):
     return main_func
 
 
-def read_cluster_map(gene_info_path, pid):
+def read_cluster_map(pargs):
     """ convert centroid99_gene to centroin_{pid}_gene """
+
+    gene_info_path, pid = pargs
     centroids_map = {}
     cols = ['gene_id', 'centroid_99', f"centroid_{pid}"]
     with InputStream(gene_info_path) as stream:
@@ -95,7 +98,11 @@ def read_cluster_map(gene_info_path, pid):
 
 def collect(accumulator, my_args):
 
-    sample_index, midas_genes_dir, total_sample_counts, centroids_map = my_args
+    sample_index, midas_genes_dir, total_sample_counts, species_id = my_args
+
+    global species_centroids_map
+
+    centroids_map = species_centroids_map[species_id]
 
     with InputStream(midas_genes_dir) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
@@ -120,27 +127,10 @@ def collect(accumulator, my_args):
             acc_reads[sample_index] += r["mapped_reads"]
 
 
-def write_matrices_per_species(accumulator, species_id, sample_names):
-
-    global pool_of_samples
-    for file_type in list(genes_info_schema.keys())[:-1]:
-        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
-        with OutputStream(outfile) as stream:
-            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
-            for gene_id, gene_vals in accumulator[file_type].items():
-                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals)) + "\n")
-
-
 def per_species_worker(species_id):
 
     global dict_of_species
     global global_args
-    global genes_info_files
-
-    # Prepare centroid_99 to centroid_pid mapping
-    tsprint(f"    CZ::per_species_worker::{species_id}::start read_cluster_map")
-    centroids_map = read_cluster_map(genes_info_files[species_id], global_args.cluster_pid)
-    tsprint(f"    CZ::per_species_worker::{species_id}::finish read_cluster_map")
 
     # For given species, get the list of samples and check the per-sample genes coverage file
     species = dict_of_species[species_id]
@@ -157,18 +147,27 @@ def per_species_worker(species_id):
     accumulator = defaultdict(dict)
     for sample_index, sample_name in enumerate(sample_names):
         midas_genes_path = species_samples[sample_name]
-        my_args = (sample_index, midas_genes_path, len(species_samples), centroids_map)
+        my_args = (sample_index, midas_genes_path, len(species_samples), species_id)
         collect(accumulator, my_args)
-    tsprint(f"    CZ::per_species_worker::{species_id}::finish collect")
-
     for gene_id, copynum in accumulator["copynum"].items():
         accumulator["presabs"][gene_id] = [1 if cn >= global_args.min_copy else 0 for cn in copynum]
+    tsprint(f"    CZ::per_species_worker::{species_id}::finish collect")
 
     tsprint(f"    CZ::per_species_worker::{species_id}::start write_matrices_per_species")
     write_matrices_per_species(accumulator, species_id, sample_names)
     tsprint(f"    CZ::per_species_worker::{species_id}::finish write_matrices_per_species")
 
     return "worked"
+
+
+def write_matrices_per_species(accumulator, species_id, sample_names):
+    global pool_of_samples
+    for file_type in list(genes_info_schema.keys()):
+        outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
+        with OutputStream(outfile) as stream:
+            stream.write("\t".join(["gene_id"] + sample_names) + "\n")
+            for gene_id, gene_vals in accumulator[file_type].items():
+                stream.write(f"{gene_id}\t" + "\t".join(map(format_data, gene_vals, repeat(DECIMALS6, len(gene_vals)))) + "\n")
 
 
 def midas_merge_genes(args):
@@ -189,21 +188,27 @@ def midas_merge_genes(args):
 
         pool_of_samples.create_dirs(["outdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
-
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
         # Download genes_info for every species in the restricted species profile.
-        global genes_info_files
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), args.num_cores)
+        num_cores = min(args.num_cores, len(species_ids_of_interest))
+        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), num_cores)
 
         tsprint(f"CZ::fetch_iggdb_files::start")
         genes_info_files = midas_iggdb.fetch_files("genes_info", species_ids_of_interest)
         tsprint(f"CZ::fetch_iggdb_files::finish")
-        tsprint(genes_info_files)
+
+        # Prepare centroid_99 to centroid_pid mapping
+        global species_centroids_map
+        tsprint(f"CZ::read_cluster_map::start")
+        arguments_list = [(genes_info_files[species_id], global_args.cluster_pid) for species_id in species_ids_of_interest]
+        list_of_centroids_map = multiprocessing_map(read_cluster_map, arguments_list, num_cores)
+        tsprint(f"CZ::read_cluster_map::end")
+        species_centroids_map = {species_ids_of_interest[_]: cmap for _, cmap in enumerate(list_of_centroids_map)}
 
         # Merge copy_numbers, coverage and read counts across ALl the samples
         tsprint(f"CZ::multiprocessing_map::start")
-        proc_flags = multiprocessing_map(per_species_worker, species_ids_of_interest, args.num_cores)
+        proc_flags = multiprocessing_map(per_species_worker, species_ids_of_interest, num_cores)
         assert all(s == "worked" for s in proc_flags)
         tsprint(f"CZ::multiprocessing_map::finish")
 
