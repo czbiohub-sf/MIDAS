@@ -89,7 +89,9 @@ def samtools_index(bamfile_path, debug, num_cores):
 
 
 def _keep_read(aln, aln_mapid, aln_readq, aln_mapq, aln_cov):
-    # Check the quality of one read alignnment from BAM file
+    """ Check the quality of one alignnment from BAM file """
+    if aln.is_secondary:
+        return False
     align_len = len(aln.query_alignment_sequence)
     query_len = aln.query_length
     # min pid

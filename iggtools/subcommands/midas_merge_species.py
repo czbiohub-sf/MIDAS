@@ -37,7 +37,6 @@ def compute_prevalence(rowvector, threshold):
 def transpose(pool_of_samples, columns):
     """ Collect given columns across samples and transpose the matrix by species_id """
     transposed = defaultdict(dict)
-
     total_samples_count = len(pool_of_samples.samples)
 
     for sample_index, sample in enumerate(pool_of_samples.samples):
@@ -71,7 +70,7 @@ def compute_stats(tabundance, tcoverage):
 
 
 def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
-    # Sort species in stats by descending relative abundance
+    """ Sort species in stats by descending relative abundance """
     with OutputStream(species_prevalence_filepath) as ostream:
 
         colnames = list(species_prevalence_schema.keys())
@@ -87,14 +86,11 @@ def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
 
 def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
-
     sample_names = pool_of_samples.fetch_samples_names()
-
     col_names = list(species_profile_schema.keys())[1:]
 
     for col in col_names:
         outpath = pool_of_samples.get_target_layout(f"species_{col}")
-
         with OutputStream(outpath) as outfile:
             outfile.write("\t".join(["species_id"] + sample_names) + "\n")
             for values in transposed[col].values():
@@ -107,22 +103,21 @@ def midas_merge_species(args):
         global global_args
         global_args = args
 
+        # Load species_summary into sample.profile
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "species")
-        # load species_summary into sample.profile
         pool_of_samples.init_samples("species")
         pool_of_samples.create_dirs(["outdir"], args.debug)
 
-        tsprint(f"CZ::write_species_results::start")
         # Slice the across-samples species profile matrix by species_id
+        tsprint(f"CZ::write_species_results::start")
         cols = list(species_profile_schema.keys())[1:]
         transposed = transpose(pool_of_samples, cols)
         write_species_results(pool_of_samples, transposed)
         tsprint(f"CZ::write_species_results::finish")
 
-
-        tsprint(f"CZ::write_stats::start")
         # Calculate summary statistics for coverage and relative abundance
-        stats = compute_stats(transposed["rel_abundance"], transposed["coverage"])
+        tsprint(f"CZ::write_stats::start")
+        stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
         tsprint(f"CZ::write_stats::finish")
 
