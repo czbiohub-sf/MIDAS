@@ -380,7 +380,6 @@ def accumulate_samples_per_unit(packed_args):
         species_pileup_path = sample.get_target_layout("snps_pileup", species_id)
         chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id) # USE headerless_chunk_pileup_file if exits
         snps_pileup_path = chunk_pileup_path if os.path.exists(chunk_pileup_path) else species_pileup_path
-
         # Pileup is 1-based index, close left close right
         proc_args = (contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)

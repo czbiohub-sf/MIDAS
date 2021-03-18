@@ -286,7 +286,7 @@ def pileup_per_unit(packed_args):
         "contig_covered_bases": 0
     }
 
-    with OutputStream(headerless_sliced_path) as stream:
+    with open(headerless_sliced_path, "a") as stream:
         for within_chunk_index in range(0, current_chunk_size):
             depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
             count_a = counts[0][within_chunk_index]
