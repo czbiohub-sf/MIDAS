@@ -21,7 +21,7 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
         "marker_centroids":           f"marker_genes/{inputs.marker_set}/marker_centroids/{species_id}.txt",
         "marker_centroids_log":       f"marker_genes/{inputs.marker_set}/marker_centroids.log",
 
-        "marker_centroids_99":         f"marker_genes/{inputs.marker_set}/marker_centroids_99/{species_id}.txt",
+        "marker_centroids_99":        f"marker_genes/{inputs.marker_set}/marker_centroids_99/{species_id}.txt",
         "marker_centroids_99_log":    f"marker_genes/{inputs.marker_set}/marker_centroids_99.log",
 
         # marker_genes/phyeco/temp/{SPECIES_ID}/{GENOME_ID}/{GENOME_ID}.{hmmsearch, markers.fa, markers.map}

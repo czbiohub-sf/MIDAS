@@ -167,7 +167,6 @@ def design_chunks_per_species(args):
 def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
     """ Chunks of continuous genomics sites, indexed by species_id, chunk_id """
 
-    global sample
     global semaphore_for_species
     global dict_of_species
 
@@ -186,8 +185,8 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
     reg_list = []
     for species_id, sp in dict_of_species.items():
         priority_chunks = sp.priority_chunks
-        num_of_chunks = sp.num_of_chunks
-        for chunk_id in range(0, num_of_chunks):
+        num_of_sites_chunks = sp.num_of_sites_chunks
+        for chunk_id in range(0, num_of_sites_chunks):
             if chunk_id in priority_chunks:
                 pri_list.append((species_id, chunk_id))
             else:
@@ -195,8 +194,8 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
         reg_list.append((species_id, -1))
 
         # Create a semaphore with number_of_chunks of elements
-        semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_chunks)
-        for _ in range(num_of_chunks):
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
+        for _ in range(num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
 
     arguments_list = pri_list + reg_list
@@ -206,15 +205,15 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
 def process_one_chunk_of_sites(packed_args):
     """ Process one chunk: either pileup or merge and write results to disk """
 
-    global semaphore_for_species
-    global dict_of_species
-
     species_id, chunk_id = packed_args
-    sp = dict_of_species[species_id]
 
     if chunk_id == -1:
+        global semaphore_for_species
+        global dict_of_species
+        sp = dict_of_species[species_id]
+
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::wait merge_chunks_per_species")
-        for _ in range(sp.num_of_chunks):
+        for _ in range(sp.num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
@@ -231,8 +230,8 @@ def process_one_chunk_of_sites(packed_args):
 def compute_pileup_per_chunk(packed_args):
     """ Pileup for one chunk, potentially contain multiple contigs """
 
-    global dict_of_species
     global semaphore_for_species
+    global dict_of_species
 
     try:
         species_id, chunk_id = packed_args
@@ -257,7 +256,7 @@ def pileup_per_unit(packed_args):
 
     repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
     headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
-    contig_seq = dict_of_species[species_id].contigs[contig_id]["contig_seq"]
+    contig_seq = dict_of_species[species_id].contigs[contig_id]["seq"]
 
     zero_rows_allowed = not global_args.sparse
     current_chunk_size = contig_end - contig_start
@@ -286,6 +285,7 @@ def pileup_per_unit(packed_args):
         "contig_covered_bases": 0
     }
 
+    # TODO: instead of write to file, save into memory.
     with open(headerless_sliced_path, "a") as stream:
         for within_chunk_index in range(0, current_chunk_size):
             depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
@@ -314,7 +314,7 @@ def merge_chunks_per_species(species_id):
     global dict_of_species
 
     sp = dict_of_species[species_id]
-    number_of_chunks = sp.num_of_chunks
+    number_of_chunks = sp.num_of_sites_chunks
 
     list_of_chunks_pileup = [sample.get_target_layout("chunk_pileup", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
     species_snps_pileup_file = sample.get_target_layout("snps_pileup", species_id)
@@ -324,8 +324,10 @@ def merge_chunks_per_species(species_id):
     cat_files(list_of_chunks_pileup, species_snps_pileup_file, 20)
 
     # The chunk_pilup_path will be used in merge_midas_snps.
-    #for s_file in list_of_chunks_pileup:
-    #    command(f"rm -rf {s_file}", quiet=True)
+    if False: #not global_args.debug:
+        tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
+        for s_file in list_of_chunks_pileup:
+            command(f"rm -rf {s_file}", quiet=True)
 
     # return a status flag
     # the path should be computable somewhere else
@@ -460,8 +462,8 @@ def midas_run_snps(args):
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
             sample.remove_dirs(["outdir", "tempdir"])
-        if not args.prebuilt_bowtie2_indexes:
-            sample.remove_dirs(["bt2_indexes_dir"])
+            if not args.prebuilt_bowtie2_indexes:
+                sample.remove_dirs(["bt2_indexes_dir"])
         raise error
 
 

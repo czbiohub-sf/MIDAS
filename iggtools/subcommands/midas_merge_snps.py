@@ -249,7 +249,7 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
     if locus_type != "CDS":
         return locus_type, curr_gene_id
 
-    curr_seq = genes_sequence[curr_gene_id]["gene_seq"]
+    curr_seq = genes_sequence[curr_gene_id]["seq"]
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
 
     ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
@@ -292,7 +292,7 @@ def design_chunks(midas_iggdb, chunk_size):
 
         # The structure of the chunks depends on the representative genome sequences
         assert sp.design_snps_chunks(midas_iggdb, chunk_size)
-        num_of_chunks = sp.num_of_chunks
+        num_of_chunks = sp.num_of_sites_chunks
 
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
@@ -323,15 +323,15 @@ def prepare_site_annotation(midas_iggdb, num_cores):
 
 def process_one_chunk_of_sites(packed_args):
 
-    global semaphore_for_species
-    global dict_of_species
-
     species_id, chunk_id = packed_args
-    sp = dict_of_species[species_id]
 
     if chunk_id == -1:
+        global semaphore_for_species
+        global dict_of_species
+        sp = dict_of_species[species_id]
+
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::wait merge_all_chunks_per_species")
-        for _ in range(sp.num_of_chunks):
+        for _ in range(sp.num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::start merge_all_chunks_per_species")
         merge_all_chunks_per_species(species_id)
@@ -341,6 +341,7 @@ def process_one_chunk_of_sites(packed_args):
     tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::start pool_across_samples_per_chunk")
     pool_across_samples_per_chunk(species_id, chunk_id)
     tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::finish pool_across_samples_per_chunk")
+
     return "worked"
 
 
@@ -380,12 +381,14 @@ def accumulate_samples_per_unit(packed_args):
         species_pileup_path = sample.get_target_layout("snps_pileup", species_id)
         chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id) # USE headerless_chunk_pileup_file if exits
         snps_pileup_path = chunk_pileup_path if os.path.exists(chunk_pileup_path) else species_pileup_path
+        has_header = not os.path.exists(chunk_coverage_path)
+
         # Pileup is 1-based index, close left close right
         proc_args = (contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_one_samples")
 
-    # Compute across-samples SNPs and write to file
+    # Compute across-samples SNPs and write to chunk file
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start compute_and_write_pooled_snps_per_unit")
     flag = compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id)
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish compute_and_write_pooled_snps_per_unit")
@@ -535,7 +538,6 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
         pooled_snps_freq_list.append([site_id] + sample_mafs)
         pooled_snps_depth_list.append([site_id] + sample_depths)
 
-
     # Write to file
     snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
     snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
@@ -563,7 +565,7 @@ def merge_all_chunks_per_species(species_id):
     global pool_of_samples
 
     sp = dict_of_species[species_id]
-    number_of_chunks = sp.num_of_chunks
+    number_of_chunks = sp.num_of_sites_chunks
     samples_names = dict_of_species[species_id].fetch_samples_names()
 
     list_of_chunks_snps_info = [pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
@@ -620,7 +622,7 @@ def midas_merge_snps(args):
         num_cores = min(args.num_cores, len(species_ids_of_interest))
         midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), num_cores)
 
-        # Compute pooled SNPs by the unit of chunks_of_sites
+        # The unit of compute across-samples pooled SNPs is: chunk_of_sites.
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(midas_iggdb, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")

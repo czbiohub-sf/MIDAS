@@ -9,36 +9,40 @@ from iggtools.models.species import Species, sort_list_of_species
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
-            "outdir":                f"{dbtype}",
-            "outdir_by_species":     f"{dbtype}/{species_id}",
+            "outdir":                     f"{dbtype}",
+            "outdir_by_species":          f"{dbtype}/{species_id}",
 
-            "tempdir":               f"temp/{dbtype}",
-            "tempdir_by_species":    f"temp/{dbtype}/{species_id}",
+            "tempdir":                    f"temp/{dbtype}",
+            "tempdir_by_species":         f"temp/{dbtype}/{species_id}",
 
-            "midas_iggdb_dir":       f"midas_iggdb",
-            "bt2_indexes_dir":       f"bt2_indexes",
+            "midas_iggdb_dir":            f"midas_iggdb",
+            "bt2_indexes_dir":            f"bt2_indexes",
 
             # species
-            "species_prevalence":    f"species/species_prevalence.tsv",
-            "species_read_counts":   f"species/species_read_counts.tsv",
-            "species_coverage":      f"species/species_coverage.tsv",
+            "species_prevalence":         f"species/species_prevalence.tsv",
+            "species_read_counts":        f"species/species_read_counts.tsv",
+            "species_coverage":           f"species/species_coverage.tsv",
             "species_relative_abundance": f"species/species_relative_abundance.tsv",
 
             # snps
-            "snps_summary":          f"snps/snps_summary.tsv",
-            "snps_info":             f"snps/{species_id}/{species_id}.snps_info.tsv",
-            "snps_freq":             f"snps/{species_id}/{species_id}.snps_freqs.tsv",
-            "snps_depth":            f"snps/{species_id}/{species_id}.snps_depth.tsv",
-            "snps_info_by_chunk":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv",
-            "snps_freq_by_chunk":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
-            "snps_depth_by_chunk":   f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv",
+            "snps_summary":               f"snps/snps_summary.tsv",
+            "snps_info":                  f"snps/{species_id}/{species_id}.snps_info.tsv",
+            "snps_freq":                  f"snps/{species_id}/{species_id}.snps_freqs.tsv",
+            "snps_depth":                 f"snps/{species_id}/{species_id}.snps_depth.tsv",
+            "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv",
+            "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
+            "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv",
 
             # genes
-            "genes_summary":         f"genes/genes_summary.tsv",
-            "genes_reads":           f"genes/{species_id}/{species_id}.genes_reads.tsv",
-            "genes_depth":           f"genes/{species_id}/{species_id}.genes_depth.tsv",
-            "genes_copynum":         f"genes/{species_id}/{species_id}.genes_copynum.tsv",
-            "genes_presabs":         f"genes/{species_id}/{species_id}.genes_presabs.tsv",
+            "genes_summary":              f"genes/genes_summary.tsv",
+            "genes_reads":                f"genes/{species_id}/{species_id}.genes_reads.tsv",
+            "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv",
+            "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv",
+            "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv",
+            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv",
+            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv",
+            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv",
+            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv",
         }
     return per_species
 

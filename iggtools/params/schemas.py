@@ -195,6 +195,13 @@ genes_coverage_schema = {
 }
 
 
+genes_are_markers_schema = {
+    "centroid_99": str,
+    "marker_id": str,
+    "gene_depth": float,
+}
+
+
 samples_pool_schema = {
     "sample_name": str,
     "midas_outdir": str,
