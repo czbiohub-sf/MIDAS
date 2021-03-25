@@ -3,14 +3,14 @@ import json
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 
 
 def register_args(main_func):
     subparser = add_subcommand('build_bowtie2_indexes', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
 
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            required=True,
@@ -90,18 +90,18 @@ def build_bowtie2_indexes(args):
 
 
         # Fetch UHGG related files
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb, args.num_cores)
+        midas_db = MIDAS_DB(args.midas_db, args.num_cores)
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::start")
-            contigs_files = midas_iggdb.fetch_files("prokka_genome", species_ids_of_interest)
+            contigs_files = midas_db.fetch_files("prokka_genome", species_ids_of_interest)
             tsprint(contigs_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, contigs_files, args.num_cores)
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::finish")
 
         if args.bt2_indexes_name == "pangenomes":
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::start")
-            centroids_files = midas_iggdb.fetch_files("marker_centroids", species_ids_of_interest)
+            centroids_files = midas_db.fetch_files("marker_centroids", species_ids_of_interest)
             tsprint(centroids_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, centroids_files, args.num_cores)
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::finish")

@@ -6,6 +6,11 @@ DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
 
 
+MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
+hmmsearch_max_evalue = 1e-5
+hmmsearch_min_cov = 0.00
+
+
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
@@ -192,6 +197,13 @@ genes_coverage_schema = {
     "mapped_reads": int,
     "total_depth": float,
     "copy_number": float,
+}
+
+
+genes_are_markers_schema = {
+    "centroid_99": str,
+    "marker_id": str,
+    "gene_depth": float,
 }
 
 
