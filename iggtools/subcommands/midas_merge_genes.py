@@ -8,7 +8,7 @@ from itertools import repeat
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, cat_files
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 
 
@@ -16,7 +16,6 @@ DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35
-
 DEFAULT_CHUNK_SIZE = 5000
 
 
@@ -57,8 +56,8 @@ def register_args(main_func):
                            default=DEFAULT_SAMPLE_COUNTS,
                            help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
@@ -86,8 +85,9 @@ def register_args(main_func):
     return main_func
 
 
-def design_chunks(midas_iggdb, chunk_size):
-    """ Chunks_of_genes and each chunk is indexed by (species_id, chunk_id) """
+def design_chunks(midas_db, chunk_size):
+    """ Each chunk_of_genes is indexed by (species_id, chunk_id) """
+
     global pool_of_samples
     global dict_of_species
 
@@ -98,16 +98,18 @@ def design_chunks(midas_iggdb, chunk_size):
     for species_id, sp in dict_of_species.items():
         species_id = sp.id
 
-        assert sp.design_genes_chunks(midas_iggdb, chunk_size)
+        assert sp.design_genes_chunks(midas_db, chunk_size)
         num_of_chunks = sp.num_of_genes_chunks
 
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
-        arguments_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_chunks)
         for _ in range(num_of_chunks):
             semaphore_for_species[species_id].acquire()
+
+    for species_id in dict_of_species.keys():
+        arguments_list.append((species_id, -1))
 
     return arguments_list
 
@@ -119,6 +121,7 @@ def process_one_chunk_of_genes(packed_args):
     if chunk_id == -1:
         global semaphore_for_species
         global dict_of_species
+
         sp = dict_of_species[species_id]
 
         tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}--1::wait merge_all_chunks_per_species")
@@ -151,6 +154,8 @@ def pool_across_samples_per_chunk(species_id, chunk_id):
 
         tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::start collect_sample_by_sample")
         accumulator = defaultdict(dict)
+
+        # First pass: accumulate the matrix sample by sample
         for sample_index, sample in enumerate(sp.list_of_samples):
             species_coverage_path = sample.get_target_layout("genes_coverage", species_id)
             chunk_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -161,6 +166,7 @@ def pool_across_samples_per_chunk(species_id, chunk_id):
             my_args = (species_id, chunk_id, sample_index, genes_coverage_path, total_samples_count, has_header)
             collect(accumulator, my_args)
 
+        # Second pass: infer presence absence based on copy number
         for gene_id, copynum in accumulator["copynum"].items():
             accumulator["presabs"][gene_id] = [1 if cn >= global_args.min_copy else 0 for cn in copynum]
         tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::finish collect_sample_by_sample")
@@ -180,7 +186,6 @@ def collect(accumulator, my_args):
     sp = dict_of_species[species_id]
     clusters_map = sp.clusters_map
     chunk_of_genes_id = set(sp.chunks_of_centroids[chunk_id].keys())
-
 
     with InputStream(genes_coverage_path) as stream:
         if has_header:
@@ -270,18 +275,18 @@ def midas_merge_genes(args):
 
         # Download genes_info for every species in the restricted species profile.
         num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), num_cores)
 
 
         tsprint(f"CZ::design_chunks::start")
-        arguments_list = design_chunks(midas_iggdb, args.chunk_size)
+        arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
 
         tsprint(f"CZ::fetch_clusters_map::start")
         for sp in dict_of_species.values():
             species_id = sp.id
-            genes_info_file = midas_iggdb.fetch_files("genes_info", [species_id])[species_id]
+            genes_info_file = midas_db.fetch_files("cluster_info", [species_id])[species_id]
             sp.fetch_clusters_map(genes_info_file, args.cluster_pid)
         tsprint(f"CZ::fetch_clusters_map::finish")
 

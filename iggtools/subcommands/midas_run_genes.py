@@ -11,7 +11,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, num_physical_cores, cat_files
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
 from iggtools.models.sample import Sample
 from iggtools.models.species import Species
@@ -54,8 +54,8 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"List of species used for building the prebuild bowtie2 indexes.")
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
@@ -157,24 +157,22 @@ def keep_read(aln):
 
 
 def design_chunks_per_species(args):
-    sp, midas_iggdb, chunk_size = args
+    sp, midas_db, chunk_size = args
     # Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information
-    sp.fetch_genes_are_markers(midas_iggdb)
-    return sp.design_genes_chunks(midas_iggdb, chunk_size)
+    sp.fetch_genes_are_markers(midas_db)
+    return sp.design_genes_chunks(midas_db, chunk_size)
 
 
-def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
-    """ Chunks_of_genes and each chunk is indexed by (species_id, chunk_id) """
+def design_chunks(midas_db, chunk_size):
+    """ Each chunk_of_genes is indexed by (species_id, chunk_id) """
 
     global semaphore_for_species
+    semaphore_for_species = dict()
+
     global dict_of_species
 
-    # Read-only global variables
-    semaphore_for_species = dict()
-    dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
-
     # Design chunks of genes structure per species
-    flags = [design_chunks_per_species((sp, midas_iggdb, chunk_size)) for sp in dict_of_species.values()]
+    flags = [design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()]
     assert all(flags)
 
     arguments_list = []
@@ -182,12 +180,14 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
         num_of_genes_chunks = sp.num_of_genes_chunks
         for chunk_id in range(0, num_of_genes_chunks):
             arguments_list.append((species_id, chunk_id))
-        # Submit merge tasks for all chunks per species
-        arguments_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_genes_chunks)
         for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
+
+    # Submit merge tasks for all chunks per species
+    for species_id in dict_of_species.keys():
+        arguments_list.append((species_id, -1))
 
     return arguments_list
 
@@ -200,6 +200,7 @@ def process_one_chunk_of_genes(packed_args):
     if chunk_id == -1:
         global semaphore_for_species
         global dict_of_species
+
         sp = dict_of_species[species_id]
 
         tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}--1::wait merge_chunks_per_species")
@@ -211,12 +212,12 @@ def process_one_chunk_of_genes(packed_args):
         return ret
 
     tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
-    ret = compute_coverage_per_chunk(packed_args)
+    ret = compute_coverage_per_chunk(species_id, chunk_id)
     tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
     return ret
 
 
-def compute_coverage_per_chunk(packed_args):
+def compute_coverage_per_chunk(species_id, chunk_id):
     """ Count number of bp mapped to each pan-gene. """
 
     global semaphore_for_species
@@ -224,7 +225,6 @@ def compute_coverage_per_chunk(packed_args):
     global sample
 
     try:
-        species_id, chunk_id = packed_args
         sp = dict_of_species[species_id]
         chunks_of_centroids = sp.chunks_of_centroids
         dict_of_genes_are_markers = sp.dict_of_genes_are_markers
@@ -237,7 +237,6 @@ def compute_coverage_per_chunk(packed_args):
         headerless_genes_are_marker = sample.get_target_layout("chunk_genes_are_markers", species_id, chunk_id)
 
         # Statistics needed to be accmulated within each chunk
-        chunk_genes_are_marker = defaultdict(dict)
         chunk_cov_stats = {
             "species_id": species_id,
             "chunk_id": chunk_id,
@@ -247,40 +246,46 @@ def compute_coverage_per_chunk(packed_args):
             "chunk_aligned_reads": 0,
             "chunk_mapped_reads": 0
         }
+        chunk_genes_are_marker = defaultdict(dict)
+        chunk_genes_values = defaultdict(list)
 
+        with AlignmentFile(pangenome_bamfile) as bamfile:
+            for gene_id in chunk_of_genes_id: # compute Unit: Genes
+                gene_length = chunk_of_genes_length[gene_id]
+                aligned_reads = bamfile.count(gene_id)
+
+                chunk_cov_stats["chunk_genome_size"] += 1
+                chunk_cov_stats["chunk_aligned_reads"] += aligned_reads
+
+                mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
+                gene_depth = sum((len(aln.query_alignment_sequence)/gene_length if keep_read(aln) else 0.0 for aln in bamfile.fetch(gene_id)))
+                gene_depth = float(format(gene_depth, DECIMALS6))
+
+                if gene_depth == 0: # Sparse by default.
+                    continue
+
+                chunk_cov_stats["chunk_num_covered_genes"] += 1
+                chunk_cov_stats["chunk_nz_gene_depth"] += gene_depth
+                chunk_cov_stats["chunk_mapped_reads"] += mapped_reads
+
+                chunk_genes_values[gene_id] = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
+
+                # Collect gene_depth for genes(centroids) that are markers
+                if gene_id in dict_of_genes_are_markers:
+                    chunk_genes_are_marker[gene_id] = dict_of_genes_are_markers[gene_id]
+                    chunk_genes_are_marker[gene_id]["gene_depth"] = gene_depth
+
+        # Write chunk gene coverage results to file
         with OutputStream(headerless_genes_coverage_path) as stream:
-            with AlignmentFile(pangenome_bamfile) as bamfile:
-                for gene_id in chunk_of_genes_id: # compute Unit: Genes
-                    gene_length = chunk_of_genes_length[gene_id]
-                    aligned_reads = bamfile.count(gene_id)
-
-                    chunk_cov_stats["chunk_genome_size"] += 1
-                    chunk_cov_stats["chunk_aligned_reads"] += aligned_reads
-
-                    mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
-                    gene_depth = sum((len(aln.query_alignment_sequence)/gene_length if keep_read(aln) else 0.0 for aln in bamfile.fetch(gene_id)))
-                    gene_depth = float(format(gene_depth, DECIMALS6))
-
-                    if gene_depth == 0: # Sparse by default.
-                        continue
-
-                    chunk_cov_stats["chunk_num_covered_genes"] += 1
-                    chunk_cov_stats["chunk_nz_gene_depth"] += gene_depth
-                    chunk_cov_stats["chunk_mapped_reads"] += mapped_reads
-
-                    vals = [gene_id, gene_length, aligned_reads, mapped_reads, gene_depth, 0.0]
-                    stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
-
-                    # Collect gene_depth for genes(centroids) that are markers
-                    if gene_id in dict_of_genes_are_markers:
-                        chunk_genes_are_marker[gene_id] = dict_of_genes_are_markers[gene_id]
-                        chunk_genes_are_marker[gene_id]["gene_depth"] = gene_depth
+            for vals in chunk_genes_values.values():
+                stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
 
         # Write current chunk's genes_that_are_markers to file
         with OutputStream(headerless_genes_are_marker) as stream2:
             for record in chunk_genes_are_marker.values():
                 vals = record.values()
                 stream2.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
+
         return chunk_cov_stats
     finally:
         semaphore_for_species[species_id].release()
@@ -305,6 +310,7 @@ def compute_marker_coverage_across_chunks(species_id):
                 markers_coverage[r["marker_id"]] += r["gene_depth"]
 
     median_marker_depth = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_coverage.values())))
+
     return median_marker_depth
 
 
@@ -454,14 +460,16 @@ def midas_run_genes(args):
 
 
         tsprint(f"CZ::design_chunks::start")
+        global dict_of_species
+        dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
         num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), num_cores)
-        arguments_list = design_chunks(species_ids_of_interest, midas_iggdb, args.chunk_size)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores)
+        arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
 
         # Build Bowtie indexes for species in the restricted species profile
-        centroids_files = midas_iggdb.fetch_files("centroids", species_ids_of_interest)
+        centroids_files = midas_db.fetch_files("centroids", species_ids_of_interest)
         tsprint(f"CZ::build_bowtie2_indexes::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish")

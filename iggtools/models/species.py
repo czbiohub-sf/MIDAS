@@ -4,7 +4,6 @@ from math import floor
 import Bio.SeqIO
 
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, command, select_from_tsv
-from iggtools.models.uhgg import MIDAS_IGGDB
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import genes_feature_schema
 
@@ -36,10 +35,10 @@ class Species:
         self.clusters_map = None
 
 
-    def design_genes_chunks(self, midas_iggdb, chunk_size):
+    def design_genes_chunks(self, midas_db, chunk_size):
         """ Each chunk is indexed by (species_id, chunk_id) """
         species_id = self.id
-        self.get_centroids(midas_iggdb)
+        self.get_centroids(midas_db)
 
         genes_counter = 0
         chunk_id = 0
@@ -64,12 +63,12 @@ class Species:
         return True
 
 
-    def design_snps_chunks(self, midas_iggdb, chunk_size):
+    def design_snps_chunks(self, midas_db, chunk_size):
         """ Given the Genome and chunk_size, the structure of the chunks are the same.
             Each chunk is indexed by (species_id, chunk_id) """
 
         species_id = self.id
-        self.get_representative_genome(midas_iggdb)
+        self.get_representative_genome(midas_db)
 
         # Start with full chunks
         chunk_id = 0
@@ -126,14 +125,14 @@ class Species:
         return True
 
 
-    def get_representative_genome(self, midas_iggdb):
+    def get_representative_genome(self, midas_db):
         species_id = self.id
-        self.contigs = scan_fasta(midas_iggdb.fetch_files("prokka_genome", [species_id])[species_id])
+        self.contigs = scan_fasta(midas_db.fetch_files("prokka_genome", [species_id])[species_id])
 
 
-    def get_centroids(self, midas_iggdb):
+    def get_centroids(self, midas_db):
         species_id = self.id
-        self.centroids = scan_fasta(midas_iggdb.fetch_files("centroids", [species_id])[species_id])
+        self.centroids = scan_fasta(midas_db.fetch_files("centroids", [species_id])[species_id])
 
 
     def fetch_samples_names(self):
@@ -163,9 +162,9 @@ class Species:
         self.compute_genes_boundary()
 
 
-    def fetch_genes_are_markers(self, midas_iggdb):
+    def fetch_genes_are_markers(self, midas_db):
         species_id = self.id
-        marker_centroids_file = midas_iggdb.fetch_files("marker_centroids_99", [species_id])[species_id]
+        marker_centroids_file = midas_db.fetch_files("marker_centroids", [species_id])[species_id]
 
         dict_of_genes_are_markers = defaultdict(dict)
         list_of_marker_genes = []
@@ -179,8 +178,8 @@ class Species:
         self.list_of_markers = list_of_marker_genes
 
 
-    def fetch_clusters_map(self, genes_info_file, pid):
-        self.clusters_map = read_cluster_map(genes_info_file, pid)
+    def fetch_clusters_map(self, cluster_info_file, pid):
+        self.clusters_map = read_cluster_map(cluster_info_file, pid)
 
 
 def scan_fasta(fasta_file):
@@ -305,11 +304,12 @@ def generate_boundaries(features):
     return gene_boundaries
 
 
-def read_cluster_map(genes_info_path, pid):
+def read_cluster_map(cluster_info_path, pid):
     """ Read genes_info.txt and convert to centroid_{pid} """
+    #TODO: replace with cluster_info.txt
     centroids_map = {}
-    cols = ["gene_id", "centroid_99", f"centroid_{pid}"]
-    with InputStream(genes_info_path) as stream:
+    cols = ["centroid_99", f"centroid_{pid}"]
+    with InputStream(cluster_info_path) as stream:
         for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
             if r["centroid_99"] not in centroids_map:
                 centroids_map[r["centroid_99"]] = r[f"centroid_{pid}"]

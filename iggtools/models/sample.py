@@ -10,33 +10,33 @@ from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
 def get_single_layout(sample_name, dbtype=""):
     def per_species(species_id="", chunk_id=""):
         return {
-            "sample_dir":             f"{sample_name}",
-            "outdir":                 f"{sample_name}/{dbtype}",
-            "output_subdir":          f"{sample_name}/{dbtype}/{species_id}",
+            "sample_dir":              f"{sample_name}",
+            "outdir":                  f"{sample_name}/{dbtype}",
+            "output_subdir":           f"{sample_name}/{dbtype}/{species_id}",
 
-            "tempdir":                f"{sample_name}/temp/{dbtype}",
-            "temp_subdir":            f"{sample_name}/temp/{dbtype}/{species_id}",
+            "tempdir":                 f"{sample_name}/temp/{dbtype}",
+            "temp_subdir":             f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            "midas_iggdb_dir":        f"midas_iggdb",
-            "bt2_indexes_dir":        f"{sample_name}/bt2_indexes/{dbtype}",
+            "midas_db_dir":            f"midas2_db",
+            "bt2_indexes_dir":         f"{sample_name}/bt2_indexes/{dbtype}",
 
             # species workflow output
-            "species_summary":        f"{sample_name}/species/species_profile.tsv",
-            "species_alignments_m8":  f"{sample_name}/temp/species/alignments.m8",
+            "species_summary":         f"{sample_name}/species/species_profile.tsv",
+            "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
 
             # snps workflow output
-            "snps_summary":           f"{sample_name}/snps/snps_summary.tsv",
-            "snps_pileup":            f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
-            "snps_chunk_summary":     f"{sample_name}/snps/chunks_summary.tsv",
-            "snps_repgenomes_bam":    f"{sample_name}/temp/snps/repgenomes.bam",
-            "chunk_pileup":           f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv",
+            "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
+            "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv", #<-- cat_files
+            "snps_chunk_summary":      f"{sample_name}/snps/chunks_summary.tsv",
+            "snps_repgenomes_bam":     f"{sample_name}/temp/snps/repgenomes.bam",
+            "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv",
 
             # genes workflow output
-            "genes_summary":          f"{sample_name}/genes/genes_summary.tsv",
-            "genes_chunk_summary":    f"{sample_name}/genes/chunks_summary.tsv",
-            "genes_coverage":         f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
-            "genes_pangenomes_bam":   f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_coverage":         f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv",
+            "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
+            "genes_chunk_summary":     f"{sample_name}/genes/chunks_summary.tsv",
+            "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv", #<-- cat_files
+            "genes_pangenomes_bam":    f"{sample_name}/temp/genes/pangenomes.bam",
+            "chunk_coverage":          f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv",
             "chunk_genes_are_markers": f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv",
         }
     return per_species

@@ -8,7 +8,7 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema
 from iggtools.models.sample import Sample
@@ -54,8 +54,8 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"List of species used for building the prebuild bowtie2 indexes.")
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
@@ -160,11 +160,11 @@ def keep_read(aln):
 
 
 def design_chunks_per_species(args):
-    sp, midas_iggdb, chunk_size = args
-    return sp.design_snps_chunks(midas_iggdb, chunk_size)
+    sp, midas_db, chunk_size = args
+    return sp.design_snps_chunks(midas_db, chunk_size)
 
 
-def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
+def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     """ Chunks of continuous genomics sites, indexed by species_id, chunk_id """
 
     global semaphore_for_species
@@ -175,8 +175,8 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
     dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
 
     # Design chunks structure per species
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_iggdb, chunk_size) for sp in dict_of_species.values()], 4)
-    #flags = [sp.design_snps_chunks(midas_iggdb, chunk_size) for sp in dict_of_species.values()]
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4)
+    #flags = [sp.design_snps_chunks(midas_db, chunk_size) for sp in dict_of_species.values()]
     assert all(flags)
 
     # Prioritize chunks need to compute read counts across species
@@ -191,12 +191,15 @@ def design_chunks(species_ids_of_interest, midas_iggdb, chunk_size):
                 pri_list.append((species_id, chunk_id))
             else:
                 reg_list.append((species_id, chunk_id))
-        reg_list.append((species_id, -1))
+        #reg_list.append((species_id, -1))
 
         # Create a semaphore with number_of_chunks of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
         for _ in range(num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
+
+    for species_id in dict_of_species.keys():
+        reg_list.append((species_id, -1))
 
     arguments_list = pri_list + reg_list
     return arguments_list
@@ -428,13 +431,13 @@ def midas_run_snps(args):
         # Fetch representative genome fastas for each species (multiprocessing)
         tsprint(f"CZ::design_chunks::start")
         num_cores = min(args.num_cores, species_counts)
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), num_cores)
-        arguments_list = design_chunks(species_ids_of_interest, midas_iggdb, args.chunk_size)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores)
+        arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
 
         # Build Bowtie indexes for species in the restricted species profile
-        contigs_files = midas_iggdb.fetch_files("prokka_genome", species_ids_of_interest)
+        contigs_files = midas_db.fetch_files("prokka_genome", species_ids_of_interest)
         tsprint(f"CZ::build_bowtie2_indexes::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish")

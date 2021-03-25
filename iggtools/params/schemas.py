@@ -6,6 +6,11 @@ DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
 
 
+MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
+hmmsearch_max_evalue = 1e-5
+hmmsearch_min_cov = 0.00
+
+
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
