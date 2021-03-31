@@ -3,7 +3,7 @@ from collections import defaultdict
 from math import floor
 import Bio.SeqIO
 
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, command, select_from_tsv
+from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import genes_feature_schema
 
@@ -27,7 +27,7 @@ class Species:
         self.genes_sequence = None # indexed by gene_id
         # Pan genes
         self.centroids = defaultdict(dict)
-        self.chunks_of_genes = defaultdict(dict)
+        self.chunks_of_centroids = defaultdict(dict)
         self.num_of_genes_chunks = 0
         self.dict_of_genes_are_markers = []
         self.list_of_markers = []

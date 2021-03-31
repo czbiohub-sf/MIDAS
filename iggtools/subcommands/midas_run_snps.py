@@ -431,7 +431,7 @@ def midas_run_snps(args):
         # Fetch representative genome fastas for each species (multiprocessing)
         tsprint(f"CZ::design_chunks::start")
         num_cores = min(args.num_cores, species_counts)
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"))
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 

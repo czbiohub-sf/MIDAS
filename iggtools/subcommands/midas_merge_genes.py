@@ -16,7 +16,7 @@ DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35
-DEFAULT_CHUNK_SIZE = 5000
+DEFAULT_CHUNK_SIZE = 50000
 
 
 def register_args(main_func):
@@ -88,11 +88,14 @@ def register_args(main_func):
 def design_chunks(midas_db, chunk_size):
     """ Each chunk_of_genes is indexed by (species_id, chunk_id) """
 
-    global pool_of_samples
     global dict_of_species
-
     global semaphore_for_species
     semaphore_for_species = dict()
+
+    # Design chunks of genes structure per species
+    #assert all([design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()])
+    # sorted_tuples_of_species = sorted(((sp.id, sp.num_of_genes_chunks) for sp in dict_of_species.values()), key=itemgetter(1))
+    #for species_id, num_of_genes_chunks in sorted_tuples_of_species:
 
     arguments_list = []
     for species_id, sp in dict_of_species.items():
@@ -108,8 +111,8 @@ def design_chunks(midas_db, chunk_size):
         for _ in range(num_of_chunks):
             semaphore_for_species[species_id].acquire()
 
-    for species_id in dict_of_species.keys():
-        arguments_list.append((species_id, -1))
+    #for species_id in dict_of_species.keys():
+    #    arguments_list.append((species_id, -1))
 
     return arguments_list
 
@@ -152,10 +155,16 @@ def pool_across_samples_per_chunk(species_id, chunk_id):
         sp = dict_of_species[species_id]
         total_samples_count = sp.samples_count
 
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::start collect_sample_by_sample")
-        accumulator = defaultdict(dict)
-
         # First pass: accumulate the matrix sample by sample
+        list_of_genes_id = set([sp.clusters_map[g_id] for g_id in sp.chunks_of_centroids[chunk_id].keys()])
+        accumulator = {
+                        "copynum": {g_id:[0.0] * total_samples_count for g_id in list_of_genes_id},
+                        "depth":   {g_id:[0.0] * total_samples_count for g_id in list_of_genes_id},
+                        "reads":   {g_id:[0.0] * total_samples_count for g_id in list_of_genes_id},
+                        "presabs": {g_id:[0] * total_samples_count for g_id in list_of_genes_id}
+                      }
+
+        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::start collect_sample_by_sample")
         for sample_index, sample in enumerate(sp.list_of_samples):
             species_coverage_path = sample.get_target_layout("genes_coverage", species_id)
             chunk_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -163,60 +172,50 @@ def pool_across_samples_per_chunk(species_id, chunk_id):
             genes_coverage_path = chunk_coverage_path if os.path.exists(chunk_coverage_path) else species_coverage_path
             has_header = not os.path.exists(chunk_coverage_path)
 
-            my_args = (species_id, chunk_id, sample_index, genes_coverage_path, total_samples_count, has_header)
+            tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::start collect_one_sample")
+            my_args = (species_id, chunk_id, sample_index, genes_coverage_path, has_header)
             collect(accumulator, my_args)
+            tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::finish collect_one_sample")
+        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::finish collect_sample_by_sample")
 
         # Second pass: infer presence absence based on copy number
         for gene_id, copynum in accumulator["copynum"].items():
             accumulator["presabs"][gene_id] = [1 if cn >= global_args.min_copy else 0 for cn in copynum]
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::finish collect_sample_by_sample")
 
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::start write_pooled_genes_per_chunk")
+        # Write to chunk file
+        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::start write_pooled_genes_per_chunk")
         assert write_pooled_genes_per_chunk(accumulator, species_id, chunk_id)
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::finish write_pooled_genes_per_chunk")
+        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::finish write_pooled_genes_per_chunk")
     finally:
         semaphore_for_species[species_id].release() # no deadlock
 
 
 def collect(accumulator, my_args):
 
-    species_id, chunk_id, sample_index, genes_coverage_path, total_samples_count, has_header = my_args
-
     global dict_of_species
+
+    species_id, chunk_id, sample_index, genes_coverage_path, has_header = my_args
+
     sp = dict_of_species[species_id]
     clusters_map = sp.clusters_map
-    chunk_of_genes_id = set(sp.chunks_of_centroids[chunk_id].keys())
+    list_of_centroids_id = sorted(list(sp.chunks_of_centroids[chunk_id].keys()))
 
     with InputStream(genes_coverage_path) as stream:
         if has_header:
             stream.readline()
+
         for r in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
-            gene_id = clusters_map[r["gene_id"]]
-            if gene_id not in chunk_of_genes_id:
+            if r["gene_id"] not in list_of_centroids_id:
                 continue
 
-            acc_copynum = accumulator["copynum"].get(gene_id)
-            if not acc_copynum:
-                acc_copynum = [0.0] * total_samples_count
-                accumulator["copynum"][gene_id] = acc_copynum
-            acc_copynum[sample_index] += r["copy_number"]
-
-            acc_depth = accumulator["depth"].get(gene_id)
-            if not acc_depth:
-                acc_depth = [0.0] * total_samples_count
-                accumulator["depth"][gene_id] = acc_depth
-            acc_depth[sample_index] += r["total_depth"]
-
-            acc_reads = accumulator["reads"].get(gene_id)
-            if not acc_reads:
-                acc_reads = [0.0] * total_samples_count
-                accumulator["reads"][gene_id] = acc_reads
-            acc_reads[sample_index] += r["mapped_reads"]
+            gene_id = clusters_map[r["gene_id"]]
+            accumulator["copynum"][gene_id][sample_index] += r["copy_number"]
+            accumulator["depth"][gene_id][sample_index] += r["total_depth"]
+            accumulator["reads"][gene_id][sample_index] += r["mapped_reads"]
 
 
 def write_pooled_genes_per_chunk(accumulator, species_id, chunk_id):
     global pool_of_samples
-
     for file_type in list(genes_info_schema.keys()):
         outfile = pool_of_samples.get_target_layout(f"genes_{file_type}_by_chunk", species_id, chunk_id)
         with OutputStream(outfile) as stream:
@@ -266,22 +265,17 @@ def midas_merge_genes(args):
         assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(species_ids_of_interest)
 
-
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
-
         # Download genes_info for every species in the restricted species profile.
-        num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), num_cores)
-
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"))
 
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
-
 
         tsprint(f"CZ::fetch_clusters_map::start")
         for sp in dict_of_species.values():
@@ -293,10 +287,16 @@ def midas_merge_genes(args):
 
         # Merge copy_numbers, coverage and read counts across ALl the samples
         tsprint(f"CZ::multiprocessing_map::start")
-        proc_flags = multiprocessing_map(process_one_chunk_of_genes, arguments_list, args.num_cores)
+        total_chunk_counts = sum((sp.num_of_genes_chunks for sp in dict_of_species.values()))
+        num_cores = min(args.num_cores, total_chunk_counts)
+        proc_flags = multiprocessing_map(process_one_chunk_of_genes, arguments_list, num_cores)
+        assert all(s == "worked" for s in proc_flags)
         tsprint(f"CZ::multiprocessing_map::finish")
 
-        assert all(s == "worked" for s in proc_flags)
+        tsprint(f"CZ::merge_all_chunks_per_species::start")
+        for species_id in species_ids_of_interest:
+            assert merge_all_chunks_per_species(species_id)
+        tsprint(f"CZ::merge_all_chunks_per_species::start")
 
     except Exception as error:
         if not args.debug:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, multithreading_map, command, num_physical_cores
+from iggtools.common.utils import download_reference, multithreading_map, command
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params.schemas import MARKER_FILE_EXTS
@@ -9,7 +9,7 @@ from iggtools.params.schemas import MARKER_FILE_EXTS
 
 class MIDAS_DB: # pylint: disable=too-few-public-methods
 
-    def __init__(self, midas_db_dir=".", num_cores=num_physical_cores):
+    def __init__(self, midas_db_dir=".", num_cores=1):
         self.midas_db_dir = midas_db_dir
         self.num_cores = num_cores
         self.local_toc = _fetch_file_from_s3((outputs.genomes, self.get_target_layout("genomes_toc", False)))
@@ -74,7 +74,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
                 args_list.append((s3_file, dest_file))
 
-            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=8) #self.num_cores)
+            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=self.num_cores)
             for species_index, species_id in enumerate(list_of_species_ids):
                 fetched_files[species_id] = _fetched_files[species_index]
             return fetched_files
