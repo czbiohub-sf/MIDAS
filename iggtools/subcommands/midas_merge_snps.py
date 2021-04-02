@@ -286,6 +286,7 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
+    # TODO: optimal way is to sort chunks by coverage
     arguments_list = []
     for sp in dict_of_species.values():
         species_id = sp.id
@@ -296,7 +297,6 @@ def design_chunks(midas_db, chunk_size):
 
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
-        #arguments_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_chunks)
         for _ in range(num_of_chunks):
