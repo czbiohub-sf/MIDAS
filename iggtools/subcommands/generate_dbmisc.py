@@ -9,7 +9,7 @@ from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params import outputs
 from iggtools.subcommands.import_uhgg import decode_genomes_arg
 from iggtools.subcommands.build_pangenome import decode_species_arg
-from iggtools.params.schemas import PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA
+from iggtools.params.schemas import PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
 
 
 # Up to this many concurrent species builds.
@@ -223,15 +223,6 @@ def join_marker_centroids_slave(args):
     upload(local_file, dest_file, check=False)
 
 
-def gene_info_to_cluster(genes_info_path):
-    """ Read genes_info.txt and convert to centroid_{pid} """
-    centroids_dict = {}
-    cols = list(PAN_GENE_INFO_SCHEMA.keys())[1:]
-    with InputStream(genes_info_path) as stream:
-        for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
-            if r["centroid_99"] not in centroids_dict:
-                centroids_dict[r["centroid_99"]] = r
-    return centroids_dict
 
 
 def species_cluster_work(args):
@@ -255,14 +246,30 @@ def species_cluster_work(args):
     if not os.path.isdir(slave_subdir):
         command(f"mkdir -p {slave_subdir}")
 
+
     gene_info_file = destpath(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"])
-    centroids_dict = gene_info_to_cluster(gene_info_file)
+    centroids_dict = {}
+    cols = list(PAN_GENE_INFO_SCHEMA.keys())[1:]
+    with InputStream(gene_info_file) as stream:
+        for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
+            if r["centroid_99"] not in centroids_dict:
+                centroids_dict[r["centroid_99"]] = r
+
+    gene_length_file = destpath(get_uhgg_layout(species_id, "genes.len")["pangenome_file"])
+    gene_length_dict = dict()
+    with InputStream(gene_length_file) as stream:
+        for r in select_from_tsv(stream, schema = PAN_GENE_LENGTH_SCHEMA, result_structure=dict):
+            gene_length_dict[r["gene_id"]] = r["gene_length"]
+
 
     last_output = f"{slave_subdir}/cluster_info.txt"
     with OutputStream(last_output) as stream:
-        stream.write("\t".join(list(PAN_GENE_INFO_SCHEMA.keys())[1:]) + "\n")
+        stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
         for record in centroids_dict.values():
-            stream.write("\t".join(list(record.values())) + "\n")
+            gene_len = gene_length_dict[record["centroid_99"]]
+            val = list(record.values())
+            val.append(gene_len)
+            stream.write("\t".join(map(str, val)) + "\n")
 
     with open(f"{slave_subdir}/{slave_log}", "w") as slog:
         slog.write(msg + "\n")

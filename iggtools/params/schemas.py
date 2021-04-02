@@ -47,6 +47,25 @@ PAN_GENE_INFO_SCHEMA = {
 }
 
 
+PAN_GENE_LENGTH_SCHEMA = {
+    "gene_id": str,
+    "genome_id": str,
+    "gene_length": int,
+}
+
+
+CLUSTER_INFO_SCHEMA = {
+    "centroid_99": str,
+    "centroid_95": str,
+    "centroid_90": str,
+    "centroid_85": str,
+    "centroid_80": str,
+    "centroid_75": str,
+    "centroid_99_length": int,
+}
+
+
+
 def fetch_default_genome_depth(dbtype):
     if dbtype == "species":
         DEFAULT_GENOME_DEPTH = 1.0
