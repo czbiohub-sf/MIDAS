@@ -286,6 +286,7 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
+    # TODO: optimal way is to sort chunks by coverage
     arguments_list = []
     for sp in dict_of_species.values():
         species_id = sp.id
@@ -296,7 +297,6 @@ def design_chunks(midas_db, chunk_size):
 
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
-        #arguments_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_chunks)
         for _ in range(num_of_chunks):
@@ -389,7 +389,7 @@ def accumulate_samples_per_unit(packed_args):
         # Pileup is 1-based index, close left close right
         proc_args = (contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_one_samples")
+    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_sample_by_sample")
 
     # Compute across-samples SNPs and write to chunk file
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start compute_and_write_pooled_snps_per_unit")
@@ -623,7 +623,7 @@ def midas_merge_snps(args):
 
         # Download representative genomes for every species into midas_db
         num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"))
 
         # The unit of compute across-samples pooled SNPs is: chunk_of_sites.
         tsprint(f"CZ::design_chunks::start")

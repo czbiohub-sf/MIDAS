@@ -2,6 +2,7 @@
 import json
 import os
 import multiprocessing
+from operator import itemgetter
 
 from collections import defaultdict
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
@@ -175,15 +176,18 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
 
     # Design chunks structure per species
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4)
-    #flags = [sp.design_snps_chunks(midas_db, chunk_size) for sp in dict_of_species.values()]
+    #flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4)
+    flags = [sp.design_snps_chunks(midas_db, chunk_size) for sp in dict_of_species.values()]
     assert all(flags)
 
+    # Sort species by the largest contig length
+    sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
+
     # Prioritize chunks need to compute read counts across species
-    # TODO: if we don't need to priority across species, then can put the following part into design_snps_chunks
     pri_list = []
     reg_list = []
-    for species_id, sp in dict_of_species.items():
+    for species_id, _ in sorted_tuples_of_species:
+        sp = dict_of_species[species_id]
         priority_chunks = sp.priority_chunks
         num_of_sites_chunks = sp.num_of_sites_chunks
         for chunk_id in range(0, num_of_sites_chunks):
@@ -191,7 +195,6 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
                 pri_list.append((species_id, chunk_id))
             else:
                 reg_list.append((species_id, chunk_id))
-        #reg_list.append((species_id, -1))
 
         # Create a semaphore with number_of_chunks of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
@@ -431,7 +434,7 @@ def midas_run_snps(args):
         # Fetch representative genome fastas for each species (multiprocessing)
         tsprint(f"CZ::design_chunks::start")
         num_cores = min(args.num_cores, species_counts)
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"))
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 

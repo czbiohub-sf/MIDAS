@@ -3,9 +3,9 @@ from collections import defaultdict
 from math import floor
 import Bio.SeqIO
 
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, command, select_from_tsv
+from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import genes_feature_schema
+from iggtools.params.schemas import genes_feature_schema, CLUSTER_INFO_SCHEMA
 
 
 class Species:
@@ -14,6 +14,7 @@ class Species:
         self.id = species_id
         # SNPs chunks design related
         self.contigs = defaultdict(dict)
+        self.max_contig_length = 0
         self.chunks_of_sites = defaultdict(list)
         self.num_of_sites_chunks = 0
         self.priority_chunks = []
@@ -26,32 +27,32 @@ class Species:
         self.genes_boundary = None # indexed by contig_id
         self.genes_sequence = None # indexed by gene_id
         # Pan genes
-        self.centroids = defaultdict(dict)
-        self.chunks_of_genes = defaultdict(dict)
+        #self.centroids = defaultdict(dict)
+        self.cluster_info = None
+        self.chunks_of_centroids = defaultdict(dict)
         self.num_of_genes_chunks = 0
         self.dict_of_genes_are_markers = []
         self.list_of_markers = []
-        # Merge genes
-        self.clusters_map = None
 
 
     def design_genes_chunks(self, midas_db, chunk_size):
         """ Each chunk is indexed by (species_id, chunk_id) """
         species_id = self.id
-        self.get_centroids(midas_db)
+        self.get_cluster_info(midas_db)
 
         genes_counter = 0
         chunk_id = 0
-        curr_chunk_of_genes = defaultdict()
+
+        curr_chunk_of_genes = dict()
         chunks_of_centroids = defaultdict(dict)
-        for centroid in self.centroids.values():
+        for row in self.cluster_info.values():
             if not chunk_id*chunk_size <= genes_counter < (chunk_id+1)*chunk_size:
                 chunks_of_centroids[chunk_id] = curr_chunk_of_genes
 
                 chunk_id += 1
                 curr_chunk_of_genes = defaultdict()
 
-            curr_chunk_of_genes[centroid["id"]] = centroid["length"]
+            curr_chunk_of_genes[row["centroid_99"]] = row["centroid_99_length"]
             genes_counter += 1
 
         # Last chunk of centroids
@@ -75,9 +76,14 @@ class Species:
         dict_of_packed_args = defaultdict(list)
         priority_chunks = []
         unassigned_contigs = defaultdict(dict)
+        max_contig_length = 0
         for contig in self.contigs.values():
             contig_id = contig["id"]
             contig_length = contig["length"]
+
+            if contig_length > max_contig_length:
+                max_contig_length = contig_length
+
             # left closed, right open
             if contig_length < chunk_size:
                 unassigned_contigs[contig_id] = {"contig_id": contig_id,
@@ -121,6 +127,7 @@ class Species:
         self.num_of_sites_chunks = chunk_id
         self.chunks_of_sites = dict_of_packed_args
         self.priority_chunks = priority_chunks
+        self.max_contig_length = max_contig_length
 
         return True
 
@@ -133,6 +140,16 @@ class Species:
     def get_centroids(self, midas_db):
         species_id = self.id
         self.centroids = scan_fasta(midas_db.fetch_files("centroids", [species_id])[species_id])
+
+
+    def get_cluster_info(self, midas_db):
+        species_id = self.id
+        cluster_info_path = midas_db.fetch_files("cluster_info", [species_id])[species_id]
+        cluster_info = dict()
+        with InputStream(cluster_info_path) as stream:
+            for r in select_from_tsv(stream, selected_columns=CLUSTER_INFO_SCHEMA, result_structure=dict):
+                cluster_info[r["centroid_99"]] = r
+        self.cluster_info = cluster_info
 
 
     def fetch_samples_names(self):
@@ -176,10 +193,6 @@ class Species:
 
         self.dict_of_genes_are_markers = dict_of_genes_are_markers
         self.list_of_markers = list_of_marker_genes
-
-
-    def fetch_clusters_map(self, cluster_info_file, pid):
-        self.clusters_map = read_cluster_map(cluster_info_file, pid)
 
 
 def scan_fasta(fasta_file):
@@ -302,15 +315,3 @@ def generate_boundaries(features):
         boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
         gene_boundaries[contig_id] = {"genes": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
     return gene_boundaries
-
-
-def read_cluster_map(cluster_info_path, pid):
-    """ Read genes_info.txt and convert to centroid_{pid} """
-    #TODO: replace with cluster_info.txt
-    centroids_map = {}
-    cols = ["centroid_99", f"centroid_{pid}"]
-    with InputStream(cluster_info_path) as stream:
-        for r in select_from_tsv(stream, selected_columns=cols, result_structure=dict):
-            if r["centroid_99"] not in centroids_map:
-                centroids_map[r["centroid_99"]] = r[f"centroid_{pid}"]
-    return centroids_map

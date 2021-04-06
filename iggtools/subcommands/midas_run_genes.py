@@ -2,6 +2,7 @@
 import json
 import os
 import multiprocessing
+from operator import itemgetter
 
 from collections import defaultdict
 from itertools import repeat
@@ -22,7 +23,7 @@ DEFAULT_MARKER_DEPTH = 3.0
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
-DEFAULT_CHUNK_SIZE = 5000
+DEFAULT_CHUNK_SIZE = 50000
 
 
 def register_args(main_func):
@@ -166,18 +167,19 @@ def design_chunks_per_species(args):
 def design_chunks(midas_db, chunk_size):
     """ Each chunk_of_genes is indexed by (species_id, chunk_id) """
 
+    global dict_of_species
     global semaphore_for_species
     semaphore_for_species = dict()
 
-    global dict_of_species
-
     # Design chunks of genes structure per species
-    flags = [design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()]
-    assert all(flags)
+    assert all([design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()])
+
+    # Sort species by ascending chunk counts
+    sorted_tuples_of_species = sorted(((sp.id, sp.num_of_genes_chunks) for sp in dict_of_species.values()), key=itemgetter(1))
 
     arguments_list = []
-    for species_id, sp in dict_of_species.items():
-        num_of_genes_chunks = sp.num_of_genes_chunks
+    for species_id, num_of_genes_chunks in sorted_tuples_of_species:
+        sp = dict_of_species[species_id]
         for chunk_id in range(0, num_of_genes_chunks):
             arguments_list.append((species_id, chunk_id))
 
@@ -185,30 +187,28 @@ def design_chunks(midas_db, chunk_size):
         for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
 
-    # Submit merge tasks for all chunks per species
-    for species_id in dict_of_species.keys():
-        arguments_list.append((species_id, -1))
-
+    # Submit the merge tasks to the end of the queue.
+    for species_id, sp in dict_of_species.items():
+        arguments_list.append((species_id, -1, sp.num_of_genes_chunks))
     return arguments_list
 
 
 def process_one_chunk_of_genes(packed_args):
     """ Compute coverage of pangenome for given species_id and write results to disk """
 
-    species_id, chunk_id = packed_args
+    species_id, chunk_id = packed_args[:2]
 
     if chunk_id == -1:
         global semaphore_for_species
-        global dict_of_species
-
-        sp = dict_of_species[species_id]
+        num_of_genes_chunks = packed_args[2]
 
         tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}--1::wait merge_chunks_per_species")
-        for _ in range(sp.num_of_genes_chunks):
+        for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}--1::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
         tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}--1::finish merge_chunks_per_species")
+
         return ret
 
     tsprint(f"  CZ::process_one_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
@@ -230,7 +230,7 @@ def compute_coverage_per_chunk(species_id, chunk_id):
         dict_of_genes_are_markers = sp.dict_of_genes_are_markers
 
         chunk_of_genes_length = chunks_of_centroids[chunk_id]
-        chunk_of_genes_id = sorted(list(chunk_of_genes_length.keys()))
+        list_of_centroids_id = sorted(list(chunk_of_genes_length.keys()))
 
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         headerless_genes_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
@@ -250,7 +250,7 @@ def compute_coverage_per_chunk(species_id, chunk_id):
         chunk_genes_values = defaultdict(list)
 
         with AlignmentFile(pangenome_bamfile) as bamfile:
-            for gene_id in chunk_of_genes_id: # compute Unit: Genes
+            for gene_id in list_of_centroids_id: # compute Unit: Genes
                 gene_length = chunk_of_genes_length[gene_id]
                 aligned_reads = bamfile.count(gene_id)
 
@@ -364,10 +364,10 @@ def merge_chunks_per_species(species_id):
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
     cat_files(list_of_chunks_coverage, species_gene_coverage_path, 10)
 
-    if False: #not global_args.debug:
+    if not global_args.debug:
         tsprint(f"Deleting temporary sliced coverage files for {species_id}.")
-        for s_file in list_of_chunks_coverage:
-            command(f"rm -rf {s_file}", quiet=True)
+        temp_species_dir = os.path.dirname(list_of_chunks_coverage[0])
+        command(f"rm -rf {temp_species_dir}", quiet=True)
 
     return {"species_id": species_id, "chunk_id": -1, "median_marker_depth": median_marker_depth}
 
@@ -455,15 +455,15 @@ def midas_run_genes(args):
         # Select abundant species present in the sample for SNPs calling
         species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
         species_counts = len(species_ids_of_interest)
-        assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
+        assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(species_ids_of_interest)
 
 
         tsprint(f"CZ::design_chunks::start")
         global dict_of_species
         dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
-        num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores)
+        num_cores_download = min(species_counts, args.num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores_download)
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
@@ -485,8 +485,18 @@ def midas_run_genes(args):
 
 
         tsprint(f"CZ::multiprocessing_map::start")
-        chunks_gene_coverage = multiprocessing_map(process_one_chunk_of_genes, arguments_list, args.num_cores)
+        total_chunk_counts = sum((sp.num_of_genes_chunks for sp in dict_of_species.values()))
+        num_cores = min(args.num_cores, total_chunk_counts)
+        tsprint(f"The number of cores will be used to compute coverage is {num_cores}")
+        chunks_gene_coverage = multiprocessing_map(process_one_chunk_of_genes, arguments_list, num_cores)
         tsprint(f"CZ::multiprocessing_map::finish")
+
+
+        #tsprint(f"CZ::merge_chunks_per_species::start")
+        # Merge chunk files
+        #for species_id in species_ids_of_interest:
+        #    chunks_gene_coverage.append(merge_chunks_per_species(species_id))
+        #tsprint(f"CZ::merge_chunks_per_species::finish")
 
 
         tsprint(f"CZ::write_species_coverage_summary::start")

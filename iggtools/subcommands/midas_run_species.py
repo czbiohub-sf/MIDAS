@@ -283,7 +283,7 @@ def midas_run_species(args):
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         tsprint(f"CZ::fetch_iggdb_files::start")
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), args.num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), 1)
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
         tsprint(f"CZ::fetch_iggdb_files::finish")
