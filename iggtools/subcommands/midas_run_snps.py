@@ -187,9 +187,6 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     pri_list = []
     reg_list = []
     for species_id, _ in sorted_tuples_of_species:
-        print(sp.chunks_of_sites)
-        print(sp.num_of_sites_chunks)
-
         sp = dict_of_species[species_id]
         priority_chunks = sp.priority_chunks
         num_of_sites_chunks = sp.num_of_sites_chunks
