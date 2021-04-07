@@ -6,7 +6,7 @@ from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
-from iggtools.models.uhgg import UHGG
+from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params import outputs
 
 
@@ -18,14 +18,37 @@ CLUSTERING_PERCENTS = sorted(CLUSTERING_PERCENTS, reverse=True)
 CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 
 
-def pangenome_file(species_id, component):
-    # s3://microbiome-igg/2.0/pangenomes/GUT_GENOMEDDDDDD/{genes.ffn, centroids.ffn, gene_info.txt}
-    return f"{outputs.pangenomes}/{species_id}/{component}"
+def pan_destpath(species_id, filename):
+    return destpath(get_uhgg_layout(species_id, filename)["pangenome_file"])
 
 
-def annotations_file(species_id, genome_id, component_extension):
-    # s3://microbiome-igg/2.0/prodigal/GUT_GENOMEDDDDDD.{ffn, gff, ...}
-    return f"{outputs.annotations}/{species_id}/{genome_id}/{genome_id}.{component_extension}"
+@retry
+def find_files_with_retry(f):
+    return find_files(f)
+
+
+def decode_species_arg(args, species):
+    selected_species = set()
+    try:  # pylint: disable=too-many-nested-blocks
+        if args.species.upper() == "ALL":
+            selected_species = set(species)
+        else:
+            for s in args.species.split(","):
+                if ":" not in s:
+                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
+                    selected_species.add(s)
+                else:
+                    i, n = s.split(":")
+                    i = int(i)
+                    n = int(n)
+                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
+                    for sid in species:
+                        if int(sid) % n == i:
+                            selected_species.add(sid)
+    except:
+        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
+        raise
+    return sorted(selected_species)
 
 
 # 1. Occasional failures in aws s3 cp require a retry.
@@ -34,7 +57,8 @@ def annotations_file(species_id, genome_id, component_extension):
 @retry
 def clean_genes(packed_ids):
     species_id, genome_id = packed_ids
-    input_annotations = annotations_file(species_id, genome_id, "ffn.lz4")
+    input_annotations = destpath(get_uhgg_layout(species_id, "ffn", genome_id)["annotation_file"])
+
     output_genes = f"{genome_id}.genes.ffn"
     output_info = f"{genome_id}.genes.len"
 
@@ -144,35 +168,6 @@ def build_pangenome(args):
         build_pangenome_master(args)
 
 
-@retry
-def find_files_with_retry(f):
-    return find_files(f)
-
-
-def decode_species_arg(args, species):
-    selected_species = set()
-    try:  # pylint: disable=too-many-nested-blocks
-        if args.species.upper() == "ALL":
-            selected_species = set(species)
-        else:
-            for s in args.species.split(","):
-                if ":" not in s:
-                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
-                    selected_species.add(s)
-                else:
-                    i, n = s.split(":")
-                    i = int(i)
-                    n = int(n)
-                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
-                    for sid in species:
-                        if int(sid) % n == i:
-                            selected_species.add(sid)
-    except:
-        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
-        raise
-    return sorted(selected_species)
-
-
 def build_pangenome_master(args):
 
     # Fetch table of contents from s3.
@@ -188,12 +183,9 @@ def build_pangenome_master(args):
         assert species_id in species, f"Species {species_id} is not in the database."
         species_genomes = species[species_id]
 
-        def destpath(src):
-            return pangenome_file(species_id, src + ".lz4")
-
         # The species build will upload this file last, after everything else is successfully uploaded.
         # Therefore, if this file exists in s3, there is no need to redo the species build.
-        dest_file = destpath("gene_info.txt")
+        dest_file = pan_destpath(species_id, "gene_info.txt")
         msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -203,7 +195,8 @@ def build_pangenome_master(args):
 
         with CONCURRENT_SPECIES_BUILDS:
             tsprint(msg)
-            slave_log = "pangenome_build.log"
+            logfile = get_uhgg_layout(species_id)["pangenome_log"]
+            slave_log = os.path.basename(logfile)
             slave_subdir = str(species_id)
             if not args.debug:
                 command(f"rm -rf {slave_subdir}")
@@ -219,7 +212,7 @@ def build_pangenome_master(args):
             finally:
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
-                upload(f"{slave_subdir}/{slave_log}", destpath(slave_log), check=False)
+                upload(f"{slave_subdir}/{slave_log}", destpath(logfile), check=False)
                 if not args.debug:
                     command(f"rm -rf {slave_subdir}", check=False)
 
@@ -249,15 +242,9 @@ def build_pangenome_slave(args):
     species_genomes = species[species_id]
     species_genomes_ids = species_genomes.keys()
 
-    def destpath(src):
-        return pangenome_file(species_id, src + ".lz4")
-
-    command(f"aws s3 rm --recursive {pangenome_file(species_id, '')}")
-
     cleaned = multiprocessing_map(clean_genes, ((species_id, genome_id) for genome_id in species_genomes_ids))
 
     command("rm -f genes.ffn genes.len")
-
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
         ffn_files, len_files = transpose(temp_files)
         command("cat " + " ".join(ffn_files) + " >> genes.ffn")
@@ -274,20 +261,24 @@ def build_pangenome_slave(args):
     xref(cluster_files, "gene_info.txt")
 
     # Create list of (source, dest) pairs for uploading.
-    # Note that centroids.{max_percent}.ffn is uploaded to 2 different destinations.
+    # Note that centroids.{max_percent}.ffn is uploaded to two different destinations.
     upload_tasks = [
-        ("genes.ffn", destpath("genes.ffn")),
-        ("genes.len", destpath("genes.len")),
-        (f"centroids.{max_percent}.ffn", destpath("centroids.ffn"))  # no percent in dest, per spec
+        ("genes.ffn", pan_destpath(species_id, "genes.ffn")),
+        ("genes.len", pan_destpath(species_id, "genes.len")),
+        (f"centroids.{max_percent}.ffn", pan_destpath(species_id, "centroids.ffn"))
     ]
+
     for src in flatten(cluster_files.values()):
-        upload_tasks.append((src, destpath("temp/" + src)))
+        upload_tasks.append((src, pan_destpath(species_id, f"temp/{src}")))
 
     # Upload in parallel.
+    last_output = "gene_info.txt"
+    last_dest_file = pan_destpath(species_id, last_output)
+    command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
     multithreading_map(upload_star, upload_tasks)
 
     # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
-    upload("gene_info.txt", destpath("gene_info.txt"))
+    upload(last_output, last_dest_file)
 
 
 def register_args(main_func):

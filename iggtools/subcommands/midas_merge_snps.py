@@ -9,7 +9,7 @@ import time
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv, cat_files
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
 from iggtools.models.species import Species
 from iggtools.common.argparser import add_subcommand
@@ -49,8 +49,8 @@ def register_args(main_func):
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
 
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
@@ -249,7 +249,7 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
     if locus_type != "CDS":
         return locus_type, curr_gene_id
 
-    curr_seq = genes_sequence[curr_gene_id]["gene_seq"]
+    curr_seq = genes_sequence[curr_gene_id]["seq"]
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
 
     ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
@@ -279,28 +279,31 @@ def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     return (major_allele, minor_allele, snp_type)
 
 
-def design_chunks(midas_iggdb, chunk_size):
+def design_chunks(midas_db, chunk_size):
     global pool_of_samples
     global dict_of_species
 
     global semaphore_for_species
     semaphore_for_species = dict()
 
+    # TODO: optimal way is to sort chunks by coverage
     arguments_list = []
     for sp in dict_of_species.values():
         species_id = sp.id
 
         # The structure of the chunks depends on the representative genome sequences
-        assert sp.design_snps_chunks(midas_iggdb, chunk_size)
-        num_of_chunks = sp.num_of_chunks
+        assert sp.design_snps_chunks(midas_db, chunk_size)
+        num_of_chunks = sp.num_of_sites_chunks
 
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
-        arguments_list.append((species_id, -1))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_chunks)
         for _ in range(num_of_chunks):
             semaphore_for_species[species_id].acquire()
+
+    for species_id in dict_of_species.keys():
+        arguments_list.append((species_id, -1))
 
     return arguments_list
 
@@ -310,28 +313,28 @@ def prepare_annotation_per_species(args):
     sp.prepare_annotation(genes_feature_file, genes_seq_file)
 
 
-def prepare_site_annotation(midas_iggdb, num_cores):
+def prepare_site_annotation(midas_db, num_cores):
     global dict_of_species
     args_list = []
     for sp in dict_of_species.values():
         species_id = sp.id
-        genes_feature_file = midas_iggdb.fetch_files("gene_feature", [species_id])[species_id]
-        genes_seq_file = midas_iggdb.fetch_files("gene_seq", [species_id])[species_id]
+        genes_feature_file = midas_db.fetch_files("gene_feature", [species_id])[species_id]
+        genes_seq_file = midas_db.fetch_files("gene_seq", [species_id])[species_id]
         args_list.append((sp, genes_feature_file, genes_seq_file))
     multithreading_map(prepare_annotation_per_species, args_list, num_cores)
 
 
 def process_one_chunk_of_sites(packed_args):
 
-    global semaphore_for_species
-    global dict_of_species
-
     species_id, chunk_id = packed_args
-    sp = dict_of_species[species_id]
 
     if chunk_id == -1:
+        global semaphore_for_species
+        global dict_of_species
+        sp = dict_of_species[species_id]
+
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::wait merge_all_chunks_per_species")
-        for _ in range(sp.num_of_chunks):
+        for _ in range(sp.num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::start merge_all_chunks_per_species")
         merge_all_chunks_per_species(species_id)
@@ -341,6 +344,7 @@ def process_one_chunk_of_sites(packed_args):
     tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::start pool_across_samples_per_chunk")
     pool_across_samples_per_chunk(species_id, chunk_id)
     tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::finish pool_across_samples_per_chunk")
+
     return "worked"
 
 
@@ -380,13 +384,14 @@ def accumulate_samples_per_unit(packed_args):
         species_pileup_path = sample.get_target_layout("snps_pileup", species_id)
         chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id) # USE headerless_chunk_pileup_file if exits
         snps_pileup_path = chunk_pileup_path if os.path.exists(chunk_pileup_path) else species_pileup_path
+        has_header = not os.path.exists(chunk_pileup_path)
 
         # Pileup is 1-based index, close left close right
         proc_args = (contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_one_samples")
+    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_sample_by_sample")
 
-    # Compute across-samples SNPs and write to file
+    # Compute across-samples SNPs and write to chunk file
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start compute_and_write_pooled_snps_per_unit")
     flag = compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id)
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish compute_and_write_pooled_snps_per_unit")
@@ -536,7 +541,6 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
         pooled_snps_freq_list.append([site_id] + sample_mafs)
         pooled_snps_depth_list.append([site_id] + sample_depths)
 
-
     # Write to file
     snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
     snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
@@ -564,7 +568,7 @@ def merge_all_chunks_per_species(species_id):
     global pool_of_samples
 
     sp = dict_of_species[species_id]
-    number_of_chunks = sp.num_of_chunks
+    number_of_chunks = sp.num_of_sites_chunks
     samples_names = dict_of_species[species_id].fetch_samples_names()
 
     list_of_chunks_snps_info = [pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
@@ -617,18 +621,18 @@ def midas_merge_snps(args):
         pool_of_samples.write_summary_files(dict_of_species, "snps")
 
 
-        # Download representative genomes for every species into midas_iggdb
+        # Download representative genomes for every species into midas_db
         num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else pool_of_samples.get_target_layout("midas_iggdb_dir"), num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"))
 
-        # Compute pooled SNPs by the unit of chunks_of_sites
+        # The unit of compute across-samples pooled SNPs is: chunk_of_sites.
         tsprint(f"CZ::design_chunks::start")
-        arguments_list = design_chunks(midas_iggdb, args.chunk_size)
+        arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
 
         tsprint(f"CZ::prepare_site_annotation::start")
-        prepare_site_annotation(midas_iggdb, num_cores)
+        prepare_site_annotation(midas_db, num_cores)
         tsprint(f"CZ::prepare_site_annotation::finish")
 
 

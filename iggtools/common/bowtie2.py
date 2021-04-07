@@ -7,7 +7,7 @@ from iggtools.common.utils import tsprint, command, split, OutputStream
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):
     bt2_db_suffixes = ["1.bt2", "2.bt2", "3.bt2", "4.bt2", "rev.1.bt2", "rev.2.bt2"]
     if all(os.path.exists(f"{bt2_db_dir}/{bt2_db_name}.{ext}") for ext in bt2_db_suffixes):
-        tsprint(f"Use existing bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
+        tsprint(f"Use existing Bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
         return True
     return False
 

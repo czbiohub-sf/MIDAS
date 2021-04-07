@@ -1,48 +1,15 @@
+#!/usr/bin/env python3
 import os
 import sys
 from hashlib import md5
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
-from iggtools.models.uhgg import UHGG, imported_genome_file, raw_genome_file
-from iggtools.params import inputs, outputs
+from iggtools.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id, destpath
+from iggtools.params import outputs
 
 
 CONCURRENT_GENOME_IMPORTS = 20
-
-
-# Move genome id parsing and name transformations in some central place that all commands can import
-def unified_genome_id(genome_id):
-    return "UHGG" + genome_id.replace("GUT_GENOME", "")
-
-
-# 1. Occasional failures in aws s3 cp require a retry.
-# 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
-# 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
-@retry
-def clean_genome(genome_id, representative_id):
-    #get_get_uhgg_layout(representative_id, "fna.lz4", genome_id)["raw_genome_file"]
-    raw_genome = raw_genome_file(genome_id, representative_id)
-    output_genome = f"{genome_id}.fna"
-
-    with open(output_genome, 'w') as o_genome, \
-         InputStream(raw_genome, check_path=False) as genome:
-        for sn, rec in enumerate(Bio.SeqIO.parse(genome, 'fasta')):
-            contig_seq = str(rec.seq).upper()
-            contig_len = len(contig_seq)
-            ugid = unified_genome_id(genome_id)
-            contig_hash = md5(contig_seq.encode('utf-8')).hexdigest()[-6:]
-            new_contig_id = f"{ugid}_C{sn}_L{contig_len/1000.0:3.1f}k_H{contig_hash}"
-            o_genome.write(f">{new_contig_id}\n{contig_seq}\n")
-
-    return output_genome
-
-
-def import_uhgg(args):
-    if args.zzz_slave_toc:
-        import_uhgg_slave(args)
-    else:
-        import_uhgg_master(args)
 
 
 @retry
@@ -74,6 +41,34 @@ def decode_genomes_arg(args, genomes):
     return sorted(selected_genomes)
 
 
+# 1. Occasional failures in aws s3 cp require a retry.
+# 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
+# 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
+@retry
+def clean_genome(genome_id, representative_id):
+    raw_genome = get_uhgg_layout(representative_id, "fna.lz4", genome_id)["raw_genome_file"]
+    output_genome = f"{genome_id}.fna"
+
+    with open(output_genome, 'w') as o_genome, \
+         InputStream(raw_genome, check_path=False) as genome:
+        for sn, rec in enumerate(Bio.SeqIO.parse(genome, 'fasta')):
+            contig_seq = str(rec.seq).upper()
+            contig_len = len(contig_seq)
+            ugid = unified_genome_id(genome_id)
+            contig_hash = md5(contig_seq.encode('utf-8')).hexdigest()[-6:]
+            new_contig_id = f"{ugid}_C{sn}_L{contig_len/1000.0:3.1f}k_H{contig_hash}"
+            o_genome.write(f">{new_contig_id}\n{contig_seq}\n")
+
+    return output_genome
+
+
+def import_uhgg(args):
+    if args.zzz_slave_toc:
+        import_uhgg_slave(args)
+    else:
+        import_uhgg_master(args)
+
+
 def import_uhgg_master(args):
 
     # Fetch table of contents from s3.
@@ -89,7 +84,8 @@ def import_uhgg_master(args):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = imported_genome_file(genome_id, species_id, f"{genome_id}.fna.lz4")
+        dest_file = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome_file"])
+
         msg = f"Importing genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -98,7 +94,8 @@ def import_uhgg_master(args):
             msg = msg.replace("Importing", "Reimporting")
 
         tsprint(msg)
-        slave_log = "import_uhgg.log"
+        logfile = get_uhgg_layout(species_id, "", genome_id)["imported_genome_log"]
+        slave_log = os.path.basename(logfile)
         slave_subdir = f"{species_id}__{genome_id}"
         if not args.debug:
             command(f"rm -rf {slave_subdir}")
@@ -114,7 +111,7 @@ def import_uhgg_master(args):
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            upload(f"{slave_subdir}/{slave_log}", imported_genome_file(genome_id, species_id, slave_log + ".lz4"), check=False)
+            upload(f"{slave_subdir}/{slave_log}", destpath(logfile), check=False)
             if not args.debug:
                 command(f"rm -rf {slave_subdir}", check=False)
 
@@ -139,8 +136,8 @@ def import_uhgg_slave(args):
     species_id = species_for_genome[genome_id]
     representative_id = representatives[species_id]
 
-    dest = imported_genome_file(genome_id, species_id, f"{genome_id}.fna.lz4")
-    command(f"aws s3 rm --recursive {imported_genome_file(genome_id, species_id, '')}")
+    dest = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome_file"])
+    command(f"aws s3 rm --recursive {os.path.dirname(dest)}")
     cleaned = clean_genome(genome_id, representative_id)
     upload(cleaned, dest)
 

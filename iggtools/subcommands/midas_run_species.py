@@ -9,7 +9,7 @@ import Bio.SeqIO
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
-from iggtools.models.uhgg import MIDAS_IGGDB
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data, DECIMALS6
 
@@ -36,8 +36,8 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
-    subparser.add_argument('--midas_iggdb',
-                           dest='midas_iggdb',
+    subparser.add_argument('--midas_db',
+                           dest='midas_db',
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
@@ -279,14 +279,13 @@ def write_abundance(species_profile_path, species_abundance):
 def midas_run_species(args):
 
     try:
-
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         tsprint(f"CZ::fetch_iggdb_files::start")
-        midas_iggdb = MIDAS_IGGDB(args.midas_iggdb if args.midas_iggdb else sample.get_target_layout("midas_iggdb_dir"), args.num_cores)
-        marker_db_files = midas_iggdb.fetch_files("marker_db")
-        marker_db_hmm_cutoffs = midas_iggdb.fetch_files("marker_db_hmm_cutoffs")
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), 1)
+        marker_db_files = midas_db.fetch_files("marker_db")
+        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
         tsprint(f"CZ::fetch_iggdb_files::finish")
 
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
@@ -299,7 +298,7 @@ def midas_run_species(args):
         tsprint(f"CZ::map_reads_hsblast::finish")
 
         # Classify reads
-        species_info = midas_iggdb.uhgg.species
+        species_info = midas_db.uhgg.species
         #marker_info = read_marker_info_repgenomes(marker_db_files["map"])
         marker_info = read_marker_info(marker_db_files["fa"], marker_db_files["map"])
         tsprint(f"CZ::find_best_hits::start")
@@ -323,17 +322,18 @@ def midas_run_species(args):
         outfile = sample.get_target_layout("species_summary")
         write_abundance(outfile, species_abundance)
 
+        # TODO: remove the following once finish debug
         spids = [k for k, v in species_abundance.items() if v['count'] > 0 ]
         with OutputStream(os.path.dirname(outfile) + '/marker_genes') as stream:
             for k, d, in list_of_marker_genes.items():
                 if k in spids:
                     for v in d:
                         stream.write("\t".join([k, v]) + "\n")
+
         with OutputStream(os.path.dirname(outfile) + '/marker_length') as stream:
             for k, v, in total_gene_length.items():
                 if k in spids:
                     stream.write("\t".join([k, str(v)]) + "\n")
-
 
     except Exception as error:
         if not args.debug:

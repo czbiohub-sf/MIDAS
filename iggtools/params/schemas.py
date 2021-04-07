@@ -6,6 +6,11 @@ DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
 
 
+MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
+hmmsearch_max_evalue = 1e-5
+hmmsearch_min_cov = 0.00
+
+
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
@@ -40,6 +45,25 @@ PAN_GENE_INFO_SCHEMA = {
     "centroid_80": str,
     "centroid_75": str,
 }
+
+
+PAN_GENE_LENGTH_SCHEMA = {
+    "gene_id": str,
+    "genome_id": str,
+    "gene_length": int,
+}
+
+
+CLUSTER_INFO_SCHEMA = {
+    "centroid_99": str,
+    "centroid_95": str,
+    "centroid_90": str,
+    "centroid_85": str,
+    "centroid_80": str,
+    "centroid_75": str,
+    "centroid_99_length": int,
+}
+
 
 
 def fetch_default_genome_depth(dbtype):
@@ -192,6 +216,13 @@ genes_coverage_schema = {
     "mapped_reads": int,
     "total_depth": float,
     "copy_number": float,
+}
+
+
+genes_are_markers_schema = {
+    "centroid_99": str,
+    "marker_id": str,
+    "gene_depth": float,
 }
 
 
