@@ -8,7 +8,7 @@ from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
 # Executable Documentation
 # Low level functions: the Target Files
 def get_single_layout(sample_name, dbtype=""):
-    def per_species(species_id="", chunk_id=""):
+    def per_species(species_id="", chunk_id="", contig_idx=""):
         return {
             "sample_dir":              f"{sample_name}",
             "outdir":                  f"{sample_name}/{dbtype}",
@@ -22,14 +22,18 @@ def get_single_layout(sample_name, dbtype=""):
 
             # species workflow output
             "species_summary":         f"{sample_name}/species/species_profile.tsv",
+            "markers_summary":         f"{sample_name}/species/markers_profile.tsv",
             "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
 
             # snps workflow output
             "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
-            "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv", #<-- cat_files
+            "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv.lz4", #<-- cat_files
             "snps_chunk_summary":      f"{sample_name}/snps/chunks_summary.tsv",
             "snps_repgenomes_bam":     f"{sample_name}/temp/snps/repgenomes.bam",
-            "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv",
+            "chunk_bam":               f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.bam",
+            "chunk_sorted_bam":        f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.sorted.bam",
+            "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
+            "chunk_pileup_perc":       f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
@@ -50,11 +54,11 @@ class Sample: # pylint: disable=too-few-public-methods
         self.profile = None
 
 
-    def get_target_layout(self, filename, species_id="", chunk_id=""):
+    def get_target_layout(self, filename, species_id="", chunk_id="", contig_idx=""):
         if isinstance(self.layout(species_id, chunk_id)[filename], list):
-            local_file_lists = self.layout(species_id, chunk_id)[filename]
+            local_file_lists = self.layout(species_id, chunk_id, contig_idx)[filename]
             return [os.path.join(self.midas_outdir, fn) for fn in local_file_lists]
-        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id, contig_idx)[filename])
 
 
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
