@@ -253,7 +253,10 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
 
     ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
-    assert all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+    ## temporaritly comment this, fix me later
+    #assert all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+    if not all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon):
+        return locus_type, curr_gene_id
 
     site_type, amino_acids = compute_degenracy(ref_codon, within_codon_pos, curr_gene['strand'])
     return locus_type, curr_gene_id, site_type, amino_acids

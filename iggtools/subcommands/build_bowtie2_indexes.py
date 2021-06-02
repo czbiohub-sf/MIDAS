@@ -101,7 +101,7 @@ def build_bowtie2_indexes(args):
 
         if args.bt2_indexes_name == "pangenomes":
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::start")
-            centroids_files = midas_db.fetch_files("marker_centroids", species_ids_of_interest)
+            centroids_files = midas_db.fetch_files("centroids", species_ids_of_interest)
             tsprint(centroids_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, centroids_files, args.num_cores)
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::finish")
