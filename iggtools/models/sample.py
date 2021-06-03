@@ -79,16 +79,16 @@ class Sample: # pylint: disable=too-few-public-methods
 
 
     def select_species(self, marker_depth, species_list=[]):
-        """ Parse species_summary and return list of species for pileup/pangenome analysis """
+        """ Parse species profile summary and return list of species for SNPs/Genes analysis """
+        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
+
         schema = fetch_schema_by_dbtype("species")
         species_ids = []
-
-        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
         with InputStream(self.get_target_layout("species_summary")) as stream:
             for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if record["coverage"] >= marker_depth:
+                if record["median_marker_coverage"] > marker_depth: # marker_coverage
                     species_ids.append(record["species_id"])
         return species_ids
 
