@@ -86,13 +86,13 @@ old_species_profile_schema = {
 
 species_profile_schema = {
     "species_id": str,
-    "read_counts": int,
-    "media_coverage": float,
-    "coverage": float,
-    "relative_abundance": float,
-    "total_covered": int,
-    "unique_covered": int,
-    "ambiguous_covered": int,
+    "marker_read_counts": int,
+    "median_marker_coverage": float,
+    "marker_coverage": float,
+    "marker_relative_abundance": float,
+    "total_covered_marker": int,
+    "unique_covered_marker": int,
+    "ambiguous_covered_marker": int,
     "total_marker_length": int,
 }
 
