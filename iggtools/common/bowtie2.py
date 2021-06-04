@@ -55,6 +55,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     aln_mode = "local" if args.aln_mode == "local" else "end-to-end"
     aln_speed = args.aln_speed if aln_mode == "end-to-end" else args.aln_speed + "-local"
     r2 = ""
+    max_fraglen = args.fragment_length
     if args.r2:
         r1 = f"-1 {args.r1}"
         r2 = f"-2 {args.r2}"
@@ -64,7 +65,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
         r1 = f"-U {args.r1}"
 
     try:
-        bt2_command = f"bowtie2 --no-unal -X 50000 -x {bt2_db_prefix} {max_reads} --{aln_mode} --{aln_speed} --threads {args.num_cores} -q {r1} {r2}"
+        bt2_command = f"bowtie2 --no-unal -X {max_fraglen} -x {bt2_db_prefix} {max_reads} --{aln_mode} --{aln_speed} --threads {args.num_cores} -q {r1} {r2}"
         command(f"set -o pipefail; {bt2_command} | \
                 samtools view --threads {args.num_cores} -b - | \
                 samtools sort --threads {args.num_cores} -o {bamfile_path}")
