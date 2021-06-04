@@ -34,6 +34,8 @@ def get_single_layout(sample_name, dbtype=""):
             "chunk_sorted_bam":        f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.sorted.bam",
             "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
             "chunk_pileup_perc":       f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.tsv.lz4",
+            "aln_bam_perc":            f"{sample_name}/temp/snps/{species_id}/alns_bam_{chunk_id}_{contig_idx}.tsv.lz4",
+            "aln_bam":                 f"{sample_name}/temp/snps/{species_id}/alns_bam_{chunk_id}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
