@@ -77,6 +77,7 @@ class Species:
         priority_chunks = []
         unassigned_contigs = defaultdict(dict)
         max_contig_length = 0
+
         for contig in self.contigs.values():
             contig_id = contig["id"]
             contig_length = contig["length"]
@@ -102,7 +103,7 @@ class Species:
                                                          "compute_reads": False}
                     else:
                         count_flag = ni == 0 # first chunk
-                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, ci+chunk_size, count_flag)]
+                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, ci+chunk_size, count_flag, 0)]
                         if count_flag:
                             priority_chunks.append(chunk_id)
                         chunk_id += 1
@@ -114,11 +115,11 @@ class Species:
         for chunk_dict in dict_of_chunks.values():
             _chunk_id = chunk_dict["chunk_id"]
             list_of_contigs = chunk_dict["contigs_id"]
-            for _contig_id in list_of_contigs:
-                cstart = unassigned_contigs[_contig_id]["contig_start"]
-                cend = unassigned_contigs[_contig_id]["contig_end"]
-                cflag = unassigned_contigs[_contig_id]["compute_reads"]
-                dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, _contig_id, cstart, cend, cflag)) #cseq
+            for wc_cidx, _cid in enumerate(list_of_contigs):
+                cstart = unassigned_contigs[_cid]["contig_start"]
+                cend = unassigned_contigs[_cid]["contig_end"]
+                cflag = unassigned_contigs[_cid]["compute_reads"]
+                dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, _cid, cstart, cend, cflag, wc_cidx))
         assert chunk_id == _chunk_id+1
 
         # Finally the merge jobs
