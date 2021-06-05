@@ -65,7 +65,6 @@ CLUSTER_INFO_SCHEMA = {
 }
 
 
-
 def fetch_default_genome_depth(dbtype):
     if dbtype == "species":
         DEFAULT_GENOME_DEPTH = 1.0
@@ -77,11 +76,39 @@ def fetch_default_genome_depth(dbtype):
     return DEFAULT_GENOME_DEPTH
 
 
-species_profile_schema = {
+old_species_profile_schema = {
     "species_id": str,
     "read_counts": int,
     "coverage": float,
     "relative_abundance": float
+}
+
+
+species_profile_schema = {
+    "species_id": str,
+    "marker_read_counts": int,
+    "median_marker_coverage": float,
+    "marker_coverage": float,
+    "marker_relative_abundance": float,
+    "total_covered_marker": int,
+    "unique_covered_marker": int,
+    "ambiguous_covered_marker": int,
+    "total_marker_length": int,
+}
+
+
+species_marker_profile_schema = {
+    "species_id": str,
+    "marker_id": str,
+    "marker_length": int,
+    "gene_id": str,
+    "total_reads": int,
+    "total_alnbps": int,
+    "coverage": float,
+    "uniq_reads": int,
+    "ambi_reads": int,
+    "uniq_alnbps": int,
+    "ambi_alnbps": int,
 }
 
 

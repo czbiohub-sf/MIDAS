@@ -405,7 +405,7 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
     with OutputStream(genes_stats_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
         for record in species_coverage_summary.values():
-            mean_coverage = record["total_nz_gene_depth"] / record["num_covered_genes"]
+            mean_coverage = record["total_nz_gene_depth"] / record["num_covered_genes"] if record["num_covered_genes"] > 0 else 0
             fraction_covered = record["num_covered_genes"] / record["pangenome_size"]
             vals = [record["species_id"], record["pangenome_size"], record["num_covered_genes"], \
                     fraction_covered, mean_coverage, record["aligned_reads"], record["mapped_reads"], record["median_marker_depth"]]

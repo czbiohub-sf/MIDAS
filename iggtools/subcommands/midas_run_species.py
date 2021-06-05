@@ -11,11 +11,13 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.sample import Sample
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data, DECIMALS6
+from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_marker_profile_schema, format_data, DECIMALS6
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_MAPID = 94.0
+DEFAULT_MARKER_READS = 2
+DEFAULT_MARKER_COVERED = 2
 
 
 def register_args(main_func):
@@ -59,6 +61,20 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
+
+    subparser.add_argument('--marker_reads',
+                           dest='marker_reads',
+                           default=DEFAULT_MARKER_READS,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Only report marker covered by at least {DEFAULT_MARKER_READS} reads.")
+    subparser.add_argument('--marker_covered',
+                           dest='marker_covered',
+                           default=DEFAULT_MARKER_COVERED,
+                           type=float,
+                           metavar="FLOAT",
+                           help=f"Only species with more than {DEFAULT_MARKER_COVERED} markeres by at least {DEFAULT_MARKER_READS} reads.")
+
     subparser.add_argument('--max_reads',
                            dest='max_reads',
                            type=int,
@@ -126,9 +142,8 @@ def parse_reads(filename, max_reads=None):
     tsprint(f"parse_reads:: parsed {read_count} reads from {filename}")
 
 
-def map_reads_hsblast(m8_file, r1, r2, word_size, markers_db, max_reads, num_cores):
+def map_reads_hsblastn(m8_file, r1, r2, word_size, markers_db, max_reads, num_cores):
     assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit."
-
     blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_cores} -evalue 1e-3"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
@@ -150,129 +165,246 @@ def query_coverage(aln):
     return aln['aln'] / qlen
 
 
-def find_best_hits(marker_info, m8_file, marker_cutoffs, args):
-    """ Find top scoring alignment for each read """
+def read_markers_info(fasta_file, map_file):
+    """ Extract gene_id_is_marker - marker_id mapping from fasta and map files """
+    # Read the gene_is_marker_id from phyeco.fa file
+    genes_that_are_marker = []
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            genes_that_are_marker.append(rec.id)
 
+    # Extract the mapping of <marker_id, genome_id, species_id> from the phyeco.map file
+    markers_info = defaultdict(dict)
+    markers_length = defaultdict(lambda: defaultdict(dict))
+    with InputStream(map_file) as map_file_stream:
+        for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
+            if r["gene_id"] in genes_that_are_marker:
+                markers_info[r["gene_id"]] = r
+                if r["marker_id"] in markers_length[r['species_id']]:
+                    markers_length[r['species_id']][r['marker_id']]["marker_length"] += int(r["gene_length"])
+                    markers_length[r['species_id']][r['marker_id']]["gene_id"].append(r["gene_id"])
+                else:
+                    markers_length[r['species_id']][r['marker_id']] = {"marker_length": r["gene_length"], "gene_id": [r["gene_id"]]}
+    return markers_info, markers_length
+
+
+def find_best_hits(m8_file, markers_info, marker_cutoffs, args):
+    """ Find top scoring alignment for each read """
     best_hits = {}
     i = 0
     with InputStream(m8_file) as m8_stream:
         for aln in select_from_tsv(m8_stream, schema=BLAST_M8_SCHEMA, result_structure=dict):
             i += 1
-            cutoff = args.aln_mapid
-            if cutoff == None:
-                marker_id = marker_info[aln['target']]['marker_id'] # get gene family from marker_info
-                cutoff = marker_cutoffs[marker_id]
-            if aln['pid'] < cutoff: # does not meet marker cutoff
+
+            # Default specific marker genes sequence identity cutoff
+            cutoff = marker_cutoffs[markers_info[aln['target']]['marker_id']]
+            cutoff = args.aln_mapid if args.aln_mapid is not None else cutoff
+            if aln['pid'] < cutoff:
                 continue
+
             if query_coverage(aln) < args.aln_cov: # filter local alignments
                 continue
+
+            # For each read (query), find the best hits based on the reported score
             if aln['query'] not in best_hits: # record aln
                 best_hits[aln['query']] = [aln]
             elif best_hits[aln['query']][0]['score'] == aln['score']: # add aln
                 best_hits[aln['query']] += [aln]
             elif best_hits[aln['query']][0]['score'] < aln['score']: # update aln
                 best_hits[aln['query']] = [aln]
+
     tsprint(f"  total alignments: {i}")
     return list(best_hits.values())
 
 
-def assign_unique(alns, species_info, marker_info):
-    """ Count the number of uniquely mapped reads to each genome species """
-    unique_alns = {si: [] for si in species_info}
-    unique = 0
-    non_unique = 0
+def filter_alns_by_markers(alns, min_mreads=2, min_mcounts=2):
+    """ Only species with more then 2 markers covered by 2 reads are reported """
+    # Each marker needs to be covered by more than one reads
+    filtered_alns = defaultdict(lambda: defaultdict(dict))
+    filtered_covered_markers = defaultdict(list)
+
+    for spid, aln_dict in alns.items():
+        for mkid, mdict in aln_dict.items():
+            if mdict['readcounts'] >= min_mreads:
+                filtered_alns[spid][mkid] = mdict
+                filtered_covered_markers[spid].append(mkid)
+
+    # At least two markers are covered with at least two reads
+    final_covered_markers = {spid:lom for spid, lom in filtered_covered_markers.items() if len(lom) >= min_mcounts}
+
+    final_alns = {spid:_ for spid, _ in filtered_alns.items() if spid in final_covered_markers.keys()}
+    # TODO: can we recycle those reads, e.g. reading the second best alignments?
+
+    return final_alns, final_covered_markers
+
+
+def assign_unique(alns, markers_info, args):
+    """
+    Assign uniquely mapped read to each marker gene
+    final_unique_alns are indexed by <species_id, marker_id>:
+        - alns: total aligned bps
+        - readcounts: totall mapped reads
+    """
+
+    unique_alns = defaultdict(lambda: defaultdict(dict))
+    unique_counts = defaultdict(int)
+    non_unique_counts = 0
+
     for aln in alns:
         if len(aln) == 1:
-            unique += 1
-            species_id = marker_info[aln[0]['target']]['species_id']
-            unique_alns[species_id].append(aln[0])
-        else:
-            non_unique += 1
-    tsprint(f" uniquely mapped reads: {unique}")
-    tsprint(f" ambiguously mapped reads: {non_unique}")
-    return unique_alns
+            gid = aln[0]['target']
+            spid = markers_info[gid]['species_id']
+            mkid = markers_info[gid]['marker_id']
 
-
-def assign_non_unique(alns, unique_alns, marker_info):
-    """ Probabalistically assign ambiguously mapped reads """
-    total_alns = unique_alns.copy()
-    for aln in alns:
-        if len(aln) > 1:
-            species_ids = [marker_info[aln_item['target']]['species_id'] for aln_item in aln]
-            counts = [len(unique_alns[sid]) for sid in species_ids]
-            if sum(counts) == 0:
-                species_id = random.sample(species_ids, 1)[0]
+            if mkid in unique_alns[spid]:
+                unique_alns[spid][mkid]["alns"] += aln[0]['aln']
+                unique_alns[spid][mkid]["readcounts"] += 1
             else:
-                probs = [float(count)/sum(counts) for count in counts]
-                species_id = np.random.choice(species_ids, 1, p=probs)[0]
-            total_alns[species_id].append(aln[species_ids.index(species_id)])
-    return total_alns
+                unique_alns[spid][mkid] = {"alns": aln[0]['aln'], "readcounts": 1}
 
-
-def read_marker_info_repgenomes(map_file):
-    """ Only when the map file only include representative marker genes"""
-    with InputStream(map_file) as map_file_stream:
-        return {r['gene_id']: r for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict)}
-
-
-def read_marker_info(fasta_file, map_file):
-    """ Extract gene_id_is_marker - marker_id mapping from fasta and map files """
-    # Read the gene_is_marker_id from phyeco.fa file
-    info = {}
-    with InputStream(fasta_file) as file:
-        for rec in Bio.SeqIO.parse(file, 'fasta'):
-            info[rec.id] = None
-
-    # Extract the corresponding marker_id, genome_id, and species_id from the phyeco.map file
-    with InputStream(map_file) as map_file_stream:
-        for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
-            if r['gene_id'] in info:
-                info[r["gene_id"]] = r
-    return info
-
-
-def sum_marker_gene_lengths(marker_info):
-    """ Compute the total marker gene lengths per species """
-    total_gene_length = defaultdict(int)
-    list_of_marker_genes = defaultdict(list)
-    for r in marker_info.values():
-        total_gene_length[r['species_id']] += int(r['gene_length'])
-        list_of_marker_genes[r['species_id']].append(r['gene_id'])
-    return total_gene_length, list_of_marker_genes
-
-
-def normalize_counts(species_alns, total_gene_length):
-    """ Normalize counts by gene length and sum contrain """
-    # norm by gene length, compute cov
-    species_abundance = {}
-    for species_id, alns in species_alns.items():
-        # compute coverage
-        if alns:
-            bp = sum(aln['aln'] for aln in alns)
-            cov = float(bp)/total_gene_length[species_id]
+            unique_counts[spid] += 1
         else:
-            cov = 0.0
-        # TODO:  Use NamedTuple instead of dict
-        species_abundance[species_id] = {'count':len(alns), 'cov':cov, 'rel_abun': 0.0}
-    # compute relative abundance
-    total_cov = sum(sav['cov'] for sav in species_abundance.values())
-    if total_cov > 0:
-        for sav in species_abundance.values():
-            sav['rel_abun'] = sav['cov'] / total_cov
-    tsprint(f"  total marker-gene coverage {total_cov:.3f}")
-    return species_abundance
+            non_unique_counts += 1
+
+    final_unique_alns, final_covered_markers = filter_alns_by_markers(unique_alns, args.marker_reads, args.marker_covered)
+
+    tsprint(f" uniquely mapped reads: {sum(unique_counts.values())}")
+    tsprint(f" ambiguously mapped reads: {non_unique_counts}")
+
+    return final_unique_alns, final_covered_markers
 
 
-def write_abundance(species_profile_path, species_abundance):
+def assign_non_unique(alns, unique_alns, markers_info, args):
+    """ Probabilistically assign ambiguously mapped reads to markers """
+
+    ambiguous_alns = defaultdict(lambda: defaultdict(dict))
+
+    for loaln in alns:
+        if len(loaln) > 1:
+            # Special case: when the same gene was mapped twice to different regions, we only record once.
+            target_dict = defaultdict(dict) # indexed by query gene
+            for aln_item in loaln:
+                gid = aln_item["target"]
+                spid = markers_info[gid]["species_id"]
+                mkid = markers_info[gid]["marker_id"]
+
+                uniq_count = unique_alns[spid][mkid]["readcounts"] if spid in unique_alns and mkid in unique_alns[spid] else 0
+                target_dict[gid] = {"species_id": spid, "marker_id": mkid, "alns": aln_item['aln'], "uniq_count": uniq_count}
+
+            lo_uniq_counts = [_['uniq_count'] for _ in target_dict.values()]
+            if sum(lo_uniq_counts) == 0:
+                gene_id = random.sample(list(target_dict.keys()), 1)[0]
+            else:
+                probs = [float(count)/sum(lo_uniq_counts) for count in lo_uniq_counts]
+                gene_id = np.random.choice(list(target_dict.keys()), 1, p=probs)[0]
+
+            # Probabilistically assigned: gene_id
+            mkid = target_dict[gene_id]['marker_id']
+            spid = target_dict[gene_id]['species_id']
+            aln_bps = target_dict[gene_id]['alns']
+            if mkid in ambiguous_alns[spid]:
+                ambiguous_alns[spid][mkid]["alns"] += aln_bps
+                ambiguous_alns[spid][mkid]["readcounts"] += 1
+            else:
+                ambiguous_alns[spid][mkid] = {"alns": aln_bps, "readcounts": 1}
+
+    final_ambiguous_alns, final_covered_markers = filter_alns_by_markers(ambiguous_alns, args.marker_reads, args.marker_covered)
+
+    return final_ambiguous_alns, final_covered_markers
+
+
+def merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length):
+    """ Merge unique and ambiguous alns into full species by marker matrix """
+    list_of_all_species = set(list(unique_alns.keys()) + list(ambiguous_alns.keys()))
+
+    species_alns = defaultdict(lambda: defaultdict(dict))
+    for spid in list_of_all_species:
+        for mkid in markers_length[spid].keys():
+            uniq_count = unique_alns[spid][mkid]['readcounts'] if spid in unique_alns and mkid in unique_alns[spid] else 0
+            amb_count = ambiguous_alns[spid][mkid]['readcounts'] if spid in ambiguous_alns and mkid in ambiguous_alns[spid] else 0
+            uniq_bps = unique_alns[spid][mkid]['alns'] if spid in unique_alns and mkid in unique_alns[spid] else 0
+            amb_bps = ambiguous_alns[spid][mkid]['alns'] if spid in ambiguous_alns and mkid in ambiguous_alns[spid] else 0
+            species_alns[spid][mkid] = {"unique": uniq_count, "ambiguous": amb_count,
+                                        "unique_bps": uniq_bps, "ambiguous_bps": amb_bps}
+
+    species_covered_markers = defaultdict(dict)
+    for spid, marker_dict in species_alns.items():
+        lom_uniq = unique_covered_markers[spid] if spid in unique_alns else []
+        lom_amb = ambiguous_covered_markers[spid] if spid in ambiguous_alns else []
+        uniq_covered = len(lom_uniq)
+        amb_covered = len(lom_amb)
+        total_covered = len(set(lom_uniq + lom_amb))
+        species_covered_markers[spid] = {"total_covered":total_covered, "unique_covered":uniq_covered, "ambiguous_covered":amb_covered}
+
+    return species_alns, species_covered_markers
+
+
+def normalize_counts(species_alns, species_covered_markers, markers_length):
+    """ Normalize counts by gene length and sum contrain """
+    species_abundance = defaultdict(lambda: defaultdict(int)) # indexed by <species_id>
+    markers_abundance = defaultdict(lambda: defaultdict(dict)) # indexed by <species_id, marker_id>
+    for spid, markers_dict in species_alns.items():
+        lomc = []
+        for mkid, mdict in markers_dict.items():
+            # For each marker gene, compute coverage
+            marker_length = markers_length[spid][mkid]["marker_length"]
+            aln_bps = mdict["unique_bps"] + mdict["ambiguous_bps"]
+            readcounts = mdict["unique"] + mdict["ambiguous"]
+
+            marker_cov = aln_bps / marker_length
+            lomc.append(marker_cov)
+
+            # Accumulate information across markers per species
+            species_abundance[spid]["read_counts"] += readcounts
+            species_abundance[spid]["total_bps"] += aln_bps
+            species_abundance[spid]["total_marker_length"] += marker_length
+
+            # Record information for <species_id, marker_id>
+            markers_abundance[spid][mkid]["gene_id"] = ",".join(markers_length[spid][mkid]["gene_id"])
+            markers_abundance[spid][mkid]["length"] = marker_length
+            markers_abundance[spid][mkid]["coverage"] = marker_cov
+            markers_abundance[spid][mkid]["total_reads"] = mdict["unique"] + mdict["ambiguous"]
+            markers_abundance[spid][mkid]["uniq_reads"] = mdict["unique"]
+            markers_abundance[spid][mkid]["ambi_reads"] = mdict["ambiguous"]
+            markers_abundance[spid][mkid]["total_alnbps"] = mdict["unique_bps"] + mdict["ambiguous_bps"]
+            markers_abundance[spid][mkid]["uniq_alnbps"] = mdict["unique_bps"]
+            markers_abundance[spid][mkid]["ambi_alnbps"] = mdict["ambiguous_bps"]
+
+        # Second round of collecting information per species
+        species_abundance[spid]["coverage"] = species_abundance[spid]["total_bps"] / species_abundance[spid]["total_marker_length"]
+        species_abundance[spid]["median_coverage"] = np.median(lomc)
+        species_abundance[spid]["total_covered"] = species_covered_markers[spid]["total_covered"]
+        species_abundance[spid]["unique_covered"] = species_covered_markers[spid]["unique_covered"]
+        species_abundance[spid]["ambiguous_covered"] = species_covered_markers[spid]["ambiguous_covered"]
+
+    # Third round: compute relative abundance based on vertical coverage: only among detected species.
+    sample_coverage = sum(_['coverage'] for _ in species_abundance.values())
+    for r in species_abundance.values():
+        r["relative_abundance"] = r["coverage"] / sample_coverage if sample_coverage > 0 else 0.0
+
+    tsprint(f"  total marker-gene coverage {sample_coverage:.3f}")
+    return species_abundance, markers_abundance
+
+
+def write_abundance(species_path, markers_path, species_abundance, markers_abundance):
     """ Write species results to specified output file """
-    with OutputStream(species_profile_path) as outfile:
+    # Sort the species by median_coverage
+    output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['median_coverage'], reverse=True)
+
+    with OutputStream(species_path) as outfile:
         outfile.write('\t'.join(species_profile_schema.keys()) + '\n')
-        output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['count'], reverse=True)
         for species_id in output_order:
-            values = species_abundance[species_id]
-            if values['count'] > 0:
-                record = [species_id, values['count'], values['cov'], values['rel_abun']]
-                #outfile.write("\t".join(map(format_data, record)) + "\n")
+            r = species_abundance[species_id]
+            record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'],
+                        r['relative_abundance'], r['total_covered'], r['unique_covered'], r['ambiguous_covered'], r['total_marker_length']]
+            outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
+
+    with OutputStream(markers_path) as outfile:
+        outfile.write('\t'.join(species_marker_profile_schema.keys()) + '\n')
+        for species_id in output_order:
+            for mid, md in markers_abundance[species_id].items():
+                record = [species_id, mid,  md['length'], md["gene_id"], md['total_reads'], md['total_alnbps'],
+                            md['coverage'], md['uniq_reads'], md['ambi_reads'], md['uniq_alnbps'], md['ambi_alnbps']]
                 outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
@@ -292,48 +424,39 @@ def midas_run_species(args):
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
-        tsprint(f"CZ::map_reads_hsblast::start")
+        tsprint(f"CZ::map_reads_hsblastn::start")
         m8_file = sample.get_target_layout("species_alignments_m8")
-        map_reads_hsblast(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
-        tsprint(f"CZ::map_reads_hsblast::finish")
+        if args.debug and os.path.exists(m8_file):
+            tsprint(f"Use existing {m8_file} according to --debug flag.")
+        else:
+            map_reads_hsblastn(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
+        tsprint(f"CZ::map_reads_hsblastn::finish")
+
+        tsprint(f"CZ::read in marker information::start")
+        species_info = midas_db.uhgg.species
+        markers_info, markers_length = read_markers_info(marker_db_files["fa"], marker_db_files["map"])
+        tsprint(f"CZ::read in marker information::finish")
 
         # Classify reads
-        species_info = midas_db.uhgg.species
-        #marker_info = read_marker_info_repgenomes(marker_db_files["map"])
-        marker_info = read_marker_info(marker_db_files["fa"], marker_db_files["map"])
         tsprint(f"CZ::find_best_hits::start")
-        best_hits = find_best_hits(marker_info, m8_file, marker_cutoffs, args)
+        best_hits = find_best_hits(m8_file, markers_info, marker_cutoffs, args)
         tsprint(f"CZ::find_best_hits::finish")
 
         tsprint(f"CZ::assign_unique::start")
-        unique_alns = assign_unique(best_hits, species_info, marker_info)
+        unique_alns, unique_covered_markers = assign_unique(best_hits, markers_info, args)
         tsprint(f"CZ::assign_unique::finish")
 
         tsprint(f"CZ::assign_non_unique::start")
-        species_alns = assign_non_unique(best_hits, unique_alns, marker_info)
+        ambiguous_alns, ambiguous_covered_markers = assign_non_unique(best_hits, unique_alns, markers_info, args)
         tsprint(f"CZ::assign_non_unique::finish")
 
         # Estimate species abundance
         tsprint(f"CZ::normalize_counts::start")
-        total_gene_length, list_of_marker_genes = sum_marker_gene_lengths(marker_info)
-        species_abundance = normalize_counts(species_alns, total_gene_length)
+        species_alns, species_covered_markers = merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length)
+        species_abundance, markers_abundance = normalize_counts(species_alns, species_covered_markers, markers_length)
         tsprint(f"CZ::normalize_counts::finish")
 
-        outfile = sample.get_target_layout("species_summary")
-        write_abundance(outfile, species_abundance)
-
-        # TODO: remove the following once finish debug
-        spids = [k for k, v in species_abundance.items() if v['count'] > 0 ]
-        with OutputStream(os.path.dirname(outfile) + '/marker_genes') as stream:
-            for k, d, in list_of_marker_genes.items():
-                if k in spids:
-                    for v in d:
-                        stream.write("\t".join([k, v]) + "\n")
-
-        with OutputStream(os.path.dirname(outfile) + '/marker_length') as stream:
-            for k, v, in total_gene_length.items():
-                if k in spids:
-                    stream.write("\t".join([k, str(v)]) + "\n")
+        write_abundance(sample.get_target_layout("species_summary"), sample.get_target_layout("markers_summary"), species_abundance, markers_abundance)
 
     except Exception as error:
         if not args.debug:
