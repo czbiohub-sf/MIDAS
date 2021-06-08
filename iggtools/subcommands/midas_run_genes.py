@@ -24,6 +24,7 @@ DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_MAPQ = 0
 DEFAULT_CHUNK_SIZE = 50000
+DEFAULT_MAX_FRAGLEN = 50000
 
 
 def register_args(main_func):
@@ -90,6 +91,12 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--fragment_length',
+                           type=float,
+                           dest='fragment_length',
+                           metavar='FLOAT',
+                           default=DEFAULT_MAX_FRAGLEN,
+                           help=f"Maximum fragment length for paired reads.")
 
     # Coverage flags
     subparser.add_argument('--aln_mapid',
