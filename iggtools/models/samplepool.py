@@ -19,10 +19,11 @@ def get_pool_layout(dbtype=""):
             "bt2_indexes_dir":            f"bt2_indexes",
 
             # species
-            "species_prevalence":         f"species/species_prevalence.tsv",
-            "species_read_counts":        f"species/species_read_counts.tsv",
-            "species_coverage":           f"species/species_coverage.tsv",
-            "species_relative_abundance": f"species/species_relative_abundance.tsv",
+            "species_prevalence":                f"species/species_prevalence.tsv",
+            "species_marker_read_counts":        f"species/species_marker_read_counts.tsv",
+            "species_marker_coverage":           f"species/species_marker_coverage.tsv",
+            "species_median_marker_coverage":    f"species/species_marker_median_coverage.tsv",
+            "species_marker_relative_abundance": f"species/species_relative_abundance.tsv",
 
             # snps
             "snps_summary":               f"snps/snps_summary.tsv",

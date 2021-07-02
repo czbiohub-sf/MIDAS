@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
+from iggtools.common.utils import tsprint, retry, InputStream, OutputStream, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
 from iggtools.models.midasdb import MIDAS_DB, MARKER_FILE_EXTS
 
 CONCURRENT_DOWNLOAD = 20
@@ -66,16 +66,17 @@ def download_midasdb(args):
             list_of_species = list(species_all)
 
         tsprint(list_of_species)
-        
+
         # Marker genes related database files
-        marker_db_files = midas_db.fetch_files("marker_db")
-        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
         midas_db.fetch_files("marker_centroids", list_of_species)
         midas_db.fetch_files("cluster_info", list_of_species)
 
         midas_db.fetch_files("prokka_genome", list_of_species)
         midas_db.fetch_files("centroids", list_of_species)
 
+        marker_db_files = midas_db.fetch_files("marker_db")
+        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
+        
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy dowdloaded databases. Specify --debug flag to keep.")

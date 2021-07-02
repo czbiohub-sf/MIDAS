@@ -88,7 +88,8 @@ def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
 def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
     sample_names = pool_of_samples.fetch_samples_names()
-    col_names = list(species_profile_schema.keys())[1:]
+    #col_names = list(species_profile_schema.keys())[1:]
+    col_names = ["marker_read_counts", "median_marker_coverage", "marker_coverage", "marker_relative_abundance"]
 
     for col in col_names:
         outpath = pool_of_samples.get_target_layout(f"species_{col}")
@@ -111,7 +112,8 @@ def midas_merge_species(args):
 
         # Slice the across-samples species profile matrix by species_id
         tsprint(f"CZ::write_species_results::start")
-        cols = list(species_profile_schema.keys())[1:]
+        #cols = list(species_profile_schema.keys())[1:]
+        cols = ["marker_read_counts", "median_marker_coverage", "marker_coverage", "marker_relative_abundance"]
         transposed = transpose(pool_of_samples, cols)
         write_species_results(pool_of_samples, transposed)
         tsprint(f"CZ::write_species_results::finish")
