@@ -115,7 +115,7 @@ def annotate_genome_slave(args):
     https://github.com/czbiohub/iggtools/wiki
     """
 
-    violation = "Please do not call build_pangenome_slave directly.  Violation"
+    violation = "Please do not call annotate_genome_slave directly.  Violation"
     assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
     assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
 

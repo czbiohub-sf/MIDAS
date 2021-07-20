@@ -25,7 +25,7 @@ DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_TRIM = 0
 DEFAULT_CHUNK_SIZE = 50000
-DEFAULT_MAX_FRAGLEN = 50000
+DEFAULT_MAX_FRAGLEN = 5000
 
 
 def register_args(main_func):
@@ -141,7 +141,6 @@ def register_args(main_func):
 
     subparser.add_argument('--paired_only',
                            action='store_true',
-                           default=True,
                            help=f"Only recruit properly paired reads for pileup.")
 
     # File related
@@ -174,7 +173,6 @@ def reference_overlap(p, q):
 
 
 def hamming_distance(str1, str2):
-    """ Compute the Hamming distance between two strings """
     assert len(str1) == len(str2), f"Two input strings for hamming_distance are different length."
     hd = 0
     for i in range(len(str1)):
@@ -184,7 +182,7 @@ def hamming_distance(str1, str2):
 
 
 def position_within_overlap(pos, strand, boundary):
-    """ Check if given position is within the overlap """
+    """ Check if given position is within the overlap range """
     if strand == "fwd" and pos is not None and pos >= boundary:
         return True
     if strand == "rev" and pos is not None and pos <= boundary:
@@ -193,16 +191,14 @@ def position_within_overlap(pos, strand, boundary):
 
 
 def update_overlap(reads_overlap, aln):
+    """ The actual overlap should substract the number of gaps in the forward read """
     aligned_pos = aln.get_aligned_pairs()
     ngaps = 0
     for i in range(0, len(aligned_pos)):
         if aligned_pos[i][1] is not None and aligned_pos[i][1] >= aln.reference_end - reads_overlap and aligned_pos[i][0] is None:
             ngaps += 1
-            row = [reads_overlap, aln.reference_name, aln.reference_start, aln.reference_end, aln.query_length,
-                    f"{aln.query_name}:{aln.query_alignment_start}-{aln.query_alignment_end}, alnLen:{aln.query_alignment_length}, query length:{aln.query_length}",
-                    aln.get_aligned_pairs()]
-            #print("\t".join(map(str, row)))
     return reads_overlap - ngaps
+
 
 
 def mismatches_within_overlaps(aln, reads_overlap, strand):
@@ -225,10 +221,9 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
     qi = []
 
     for i in range(0,len(aligned_pos)):
-        ## Here we have a bug: the actual overlap should substract the number of gaps in the reads here
+
         boundary = aln.query_alignment_end - reads_overlap if strand == "fwd" else aln.query_alignment_start + reads_overlap - 1
 
-        ## inside the reference_overlap function, we need to update the overlap - gaps in the fwd reads
         if position_within_overlap(aligned_pos[i][0], strand, boundary):
             # The aligned position is witin the overlap
             if aligned_pos[i][0] is None:
@@ -257,7 +252,7 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
                 ro.append(ref_seq[aligned_pos[i][1] - aln.reference_start])
 
     ro = "".join(ro)
-    qo = "".join(qo) # a.replace("-", "")
+    qo = "".join(qo)
     nm_out = hamming_distance(ro.upper(), qo.upper())
 
     ri = "".join(ri)
@@ -269,15 +264,14 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
     ngaps_q = ngaps_qi + ngaps_qo
     ngaps_r = ngaps_ri + ngaps_ro
 
-    #print(ngaps_qi, ngaps_qo)
 
     row = ["func::mismatches_within_overlaps", aln.query_alignment_length, alned_no_gaps, ngaps_r, ngaps_q, aln.query_name,
             aln.reference_name, aln.reference_start, aln.reference_end, aln.query_length,
             aln.get_aligned_pairs()]
     if ngaps_qi > 0:
         print("\t".join(map(str, row)))
-    assert ngaps_qi == 0
 
+    assert ngaps_qi == 0
     assert aln.query_alignment_length == len((qi + qo).replace("-", ""))
     assert aln.query_alignment_length + ngaps_q == alned_no_gaps + ngaps_r, "\n".join(map(str, row)) + "\n"
 
@@ -312,6 +306,7 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     #flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4)
     flags = [sp.design_snps_chunks(midas_db, chunk_size) for sp in dict_of_species.values()]
     assert all(flags)
+
 
     # Sort species by the largest contig length
     sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
@@ -372,6 +367,7 @@ def compute_pileup_per_chunk(packed_args):
     global semaphore_for_species
     global dict_of_species
     global sample
+    global global_args
 
     try:
         species_id, chunk_id = packed_args
@@ -391,16 +387,18 @@ def compute_pileup_per_chunk(packed_args):
             for s_file in list_of_slices_files:
                 command(f"rm -rf {s_file}", quiet=True)
 
-            list_of_bfiles = [sample.get_target_layout("aln_bam_perc", species_id, chunk_id, cidx) for cidx in range(0, num_of_contigs_per_chunk)]
-            cat_files(list_of_bfiles, aln_bam_file, 20)
-            for s_file in list_of_bfiles:
-                command(f"rm -rf {s_file}", quiet=True)
+            if global_args.paired_only:
+                list_of_bfiles = [sample.get_target_layout("aln_bam_perc", species_id, chunk_id, cidx) for cidx in range(0, num_of_contigs_per_chunk)]
+                cat_files(list_of_bfiles, aln_bam_file, 20)
+                for s_file in list_of_bfiles:
+                    command(f"rm -rf {s_file}", quiet=True)
         else:
             sliced_file_0 = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, 0)
             command(f"mv {sliced_file_0} {headerless_sliced_path}", quiet=True)
 
-            sliced_file_0 = sample.get_target_layout("aln_bam_perc", species_id, chunk_id, 0)
-            command(f"mv {sliced_file_0} {aln_bam_file}", quiet=True)
+            if global_args.paired_only:
+                sliced_file_0 = sample.get_target_layout("aln_bam_perc", species_id, chunk_id, 0)
+                command(f"mv {sliced_file_0} {aln_bam_file}", quiet=True)
 
         return ret
     finally:
@@ -424,7 +422,8 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
 
     # Cache *properly* aligned reads-pair
     with AlignmentFile(repbamfile) as infile:
-        for aln in infile.fetch(contig_id, contig_start, contig_end):
+        # To avoid boundary cliff, we need to read in the whole contig
+        for aln in infile.fetch(contig_id):
             aligned_reads += 1
             if aln.is_secondary:
                 continue
@@ -441,6 +440,11 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
         for query_name, alns in alns_dict.items():
             # Ignore orphan reads
             if len(alns) != 2:
+                continue
+
+            # Check if the left-most position is in the range
+            left_most_pos = min([alns["fwd"].reference_start, alns["fwd"].reference_end, alns["rev"].reference_start, alns["rev"].reference_end])
+            if left_most_pos < contig_start or left_most_pos >= contig_end:
                 continue
 
             # Common features
@@ -470,22 +474,28 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
             # For the compute of sequence identity, we need to specially consider paired-reads overlap
             # Compute the length of the overlapping region along the reference
             reads_overlap = reference_overlap((alns["fwd"].reference_start, alns["fwd"].reference_end - 1), (alns["rev"].reference_start, alns["rev"].reference_end - 1))
-            # Compute the query overlap length: substract the gaps in the aligned from the FWD freads
+            # Compute the query overlap length: substract the gaps in the aligned from the FWD reads to define the overlap boundary
             reads_overlap = update_overlap(reads_overlap, alns["fwd"])
 
+
+            overlap_pass = True
             if reads_overlap:
                 # Keep the FWD read, split the REV reads
                 (nm_out_rev, nm_in_rev, ngaps_ri_rev, ngaps_ro_rev) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
-                #assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM']
+                assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM']
 
                 # Keep the REV read, split the FWD reads
                 (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
-                #assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
+                assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
 
-                # For repeats regions, paired-end reads can be aligned with many gaps, and high mismatches within the overlapping region
+                # Update the overlap by substracting the number of gaps in the fwd overlap region
+                reads_overlap = reads_overlap - ngaps_ri_fwd
+
+                # For repeats regions, paired-end reads can be aligned with many gaps, resulting in high mismatches within the overlapping region
                 # Only keep aligned pairs indicating from the same DNA fragment
                 if abs(nm_in_fwd - nm_in_rev) > 1:
-                    continue
+                    overlap_pass = False
+                    #continue
 
                 mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
 
@@ -498,9 +508,37 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
                 b1 = alns["fwd"].query_alignment_end - reads_overlap
                 b2 = alns["rev"].query_alignment_start + reads_overlap - 1
 
-                assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]),"\t".join([str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1]))])
-                assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]),"\t".join([str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1]))])
+
+                # TODO: loose end => this gives me error using ibd data
+                debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
+                assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
+                assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
+                
+                if reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
+                    print(debug_string)
+                    aln = alns["fwd"]
+                    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
+                            aln.reference_name, aln.reference_start, aln.reference_end,
+                            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+                            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+                            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
+                            reads_overlap, fragment_length, mismatches]
+                    print("+++++++++++++++++++++++++++++++++++++++++++")
+                    print("\t".join(map(format_data, row)))
+                    print(aln.get_aligned_pairs())
+                    aln = alns["rev"]
+                    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
+                            aln.reference_name, aln.reference_start, aln.reference_end,
+                            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+                            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+                            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
+                            reads_overlap, fragment_length, mismatches]
+                    print("\t".join(map(format_data, row)))
+                    print(aln.get_aligned_pairs())
+                    assert False, aln.reference_name
+
                 assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
+
 
                 f = alns["fwd"].query_qualities[b1:]
                 r = alns["rev"].query_qualities[:b2+1]
@@ -509,7 +547,6 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
                     if x>=y:
                         r[i] = 0
                     else:
-                        #print(f[i], r[i])
                         f[i] = 0
                 alns["fwd"].query_qualities[b1:] = f
                 alns["rev"].query_qualities[:b2+1] = r
@@ -538,25 +575,27 @@ def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, s
             ofile.write("\t".join(map(format_data, row)) + "\n")
 
 
+            if not overlap_pass:
+                continue
             if readq < global_args.aln_readq:
                 continue
             if mapq < global_args.aln_mapq:
                 continue
-            if fragment_length >= 1000:
+            if fragment_length >= 1000: #<---------------
                 continue
             if alncov < global_args.aln_cov:
                 continue
 
-
             if mapid < global_args.aln_mapid:
                 continue
 
-            mapped_reads += 1
+            mapped_reads += 2
             mybam.write(alns["fwd"])
             mybam.write(alns["rev"])
 
         mybam.close()
     tsprint(f"  CZ::pass_one_per_unit::{contig_id}-{contig_start}::finish")
+
     return (aligned_reads, mapped_reads)
 
 
@@ -606,7 +645,7 @@ def pileup_per_unit(packed_args):
         "contig_id": contig_id,
         "chunk_length": current_chunk_size,
         "aligned_reads": aligned_reads if count_flag else 0,
-        "mapped_reads": mapped_reads if count_flag else 0,
+        "mapped_reads": 0 if not count_flag and not global_args.paired_only else mapped_reads,
         "contig_total_depth": 0,
         "contig_covered_bases": 0
     }
@@ -630,8 +669,8 @@ def pileup_per_unit(packed_args):
                 stream.write("\t".join(map(format_data, row)) + "\n")
         assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
 
-    # Delete temporary bam file
-    if global_args.paired_only:
+    # Delete temporary bam file <== TODO
+    if global_args.paired_only and False:
         command(f"rm -rf {chunk_bamfile}", quiet=True)
         command(f"rm -rf {chunk_sorted_bamfile}", quiet=True)
         command(f"rm -rf {chunk_sorted_bamfile}.bai", quiet=True)

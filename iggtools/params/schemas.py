@@ -204,6 +204,7 @@ DEFAULT_MIN_COPY = 0.35
 
 DECIMALS = ".3f"
 
+
 genes_summary_schema = {
     "species_id": str,
     "pangenome_size": int,
@@ -212,7 +213,7 @@ genes_summary_schema = {
     "mean_coverage": float,
     "aligned_reads": int,
     "mapped_reads": int,
-    "marker_depth": float
+    "marker_coverage": float,
 }
 
 
@@ -221,7 +222,7 @@ genes_chunk_summary_schema = {
     "chunk_id": str,
     "chunk_genome_size": int,
     "chunk_num_covered_genes": int,
-    "chunk_nz_gene_depth": float,
+    "chunk_coverage": float,
     "chunk_aligned_reads": float,
     "chunk_mapped_reads": int,
 }
@@ -241,7 +242,8 @@ genes_coverage_schema = {
     "gene_length": int,
     "aligned_reads": int,
     "mapped_reads": int,
-    "total_depth": float,
+    "mean_coverage": float,
+    "fraction_covered": float,
     "copy_number": float,
 }
 
@@ -249,7 +251,7 @@ genes_coverage_schema = {
 genes_are_markers_schema = {
     "centroid_99": str,
     "marker_id": str,
-    "gene_depth": float,
+    "gene_coverage": float,
 }
 
 

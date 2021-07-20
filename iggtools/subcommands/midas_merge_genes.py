@@ -91,7 +91,7 @@ def collect(accumulator, my_args):
             if not acc_depth:
                 acc_depth = [0.0] * total_samples_count
                 accumulator["depth"][gene_id] = acc_depth
-            acc_depth[sample_index] += r["total_depth"]
+            acc_depth[sample_index] += r["mean_coverage"]
 
             acc_reads = accumulator["reads"].get(gene_id)
             if not acc_reads:
@@ -106,14 +106,17 @@ def build_gene_matrices(sp, pid, args_mincopy):
     total_samples_count = sp.samples_count
     cluster_info = sp.cluster_info
 
-    accumulator = defaultdict(dict)
     tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::start collect_sample_by_sample")
+
+    accumulator = defaultdict(dict)
     for sample_index, sample in enumerate(sp.list_of_samples):
         tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{sample_index}::start collect_one_sample")
         genes_coverage_path = sample.get_target_layout("genes_coverage", species_id)
+
         my_args = (species_id, sample_index, genes_coverage_path, pid, total_samples_count, cluster_info)
         collect(accumulator, my_args)
         tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{sample_index}::finish collect_one_sample")
+
     tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::finish collect_sample_by_sample")
 
     # Second pass: infer presence absence based on copy number
@@ -153,14 +156,20 @@ def midas_merge_genes(args):
 
         # Merge copy_numbers, coverage and read counts across ALl the samples
         tsprint(f"CZ::build_and_write_gene_matrices::start")
+
         for species_id in species_ids_of_interest:
             sp = dict_of_species[species_id]
             sp.get_cluster_info(midas_db)
 
+            tsprint(f"  CZ::midas_merge_genes::{species_id}::start build_gene_matrices")
             accumulator = build_gene_matrices(sp, args.cluster_pid, args.min_copy)
+            tsprint(f"  CZ::midas_merge_genes::{species_id}::finish build_gene_matrices")
 
+            tsprint(f"  CZ::midas_merge_genes::{species_id}::start write_gene_matrices")
             samples_names = sp.fetch_samples_names()
             assert write_gene_matrices(accumulator, pool_of_samples, species_id, samples_names)
+            tsprint(f"  CZ::midas_merge_genes::{species_id}::finish write_gene_matrices")
+
         tsprint(f"CZ::build_and_write_gene_matrices::finish")
 
     except Exception as error:
