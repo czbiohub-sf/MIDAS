@@ -253,8 +253,8 @@ def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
     assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
 
     ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
-    ## temporaritly comment this, fix me later
-    #assert all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon), f"codon {ref_codon} for {ref_id}-{ref_pos} contain weird characters"
+
+    # Codon contains weird characters.
     if not all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon):
         return locus_type, curr_gene_id
 
@@ -498,9 +498,6 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
         major_index = 'ACGT'.index(major_allele)
         minor_index = 'ACGT'.index(minor_allele)
 
-        # Keep sites with desired snp_type
-        if ('any' not in global_args.snp_type and snp_type not in global_args.snp_type):
-            continue
 
         # Extract the read counts of previously computed across-samples major alleles
         sample_depths = [] # only accounts for reads matching either major or minor allele

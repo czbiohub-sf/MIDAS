@@ -27,7 +27,7 @@ def get_single_layout(sample_name, dbtype=""):
 
             # snps workflow output
             "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
-            "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv.lz4", #<-- cat_files
+            "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
             "snps_chunk_summary":      f"{sample_name}/snps/chunks_summary.tsv",
             "snps_repgenomes_bam":     f"{sample_name}/temp/snps/repgenomes.bam",
             "chunk_bam":               f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.bam",
@@ -39,11 +39,11 @@ def get_single_layout(sample_name, dbtype=""):
 
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
+            "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv", #<------
             "genes_chunk_summary":     f"{sample_name}/genes/chunks_summary.tsv",
-            "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv", #<-- cat_files
             "genes_pangenomes_bam":    f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_coverage":          f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv",
-            "chunk_genes_are_markers": f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv",
+            "chunk_coverage":          f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv", #<------
+            "chunk_genes_are_markers": f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv", #<------
         }
     return per_species
 
