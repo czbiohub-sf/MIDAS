@@ -75,6 +75,19 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
         raise
 
 
+def samtools_sort(bamfile_path, sorted_bamfile, debug, num_cores):
+    if debug and os.path.exists(sorted_bamfile):
+        tsprint(f"Skipping samtools sort in debug mode as temporary data exists: {sorted_bamfile}")
+        return
+
+    try:
+        command(f"samtools sort -@ {num_cores} -o {sorted_bamfile} {bamfile_path}", quiet=True)
+    except:
+        tsprint(f"Samtools sort {bamfile_path} run into error")
+        command(f"rm -f {sorted_bamfile}")
+        raise
+
+
 def samtools_index(bamfile_path, debug, num_cores):
 
     if debug and os.path.exists(f"{bamfile_path}.bai"):
