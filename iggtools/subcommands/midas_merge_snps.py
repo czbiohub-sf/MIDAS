@@ -11,7 +11,7 @@ from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv, cat_files
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
-from iggtools.models.species import Species
+from iggtools.models.species import Species, collect_units_per_chunk
 from iggtools.common.argparser import add_subcommand
 
 
@@ -297,7 +297,6 @@ def design_chunks(midas_db, chunk_size):
         # The structure of the chunks depends on the representative genome sequences
         assert sp.design_snps_chunks(midas_db, chunk_size)
         num_of_chunks = sp.num_of_sites_chunks
-
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
 
@@ -359,12 +358,19 @@ def pool_across_samples_per_chunk(species_id, chunk_id):
     global dict_of_species
 
     try:
-        sp = dict_of_species[species_id]
         tsprint(f"    CZ::pool_across_samples_per_chunk::{species_id}-{chunk_id}::start accumulate_samples_per_unit")
+
+        sp = dict_of_species[species_id]
         flags = []
         for pargs in sp.chunks_of_sites[chunk_id]:
             flags.append(accumulate_samples_per_unit(pargs))
         assert all(flags)
+
+        contig_counts_per_chunk = len(sp.chunks_of_sites[chunk_id])
+        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_info_by_chunk")
+        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_freq_by_chunk")
+        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_depth_by_chunk")
+
         tsprint(f"    CZ::pool_across_samples_per_chunk::{species_id}-{chunk_id}::finish accumulate_samples_per_unit")
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -374,7 +380,7 @@ def accumulate_samples_per_unit(packed_args):
     global pool_of_samples
     global dict_of_species
 
-    species_id, chunk_id, contig_id, contig_start, contig_end = packed_args[:5]
+    species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, within_chunk_cid = packed_args
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
@@ -384,8 +390,10 @@ def accumulate_samples_per_unit(packed_args):
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start accumulate_sample_by_sample")
     accumulator = dict()
     for sample_index, sample in enumerate(sp.list_of_samples):
+        # USE headerless_chunk_pileup_file if exits
         species_pileup_path = sample.get_target_layout("snps_pileup", species_id)
-        chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id) # USE headerless_chunk_pileup_file if exits
+        chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
+
         snps_pileup_path = chunk_pileup_path if os.path.exists(chunk_pileup_path) else species_pileup_path
         has_header = not os.path.exists(chunk_pileup_path)
 
@@ -396,7 +404,7 @@ def accumulate_samples_per_unit(packed_args):
 
     # Compute across-samples SNPs and write to chunk file
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start compute_and_write_pooled_snps_per_unit")
-    flag = compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id)
+    flag = compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id, within_chunk_cid)
     tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish compute_and_write_pooled_snps_per_unit")
 
     return flag
@@ -463,7 +471,7 @@ def accumulate(accumulator, proc_args):
             acc[9 + sample_index] = acgt_str
 
 
-def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
+def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id, within_chunk_cid):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
     global global_args
     global dict_of_species
@@ -497,7 +505,6 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
         major_allele, minor_allele, snp_type = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
         major_index = 'ACGT'.index(major_allele)
         minor_index = 'ACGT'.index(minor_allele)
-
 
         # Extract the read counts of previously computed across-samples major alleles
         sample_depths = [] # only accounts for reads matching either major or minor allele
@@ -542,19 +549,19 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id):
         pooled_snps_depth_list.append([site_id] + sample_depths)
 
     # Write to file
-    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
-    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
-    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
+    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
+    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
+    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
 
-    with open(snps_info_fp, "a") as out_info:
-        for r in pooled_snps_info_dict.values():
-            out_info.write("\t".join(map(format_data, r.values())) + "\n")
+    with OutputStream(snps_info_fp) as out_info:
+        for line in pooled_snps_info_dict.values():
+            out_info.write("\t".join(map(format_data, line.values())) + "\n")
 
-    with open(snps_freq_fp, "a") as out_freq:
+    with OutputStream(snps_freq_fp) as out_freq:
         for line in pooled_snps_freq_list:
             out_freq.write("\t".join(map(format_data, line)) + "\n")
 
-    with open(snps_depth_fp, "a") as out_depth:
+    with OutputStream(snps_depth_fp) as out_depth:
         for line in pooled_snps_depth_list:
             out_depth.write("\t".join(map(str, line)) + "\n")
 
