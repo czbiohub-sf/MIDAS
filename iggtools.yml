@@ -1,16 +1,16 @@
 channels:
  - bioconda
- - conda-forge
  - r
  - anaconda
+ - conda-forge
  - default
 dependencies:
  - python=3.7
- - snakemake
+ - snakemake<5.7.0
  - bowtie2
+ - anaconda::tbb=2020.2
  - pysam
  - samtools
- - blast
  - prokka
  - awscli
  - hs-blastn
@@ -19,6 +19,7 @@ dependencies:
  - r-essentials
  - r-base
  - r-tidyverse
- - lz4
+ - conda-forge::awscli
+ - anaconda::lz4
  - art
  - gffutils

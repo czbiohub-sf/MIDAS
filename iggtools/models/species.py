@@ -3,7 +3,7 @@ from collections import defaultdict
 from math import floor
 import Bio.SeqIO
 
-from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv
+from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv, cat_files
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import genes_feature_schema, CLUSTER_INFO_SCHEMA
 
@@ -316,3 +316,17 @@ def generate_boundaries(features):
         boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
         gene_boundaries[contig_id] = {"genes": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
     return gene_boundaries
+
+
+def collect_units_per_chunk(sample, contig_counts_per_chunk, species_id, chunk_id, filename):
+    ## Clean up sliced chunk temporary files
+    headerless_sliced_path = sample.get_target_layout(filename, species_id, chunk_id)
+
+    if contig_counts_per_chunk > 1:
+        list_of_sliced_files = [sample.get_target_layout(f"{filename}_perc", species_id, chunk_id, cidx) for cidx in range(0, contig_counts_per_chunk)]
+        cat_files(list_of_sliced_files, headerless_sliced_path, 20)
+        for s_file in list_of_sliced_files:
+            command(f"rm -rf {s_file}", quiet=True)
+    else:
+        sliced_file = sample.get_target_layout(f"{filename}_perc", species_id, chunk_id, 0)
+        command(f"mv {sliced_file} {headerless_sliced_path}", quiet=True)

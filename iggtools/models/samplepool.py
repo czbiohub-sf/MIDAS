@@ -7,7 +7,7 @@ from iggtools.models.species import Species, sort_list_of_species
 
 
 def get_pool_layout(dbtype=""):
-    def per_species(species_id="", chunk_id=""):
+    def per_species(species_id="", chunk_id="", contig_idx=""):
         return {
             "outdir":                     f"{dbtype}",
             "outdir_by_species":          f"{dbtype}/{species_id}",
@@ -27,19 +27,22 @@ def get_pool_layout(dbtype=""):
 
             # snps
             "snps_summary":               f"snps/snps_summary.tsv",
-            "snps_info":                  f"snps/{species_id}/{species_id}.snps_info.tsv",
-            "snps_freq":                  f"snps/{species_id}/{species_id}.snps_freqs.tsv",
-            "snps_depth":                 f"snps/{species_id}/{species_id}.snps_depth.tsv",
-            "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv",
-            "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv",
-            "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv",
+            "snps_info":                  f"snps/{species_id}/{species_id}.snps_info.tsv.lz4",
+            "snps_freq":                  f"snps/{species_id}/{species_id}.snps_freqs.tsv.lz4",
+            "snps_depth":                 f"snps/{species_id}/{species_id}.snps_depth.tsv.lz4",
+            "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
+            "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv.lz4",
+            "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv.lz4",
+            "snps_info_by_chunk_perc":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_info.tsv.lz4",
+            "snps_freq_by_chunk_perc":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_freqs.tsv.lz4",
+            "snps_depth_by_chunk_perc":   f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_depth.tsv.lz4",
 
             # genes
             "genes_summary":              f"genes/genes_summary.tsv",
-            "genes_reads":                f"genes/{species_id}/{species_id}.genes_reads.tsv",
-            "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv",
-            "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv",
-            "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv",
+            "genes_reads":                f"genes/{species_id}/{species_id}.genes_reads.tsv.lz4",
+            "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
+            "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
+            "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
             "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv",
             "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv",
             "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv",
@@ -57,8 +60,8 @@ class SamplePool: # pylint: disable=too-few-public-methods
         self.samples = self.init_samples(dbtype)
 
 
-    def get_target_layout(self, filename, species_id="", chunk_id=""):
-        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
+    def get_target_layout(self, filename, species_id="", chunk_id="", contig_idx=""):
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id, contig_idx)[filename])
 
 
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):

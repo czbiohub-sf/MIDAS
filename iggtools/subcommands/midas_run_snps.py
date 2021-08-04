@@ -11,19 +11,21 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema
 from iggtools.models.sample import Sample
-from iggtools.models.species import Species
+from iggtools.models.species import Species, collect_units_per_chunk
 
 
 DEFAULT_MARKER_DEPTH = 5.0
+
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 10
+DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
-DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_TRIM = 0
+
 DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
 
@@ -141,6 +143,7 @@ def register_args(main_func):
 
     subparser.add_argument('--paired_only',
                            action='store_true',
+                           default=False,
                            help=f"Only recruit properly paired reads for pileup.")
 
     # File related
@@ -165,6 +168,12 @@ def register_args(main_func):
                            metavar="INT",
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
+
+    subparser.add_argument('--sim_exp',
+                           dest='sim_exp',
+                           action='store_true',
+                           default=False,
+                           help=f"Simulation experiments")
     return main_func
 
 
@@ -198,7 +207,6 @@ def update_overlap(reads_overlap, aln):
         if aligned_pos[i][1] is not None and aligned_pos[i][1] >= aln.reference_end - reads_overlap and aligned_pos[i][0] is None:
             ngaps += 1
     return reads_overlap - ngaps
-
 
 
 def mismatches_within_overlaps(aln, reads_overlap, strand):
@@ -278,6 +286,29 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
     return (nm_out, nm_in, ngaps_ri, ngaps_ro)
 
 
+def debug_overlap(alns):
+    aln = alns["fwd"]
+    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
+            aln.reference_name, aln.reference_start, aln.reference_end,
+            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
+            reads_overlap, fragment_length, mismatches]
+    print("+++++++++++++++++++++++++++++++++++++++++++")
+    print("\t".join(map(format_data, row)))
+    print(aln.get_aligned_pairs())
+    aln = alns["rev"]
+    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
+            aln.reference_name, aln.reference_start, aln.reference_end,
+            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
+            reads_overlap, fragment_length, mismatches]
+    print("\t".join(map(format_data, row)))
+    print(aln.get_aligned_pairs())
+    assert False, aln.reference_name
+
+
 def keep_read(aln):
     global global_args
     args = global_args
@@ -285,6 +316,205 @@ def keep_read(aln):
     if not args.paired_only:
         return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
     return True
+
+
+def filter_bam_by_single_read(pargs):
+    """ Filter given BAM file with propely paired reads for given species and write to file """
+
+    global  global_args
+    global dict_of_species
+    global sample
+
+    repbamfile, species_id = pargs
+
+    tsprint(f"  CZ::filter_bam_by_single_read::{species_id}-0::start filter_bam_by_single_read")
+
+    # List of contigs for given species
+    list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+
+    # Cache *properly* aligned reads-pair
+    filtered_alns_dict = defaultdict(dict)
+    reads_stats = {
+        "aligned_reads": dict.fromkeys(list_of_contig_ids, 0),
+        "mapped_reads": dict.fromkeys(list_of_contig_ids, 0)
+    }
+
+    with AlignmentFile(repbamfile) as infile:
+        for contig_id in list_of_contig_ids:
+            # To avoid boundary cliff, we need to read in the whole contig
+            aligned_reads = 0
+            mapped_reads = 0
+            for aln in infile.fetch(contig_id):
+                aligned_reads += 1
+                if keep_read(aln):
+                    mapped_reads += 1
+                    read = "1" if aln.is_read1 else "2"
+                    filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
+
+            reads_stats["aligned_reads"][contig_id] = aligned_reads
+            reads_stats["mapped_reads"][contig_id] = mapped_reads
+
+    # Write filtered alignments to file
+    template_bam = AlignmentFile(repbamfile, "rb")
+    filtered_bam = AlignmentFile(sample.get_target_layout("species_bam", species_id), "wb", template=template_bam)
+    for aln in filtered_alns_dict.values():
+        filtered_bam.write(aln)
+    filtered_bam.close()
+
+    tsprint(f"  CZ::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
+    return reads_stats
+
+
+def filter_bam_by_proper_pair(pargs):
+    """ Filter given BAM file with propely paired reads for given species and write to file """
+
+    global global_args
+    global dict_of_species
+    global sample
+
+    repbamfile, species_id = pargs
+
+    tsprint(f"  CZ::filter_bam_by_proper_pair::{species_id}-0::start filter_bam_by_proper_pair")
+
+    # List of contigs for given species
+    list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+
+    # Cache *properly* aligned reads-pair
+    filtered_alns_dict = defaultdict(dict)
+    reads_stats = {
+        "aligned_reads": dict.fromkeys(list_of_contig_ids, 0),
+        "mapped_reads": dict.fromkeys(list_of_contig_ids, 0)
+    }
+
+    with AlignmentFile(repbamfile) as infile:
+        for contig_id in list_of_contig_ids:
+            # To avoid boundary cliff, we need to read in the whole contig
+            aligned_reads = 0
+            alns_dict = defaultdict(dict) # cache the reads
+            for aln in infile.fetch(contig_id):
+                aligned_reads += 1
+                if aln.is_secondary:
+                    continue
+                if not aln.is_proper_pair:
+                    continue
+                if aln.is_reverse:
+                    alns_dict[aln.query_name]["rev"] = aln
+                else:
+                    alns_dict[aln.query_name]["fwd"] = aln
+            reads_stats["aligned_reads"][contig_id] = aligned_reads
+
+            mapped_reads = 0
+            for query_name, alns in alns_dict.items():
+                # Ignore orphan reads
+                if len(alns) != 2:
+                    continue
+
+                # Common features
+                readq = np.mean(alns["fwd"].query_qualities + alns["rev"].query_qualities)
+                mapq = max(alns["fwd"].mapping_quality, alns["rev"].mapping_quality)
+
+                if readq < global_args.aln_readq:
+                    continue
+                if mapq < global_args.aln_mapq:
+                    continue
+
+                # Template length: number of bases from the left most mapped base to the rightmost mapped base on the reference
+                fragment_length = abs(alns["fwd"].template_length)
+
+                if fragment_length >= global_args.fragment_length:
+                    continue
+
+                # I think the alignment coverage should not be affected by overlap.
+                # However, we should double check whether gaps counted as aligned ..
+                align_len = alns["fwd"].query_alignment_length + alns["rev"].query_alignment_length
+                query_len = alns["fwd"].query_length + alns["rev"].query_length
+                alncov = align_len / float(query_len)
+
+                if alncov < global_args.aln_cov:
+                    continue
+
+                # For the compute of sequence identity, we need to specially consider paired-reads overlap
+                # Compute the length of the overlapping region along the reference
+                reads_overlap = reference_overlap((alns["fwd"].reference_start, alns["fwd"].reference_end - 1), (alns["rev"].reference_start, alns["rev"].reference_end - 1))
+                # Compute the query overlap length: substract the gaps in the aligned from the FWD reads to define the overlap boundary
+                reads_overlap = update_overlap(reads_overlap, alns["fwd"])
+
+                overlap_pass = True
+                if reads_overlap:
+                    # Keep the FWD read, split the REV reads
+                    (nm_out_rev, nm_in_rev, ngaps_ri_rev, ngaps_ro_rev) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
+                    assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM']
+
+                    # Keep the REV read, split the FWD reads
+                    (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
+                    assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
+
+                    # Update the overlap by substracting the number of gaps in the fwd overlap region
+                    reads_overlap = reads_overlap - ngaps_ri_fwd
+
+                    # For repeats regions, paired-end reads can be aligned with many gaps, resulting in high mismatches within the overlapping region
+                    # Only keep aligned pairs indicating from the same DNA fragment
+                    if abs(nm_in_fwd - nm_in_rev) > 1:
+                        overlap_pass = False
+                        continue #<-----------
+
+                    mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
+
+                    # Update the aligned_length to compute the mapid
+                    align_len = alns["rev"].query_alignment_length + alns["fwd"].query_alignment_length - reads_overlap
+                    align_len_no_gaps = align_len - ngaps_ro_rev - ngaps_ro_fwd - ngaps_ri_fwd
+
+                    # To avoid overcounting site depth for the overlapping region,
+                    # "The higher quality base is used and the lower-quality base is set to BQ=0."
+                    b1 = alns["fwd"].query_alignment_end - reads_overlap
+                    b2 = alns["rev"].query_alignment_start + reads_overlap - 1
+
+                    # TODO: loose end => this gives me error using ibd data
+                    debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
+                    assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
+                    assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
+                    assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
+
+                    if reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
+                        debug_overlap(alns)
+                        print(debug_string)
+
+                    # Only use the higher quality base in the overlap region for downstream pileup
+                    f = alns["fwd"].query_qualities[b1:]
+                    r = alns["rev"].query_qualities[:b2+1]
+                    for i, _ in enumerate(zip(f, r)):
+                        (x, y) = _
+                        if x>=y:
+                            r[i] = 0
+                        else:
+                            f[i] = 0
+                    alns["fwd"].query_qualities[b1:] = f
+                    alns["rev"].query_qualities[:b2+1] = r
+
+                    mapid = 100 * (align_len - mismatches) / float(align_len)
+                else:
+                    mismatches = dict(alns["fwd"].tags)['NM'] + dict(alns["rev"].tags)['NM']
+                    mapid = 100 * (align_len - mismatches) / float(align_len)
+
+                if mapid < global_args.aln_mapid:
+                    continue
+
+                # Compute the mapped reads for the whole contig
+                mapped_reads += 2
+                filtered_alns_dict[query_name]["fwd"] = alns["fwd"]
+                filtered_alns_dict[query_name]["rev"] = alns["rev"]
+            reads_stats["mapped_reads"][contig_id] = mapped_reads
+
+    # Write filtered alignments to file
+    template_bam = AlignmentFile(repbamfile, "rb")
+    filtered_bam = AlignmentFile(sample.get_target_layout("species_bam", species_id), "wb", template=template_bam)
+    for query_name, alns in filtered_alns_dict.items():
+        filtered_bam.write(alns["fwd"])
+        filtered_bam.write(alns["rev"])
+    filtered_bam.close()
+
+    tsprint(f"  CZ::filter_bam_by_proper_pair::{species_id}-0::finish filter_bam_by_proper_pair")
+    return reads_stats
 
 
 def design_chunks_per_species(args):
@@ -307,22 +537,17 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     flags = [sp.design_snps_chunks(midas_db, chunk_size) for sp in dict_of_species.values()]
     assert all(flags)
 
-
     # Sort species by the largest contig length
     sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
 
-    # Prioritize chunks need to compute read counts across species
-    pri_list = []
-    reg_list = []
+    arguments_list = []
     for species_id, _ in sorted_tuples_of_species:
         sp = dict_of_species[species_id]
-        priority_chunks = sp.priority_chunks
+
+        # The structure of the chunks depends on the representative genome sequences
         num_of_sites_chunks = sp.num_of_sites_chunks
         for chunk_id in range(0, num_of_sites_chunks):
-            if chunk_id in priority_chunks:
-                pri_list.append((species_id, chunk_id))
-            else:
-                reg_list.append((species_id, chunk_id))
+            arguments_list.append((species_id, chunk_id))
 
         # Create a semaphore with number_of_chunks of elements
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
@@ -330,9 +555,8 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
             semaphore_for_species[species_id].acquire()
 
     for species_id in dict_of_species.keys():
-        reg_list.append((species_id, -1))
+        arguments_list.append((species_id, -1))
 
-    arguments_list = pri_list + reg_list
     return arguments_list
 
 
@@ -373,230 +597,15 @@ def compute_pileup_per_chunk(packed_args):
         species_id, chunk_id = packed_args
         sp = dict_of_species[species_id]
         ret = []
-
         for pargs in sp.chunks_of_sites[chunk_id]:
             ret.append(pileup_per_unit(pargs))
 
-        num_of_contigs_per_chunk = len(sp.chunks_of_sites[chunk_id])
-        headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
-        aln_bam_file = sample.get_target_layout("aln_bam", species_id, chunk_id)
-
-        if num_of_contigs_per_chunk > 1:
-            list_of_slices_files = [sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, cidx) for cidx in range(0, num_of_contigs_per_chunk)]
-            cat_files(list_of_slices_files, headerless_sliced_path, 20)
-            for s_file in list_of_slices_files:
-                command(f"rm -rf {s_file}", quiet=True)
-
-            if global_args.paired_only:
-                list_of_bfiles = [sample.get_target_layout("aln_bam_perc", species_id, chunk_id, cidx) for cidx in range(0, num_of_contigs_per_chunk)]
-                cat_files(list_of_bfiles, aln_bam_file, 20)
-                for s_file in list_of_bfiles:
-                    command(f"rm -rf {s_file}", quiet=True)
-        else:
-            sliced_file_0 = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, 0)
-            command(f"mv {sliced_file_0} {headerless_sliced_path}", quiet=True)
-
-            if global_args.paired_only:
-                sliced_file_0 = sample.get_target_layout("aln_bam_perc", species_id, chunk_id, 0)
-                command(f"mv {sliced_file_0} {aln_bam_file}", quiet=True)
+        contig_counts_per_chunk = len(sp.chunks_of_sites[chunk_id])
+        collect_units_per_chunk(sample, contig_counts_per_chunk, species_id, chunk_id, "chunk_pileup")
 
         return ret
     finally:
         semaphore_for_species[species_id].release() # no deadlock
-
-
-def pass_one_per_unit(repbamfile, outbam, contig_id, contig_start, contig_end, species_id, chunk_id, within_chunk_cid):
-    # the last three are redundant
-    """ Fetch all reads aligned to specified region and write to temp bam file """
-    global global_args
-    global dict_of_species
-    global sample
-
-    tsprint(f"  CZ::pass_one_per_unit::{contig_id}-{contig_start}::start")
-
-    aligned_reads = 0
-    alns_dict = defaultdict(dict) # cache the reads
-
-    tplfile = AlignmentFile(repbamfile, "rb")
-    mybam = AlignmentFile(outbam, "wb", template=tplfile)
-
-    # Cache *properly* aligned reads-pair
-    with AlignmentFile(repbamfile) as infile:
-        # To avoid boundary cliff, we need to read in the whole contig
-        for aln in infile.fetch(contig_id):
-            aligned_reads += 1
-            if aln.is_secondary:
-                continue
-            if not aln.is_proper_pair:
-                continue
-            if aln.is_reverse:
-                alns_dict[aln.query_name]["rev"] = aln
-            else:
-                alns_dict[aln.query_name]["fwd"] = aln
-
-
-    with OutputStream(sample.get_target_layout("aln_bam_perc", species_id, chunk_id, within_chunk_cid)) as ofile:
-        mapped_reads = 0
-        for query_name, alns in alns_dict.items():
-            # Ignore orphan reads
-            if len(alns) != 2:
-                continue
-
-            # Check if the left-most position is in the range
-            left_most_pos = min([alns["fwd"].reference_start, alns["fwd"].reference_end, alns["rev"].reference_start, alns["rev"].reference_end])
-            if left_most_pos < contig_start or left_most_pos >= contig_end:
-                continue
-
-            # Common features
-            readq = np.mean(alns["fwd"].query_qualities + alns["rev"].query_qualities)
-            mapq = max(alns["fwd"].mapping_quality, alns["rev"].mapping_quality)
-
-            #if readq < global_args.aln_readq:
-            #    continue
-            #if mapq < global_args.aln_mapq:
-            #    continue
-
-            # Template length: number of bases from the left most mapped base to the rightmost mapped base on the reference
-            fragment_length = abs(alns["fwd"].template_length)
-
-            #if fragment_length >= 1000:
-            #    continue
-
-            # I think the alignment coverage should not be affected by overlap.
-            # However, we should double check whether gaps counted as aligned ..
-            align_len = alns["fwd"].query_alignment_length + alns["rev"].query_alignment_length
-            query_len = alns["fwd"].query_length + alns["rev"].query_length
-            alncov = align_len / float(query_len)
-
-            #if alncov < global_args.aln_cov:
-            #    continue
-
-            # For the compute of sequence identity, we need to specially consider paired-reads overlap
-            # Compute the length of the overlapping region along the reference
-            reads_overlap = reference_overlap((alns["fwd"].reference_start, alns["fwd"].reference_end - 1), (alns["rev"].reference_start, alns["rev"].reference_end - 1))
-            # Compute the query overlap length: substract the gaps in the aligned from the FWD reads to define the overlap boundary
-            reads_overlap = update_overlap(reads_overlap, alns["fwd"])
-
-
-            overlap_pass = True
-            if reads_overlap:
-                # Keep the FWD read, split the REV reads
-                (nm_out_rev, nm_in_rev, ngaps_ri_rev, ngaps_ro_rev) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
-                assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM']
-
-                # Keep the REV read, split the FWD reads
-                (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
-                assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
-
-                # Update the overlap by substracting the number of gaps in the fwd overlap region
-                reads_overlap = reads_overlap - ngaps_ri_fwd
-
-                # For repeats regions, paired-end reads can be aligned with many gaps, resulting in high mismatches within the overlapping region
-                # Only keep aligned pairs indicating from the same DNA fragment
-                if abs(nm_in_fwd - nm_in_rev) > 1:
-                    overlap_pass = False
-                    #continue
-
-                mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
-
-                # Update the aligned_length to compute the mapid
-                align_len = alns["rev"].query_alignment_length + alns["fwd"].query_alignment_length - reads_overlap
-                align_len_no_gaps = align_len - ngaps_ro_rev - ngaps_ro_fwd - ngaps_ri_fwd
-
-                # To avoid overcounting site depth for the overlapping region,
-                # "The higher quality base is used and the lower-quality base is set to BQ=0."
-                b1 = alns["fwd"].query_alignment_end - reads_overlap
-                b2 = alns["rev"].query_alignment_start + reads_overlap - 1
-
-
-                # TODO: loose end => this gives me error using ibd data
-                debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
-                assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
-                assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
-                
-                if reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
-                    print(debug_string)
-                    aln = alns["fwd"]
-                    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
-                            aln.reference_name, aln.reference_start, aln.reference_end,
-                            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-                            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-                            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-                            reads_overlap, fragment_length, mismatches]
-                    print("+++++++++++++++++++++++++++++++++++++++++++")
-                    print("\t".join(map(format_data, row)))
-                    print(aln.get_aligned_pairs())
-                    aln = alns["rev"]
-                    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
-                            aln.reference_name, aln.reference_start, aln.reference_end,
-                            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-                            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-                            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-                            reads_overlap, fragment_length, mismatches]
-                    print("\t".join(map(format_data, row)))
-                    print(aln.get_aligned_pairs())
-                    assert False, aln.reference_name
-
-                assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
-
-
-                f = alns["fwd"].query_qualities[b1:]
-                r = alns["rev"].query_qualities[:b2+1]
-                for i, _ in enumerate(zip(f, r)):
-                    (x, y) = _
-                    if x>=y:
-                        r[i] = 0
-                    else:
-                        f[i] = 0
-                alns["fwd"].query_qualities[b1:] = f
-                alns["rev"].query_qualities[:b2+1] = r
-
-                mapid = 100 * (align_len - mismatches) / float(align_len)
-            else:
-                mismatches = dict(alns["fwd"].tags)['NM'] + dict(alns["rev"].tags)['NM']
-                mapid = 100 * (align_len - mismatches) / float(align_len)
-
-
-            aln = alns["fwd"]
-            row = [aln.reference_name, aln.reference_start, aln.reference_end,
-                    aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-                    "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-                    aln.mapping_quality, dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-                    reads_overlap, fragment_length,
-                    readq, mapq, alncov, mismatches, mapid]
-            ofile.write("\t".join(map(format_data, row)) + "\n")
-            aln = alns["rev"]
-            row = [aln.reference_name, aln.reference_start, aln.reference_end,
-                    aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-                    "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-                    aln.mapping_quality, dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-                    reads_overlap, fragment_length,
-                    readq, mapq, alncov, mismatches, mapid]
-            ofile.write("\t".join(map(format_data, row)) + "\n")
-
-
-            if not overlap_pass:
-                continue
-            if readq < global_args.aln_readq:
-                continue
-            if mapq < global_args.aln_mapq:
-                continue
-            if fragment_length >= 1000: #<---------------
-                continue
-            if alncov < global_args.aln_cov:
-                continue
-
-            if mapid < global_args.aln_mapid:
-                continue
-
-            mapped_reads += 2
-            mybam.write(alns["fwd"])
-            mybam.write(alns["rev"])
-
-        mybam.close()
-    tsprint(f"  CZ::pass_one_per_unit::{contig_id}-{contig_start}::finish")
-
-    return (aligned_reads, mapped_reads)
 
 
 def pileup_per_unit(packed_args):
@@ -609,34 +618,16 @@ def pileup_per_unit(packed_args):
     # [contig_start, contig_end)
     species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, within_chunk_cid = packed_args
 
-    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+    repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
     headerless_sliced_path = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, within_chunk_cid)
-    contig_seq = dict_of_species[species_id].contigs[contig_id]["seq"]
 
     zero_rows_allowed = not global_args.sparse
     current_chunk_size = contig_end - contig_start
+    contig_seq = dict_of_species[species_id].contigs[contig_id]["seq"]
 
-    if global_args.paired_only:
-        chunk_bamfile = sample.get_target_layout("chunk_bam", species_id, chunk_id, within_chunk_cid)
-        chunk_sorted_bamfile = sample.get_target_layout("chunk_sorted_bam", species_id, chunk_id, within_chunk_cid)
-
-        aligned_reads, mapped_reads = pass_one_per_unit(repgenome_bamfile, chunk_bamfile, contig_id, contig_start, contig_end, species_id, chunk_id, within_chunk_cid) ### TODO: remove the last three
-
-        command(f"samtools sort -@ 1 -o {chunk_sorted_bamfile} {chunk_bamfile}", quiet=True)
-        command(f"samtools index -@ 1 {chunk_sorted_bamfile}", quiet=True)
-    else:
-        chunk_sorted_bamfile = repgenome_bamfile
-
-    with AlignmentFile(chunk_sorted_bamfile) as bamfile:
-        counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
-                                        quality_threshold=global_args.aln_baseq, # min_quality_threshold a base has to reach to be counted.
-                                        read_callback=keep_read) # select a call-back to ignore reads when counting
-
-        if not global_args.paired_only and count_flag:
-            # Single read could cover the chunk boundaries, and to avoid overcounting of boundary reads,
-            # we only compute the aligned_reads per contig once.
-            aligned_reads = bamfile.count(contig_id)
-            mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
+    with AlignmentFile(repgenome_bamfile) as bamfile:
+        # min_quality_threshold a base has to reach to be counted.
+        counts = bamfile.count_coverage(contig_id, contig_start, contig_end, quality_threshold=global_args.aln_baseq)
 
     # aln_stats need to be passed from child process back to parents
     aln_stats = {
@@ -644,10 +635,10 @@ def pileup_per_unit(packed_args):
         "chunk_id": chunk_id,
         "contig_id": contig_id,
         "chunk_length": current_chunk_size,
-        "aligned_reads": aligned_reads if count_flag else 0,
-        "mapped_reads": 0 if not count_flag and not global_args.paired_only else mapped_reads,
+        "aligned_reads": 0, #aligned_reads if count_flag and not global_args.paired_only else 0,
+        "mapped_reads": 0, #mapped_reads if count_flag and not global_args.paired_only else 0,
         "contig_total_depth": 0,
-        "contig_covered_bases": 0
+        "contig_covered_bases": 0,
     }
 
     with OutputStream(headerless_sliced_path) as stream:
@@ -671,9 +662,8 @@ def pileup_per_unit(packed_args):
 
     # Delete temporary bam file <== TODO
     if global_args.paired_only and False:
-        command(f"rm -rf {chunk_bamfile}", quiet=True)
-        command(f"rm -rf {chunk_sorted_bamfile}", quiet=True)
-        command(f"rm -rf {chunk_sorted_bamfile}.bai", quiet=True)
+        command(f"rm -rf {repgenome_bamfile}", quiet=False)
+        command(f"rm -rf {repgenome_bamfile}.bai", quiet=True)
 
     return aln_stats
 
@@ -705,7 +695,36 @@ def merge_chunks_per_species(species_id):
     return True
 
 
-def write_species_pileup_summary(chunks_pileup_summary, outfile, chunk_output):
+def assign_contig_reads_to_chunks(lalns_stats_by_contig, species_ids_of_interest):
+    global dict_of_species
+    dchunk_alns_stats = dict()
+    for spidx in range(0, len(species_ids_of_interest)):
+        species_id = species_ids_of_interest[spidx]
+        sp = dict_of_species[species_id]
+
+        cc_to_ch = defaultdict(lambda: defaultdict(dict))
+        for chunk_id, tchunks_list in sp.chunks_of_sites.items():
+            if chunk_id == -1:
+                continue
+            #[(species_id, chunk_id, contig_id, ci, ci+chunk_size, count_flag, 0)]
+            for loc in tchunks_list:
+                contig_id = loc[2]
+                count_flag = loc[5]
+
+                aligned_reads = lalns_stats_by_contig[spidx]["aligned_reads"][contig_id]
+                mapped_reads = lalns_stats_by_contig[spidx]["mapped_reads"][contig_id]
+
+                if contig_id not in cc_to_ch[chunk_id]:
+                    cc_to_ch[chunk_id][contig_id] = {"aligned_reads": 0, "mapped_reads": 0}
+
+                cc_to_ch[chunk_id][contig_id]["aligned_reads"] = aligned_reads if count_flag else 0
+                cc_to_ch[chunk_id][contig_id]["mapped_reads"] = mapped_reads if count_flag else 0
+
+        dchunk_alns_stats[species_id] = cc_to_ch
+    return dchunk_alns_stats
+
+
+def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, chunk_output, dchunk_alns_stats):
     """ Collect species pileup aln stats from all chunks and write to file """
 
     species_pileup_summary = defaultdict(dict)
@@ -714,17 +733,25 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile, chunk_output):
         for records in chunks_pileup_summary:
             if records is True:
                 continue
+
             for record in records:
-                stream.write("\t".join(map(format_data, record.values())) + "\n")
                 species_id = record["species_id"]
+                chunk_id = record["chunk_id"]
+                contig_id = record["contig_id"]
+
+                record["aligned_reads"] = dchunk_alns_stats[species_id][chunk_id][contig_id]["aligned_reads"]
+                record["mapped_reads"] = dchunk_alns_stats[species_id][chunk_id][contig_id]["mapped_reads"]
+
+                stream.write("\t".join(map(format_data, record.values())) + "\n")
+
                 if species_id not in species_pileup_summary:
                     species_pileup_summary[species_id] = {
                         "species_id": species_id,
                         "genome_length": 0,
                         "covered_bases": 0,
                         "total_depth": 0,
-                        "aligned_reads":0,
-                        "mapped_reads":0,
+                        "aligned_reads": 0,
+                        "mapped_reads": 0,
                         "fraction_covered": 0.0,
                         "mean_coverage": 0.0
                         }
@@ -736,7 +763,8 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile, chunk_output):
                 curr_species_pileup["aligned_reads"] += record["aligned_reads"]
                 curr_species_pileup["mapped_reads"] += record["mapped_reads"]
 
-    # Secondary round compute: need to loop over all chunks of sites to compute fraction_covered
+
+    # Secondary round compute: need to loop over species to compute fraction_covered
     for species_id in species_pileup_summary.keys():
         curr_species_pileup = species_pileup_summary.get(species_id)
         if curr_species_pileup["genome_length"] > 0:
@@ -745,7 +773,7 @@ def write_species_pileup_summary(chunks_pileup_summary, outfile, chunk_output):
             curr_species_pileup["mean_coverage"] = curr_species_pileup["total_depth"] / curr_species_pileup["covered_bases"]
 
     # Write to file
-    with OutputStream(outfile) as stream:
+    with OutputStream(snps_summary_outfile) as stream:
         stream.write("\t".join(snps_profile_schema.keys()) + "\n")
         for record in species_pileup_summary.values():
             stream.write("\t".join(map(format_data, record.values())) + "\n")
@@ -762,33 +790,34 @@ def midas_run_snps(args):
         sample.create_dirs(["outdir", "tempdir"], args.debug, quiet=True)
 
         species_list = args.species_list.split(",") if args.species_list else []
-        if args.prebuilt_bowtie2_indexes:
-            bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
-            bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
 
-            # We only need a list of species that we need to pull the
+
+        # Prepare Bowtie2 genome database path and name, prebuilt or to be built.
+        if args.prebuilt_bowtie2_indexes:
+            bt2db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
+            bt2db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
+            assert bowtie2_index_exists(bt2db_dir, bt2db_name), f"Provided {bt2db_dir}/{bt2db_name} don't exist."
+
+            # Required list of species used to build bowtie2 database to fetch the genome sequences.
             assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
-            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
+            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2db_dir}/{bt2db_name}")
             bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
                 for species_id in select_from_tsv(stream, schema={"species_id": str}):
                     bt2_species_list.append(species_id[0])
 
-            # Update species_list: either particular species of interest or species in the bowtie2 indexes
+            # Update the species list
             species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
-            # Note: the index was only for the purpose of same bowtie2 index. but the species_ids_of_interest per sample
-            # can still be based on sample itself.
-            # We also don't want too many empty species in our parsing stage.
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug, quiet=True)
-            bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
-            bt2_db_name = "repgenomes"
+            bt2db_dir = sample.get_target_layout("bt2_indexes_dir")
+            bt2db_name = "repgenomes"
 
 
-        # Select abundant species present in the sample for SNPs calling
+        # Pileup species: abundant and/or listed species. We don't recommend pileup on too many empty species.
         species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
         species_counts = len(species_ids_of_interest)
+
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
         assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(species_ids_of_interest)
@@ -805,17 +834,32 @@ def midas_run_snps(args):
         # Build Bowtie indexes for species in the restricted species profile
         contigs_files = midas_db.fetch_files("prokka_genome", species_ids_of_interest)
         tsprint(f"CZ::build_bowtie2_indexes::start")
-        build_bowtie2_db(bt2_db_dir, bt2_db_name, contigs_files, args.num_cores)
+        build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish")
-        # Perhaps avoid this giant conglomerated file, fetching instead submaps for each species.
-        # TODO: Also colocate/cache/download in master for multiple slave subcommand invocations
 
 
         tsprint(f"CZ::bowtie2_align::start")
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
-        bowtie2_align(bt2_db_dir, bt2_db_name, repgenome_bamfile, args)
+        bowtie2_align(bt2db_dir, bt2db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug, args.num_cores)
         tsprint(f"CZ::bowtie2_align::finish")
+
+
+        tsprint(f"CZ::filter_bam_by_proper_pair::start")
+        args_list = [(repgenome_bamfile, species_id) for species_id in species_ids_of_interest]
+        if args.paired_only:
+            lalns_stats_by_contig = multiprocessing_map(filter_bam_by_proper_pair, args_list, args.num_cores)
+        else:
+            lalns_stats_by_contig = multiprocessing_map(filter_bam_by_single_read, args_list, args.num_cores)
+
+        for species_id in species_ids_of_interest:
+            species_bam = sample.get_target_layout("species_bam", species_id)
+            species_sorted_bam = sample.get_target_layout("species_sorted_bam", species_id)
+            samtools_sort(species_bam, species_sorted_bam, args.debug, args.num_cores)
+            samtools_index(species_sorted_bam, args.debug, args.num_cores)
+            command(f"rm -rf {species_bam}", quiet=True)
+
+        tsprint(f"CZ::filter_bam_by_proper_pair::finish")
 
 
         tsprint(f"CZ::multiprocessing_map::start")
@@ -824,8 +868,12 @@ def midas_run_snps(args):
 
 
         tsprint(f"CZ::write_species_pileup_summary::start")
-        write_species_pileup_summary(chunks_pileup_summary, sample.get_target_layout("snps_summary"), sample.get_target_layout("snps_chunk_summary"))
+        snps_summary_fp = sample.get_target_layout("snps_summary")
+        snps_chunk_summary_fp = sample.get_target_layout("snps_chunk_summary")
+        dchunk_alns_stats = assign_contig_reads_to_chunks(lalns_stats_by_contig, species_ids_of_interest)
+        write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, snps_chunk_summary_fp, dchunk_alns_stats)
         tsprint(f"CZ::write_species_pileup_summary::finish")
+
 
     except Exception as error:
         if not args.debug:
