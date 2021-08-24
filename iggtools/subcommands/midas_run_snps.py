@@ -20,6 +20,7 @@ from iggtools.models.species import Species, collect_units_per_chunk, parse_spec
 DEFAULT_MARKER_DEPTH = 5.0
 DEFAULT_MARKER_MEDIAN_DEPTH = 0
 
+
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 10
 DEFAULT_ALN_COV = 0.75
@@ -457,6 +458,7 @@ def filter_bam_by_proper_pair(pargs):
                     (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
                     #assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
 
+
                     # Update the overlap by substracting the number of gaps in the fwd overlap region
                     reads_overlap = reads_overlap - ngaps_ri_fwd
 
@@ -479,6 +481,7 @@ def filter_bam_by_proper_pair(pargs):
 
                     # TODO: loose end => this gives me error using ibd data
                     debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
+
                     #assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
                     #assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
                     #assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
@@ -486,6 +489,7 @@ def filter_bam_by_proper_pair(pargs):
                     #if False and reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
                     #    debug_overlap(alns)
                     #    print(debug_string)
+
 
                     # Only use the higher quality base in the overlap region for downstream pileup
                     f = alns["fwd"].query_qualities[b1:]
@@ -822,6 +826,7 @@ def midas_run_snps(args):
 
         # Pileup species: abundant and/or listed species. We don't recommend pileup on too many empty species.
         species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
+
         species_counts = len(species_ids_of_interest)
 
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
