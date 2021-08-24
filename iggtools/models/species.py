@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 from collections import defaultdict
 from math import floor
 import Bio.SeqIO
@@ -207,6 +208,19 @@ def scan_fasta(fasta_file):
                 "seq": str(rec.seq),
             }
     return seqs
+
+
+def parse_species(args):
+    species_list = []
+    if args.species_list:
+        if os.path.exists(args.species_list):
+            with InputStream(args.species_list) as stream:
+                for line in stream:
+                    species_list.append(line.strip())
+        else:
+            species_list = args.species_list.split(",")
+
+    return species_list
 
 
 def sort_list_of_species(list_of_species):

@@ -78,17 +78,20 @@ class Sample: # pylint: disable=too-few-public-methods
             _create_dir(species_subdir, debug, quiet)
 
 
-    def select_species(self, marker_depth, species_list=[]):
+    def select_species(self, args, species_list=[]):
         """ Parse species profile summary and return list of species for SNPs/Genes analysis """
-        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
+        species_profile_fp = self.get_target_layout("species_summary")
+        assert os.path.exists(species_profile_fp), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype("species")
+        assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
+
         species_ids = []
-        with InputStream(self.get_target_layout("species_summary")) as stream:
-            for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+        with InputStream(species_profile_fp) as stream:
+            for record in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if record["median_marker_coverage"] > marker_depth: # marker_coverage
+                if float(record[args.select_by]) > args.select_threshold:
                     species_ids.append(record["species_id"])
         return species_ids
 
