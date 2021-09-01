@@ -77,7 +77,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage'],
+                           choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
                            help=f"Column from species_profile based on which to select species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
@@ -826,7 +826,7 @@ def midas_run_snps(args):
 
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
         assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
-        tsprint(len(species_ids_of_interest))
+        tsprint(species_ids_of_interest)
 
 
         # Fetch representative genome fastas for each species (multiprocessing)

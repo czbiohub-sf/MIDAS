@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 from collections import defaultdict
 from math import floor
 import Bio.SeqIO

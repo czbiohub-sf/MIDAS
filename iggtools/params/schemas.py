@@ -93,6 +93,8 @@ species_profile_schema = {
     "total_covered_marker": int,
     "unique_covered_marker": int,
     "ambiguous_covered_marker": int,
+    "total_marker_counts": int,
+    "unique_fraction_covered": float,
     "total_marker_length": int,
 }
 
