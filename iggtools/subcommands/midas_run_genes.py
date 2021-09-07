@@ -482,7 +482,6 @@ def midas_run_genes(args):
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-
         species_list = parse_species(args)
 
         if args.prebuilt_bowtie2_indexes:

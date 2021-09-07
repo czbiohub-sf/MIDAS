@@ -20,6 +20,7 @@ from iggtools.models.species import Species, collect_units_per_chunk, parse_spec
 DEFAULT_MARKER_DEPTH = 5.0
 DEFAULT_MARKER_MEDIAN_DEPTH = 0
 
+
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 10
 DEFAULT_ALN_COV = 0.75
@@ -479,6 +480,7 @@ def filter_bam_by_proper_pair(pargs):
 
                     # TODO: loose end => this gives me error using ibd data
                     debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
+
                     #assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
                     #assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
                     #assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
@@ -822,11 +824,12 @@ def midas_run_snps(args):
 
         # Pileup species: abundant and/or listed species. We don't recommend pileup on too many empty species.
         species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
+
         species_counts = len(species_ids_of_interest)
 
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
         assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
-        tsprint(species_ids_of_interest)
+        tsprint(len(species_ids_of_interest))
 
 
         # Fetch representative genome fastas for each species (multiprocessing)
