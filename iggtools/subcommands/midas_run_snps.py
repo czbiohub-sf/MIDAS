@@ -78,7 +78,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage'],
+                           choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
                            help=f"Column from species_profile based on which to select species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
@@ -458,7 +458,6 @@ def filter_bam_by_proper_pair(pargs):
                     (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
                     #assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
 
-
                     # Update the overlap by substracting the number of gaps in the fwd overlap region
                     reads_overlap = reads_overlap - ngaps_ri_fwd
 
@@ -489,7 +488,6 @@ def filter_bam_by_proper_pair(pargs):
                     #if False and reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
                     #    debug_overlap(alns)
                     #    print(debug_string)
-
 
                     # Only use the higher quality base in the overlap region for downstream pileup
                     f = alns["fwd"].query_qualities[b1:]

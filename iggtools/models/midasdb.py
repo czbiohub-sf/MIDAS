@@ -99,7 +99,6 @@ def _fetch_file_from_s3(packed_args):
 
     if not os.path.isdir(local_dir):
         command(f"mkdir -p {local_dir}")
-
     if os.path.exists(dest_file):
         return dest_file
 

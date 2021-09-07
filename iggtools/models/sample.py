@@ -24,6 +24,8 @@ def get_single_layout(sample_name, dbtype=""):
             "species_summary":         f"{sample_name}/species/species_profile.tsv",
             "markers_summary":         f"{sample_name}/species/markers_profile.tsv",
             "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
+            "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
+            "species_reads":           f"{sample_name}/temp/species/{species_id}/{chunk_id}.ids",
 
             # snps workflow output
             "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
@@ -69,13 +71,13 @@ class Sample: # pylint: disable=too-few-public-methods
                 tsprint(f"Create TEMP directory for {self.sample_name}.")
             if dirname == "dbsdir":
                 tsprint(f"Create DBS directory for {self.sample_name}.")
-            _create_dir(self.get_target_layout(dirname), debug, quiet)
+            create_local_dir(self.get_target_layout(dirname), debug, quiet)
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         for species_id in species_ids:
             species_subdir = self.get_target_layout(f"{dirname}_subdir", species_id)
-            _create_dir(species_subdir, debug, quiet)
+            create_local_dir(species_subdir, debug, quiet)
 
 
     def select_species(self, args, species_list=[]):
@@ -91,7 +93,7 @@ class Sample: # pylint: disable=too-few-public-methods
             for record in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if float(record[args.select_by]) > args.select_threshold:
+                if float(record[args.select_by]) >= args.select_threshold: #
                     species_ids.append(record["species_id"])
         return species_ids
 
@@ -115,7 +117,7 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"rm -rf {dirpath}", check=False)
 
 
-def _create_dir(dirname, debug, quiet=False):
+def create_local_dir(dirname, debug, quiet=False):
     if debug and os.path.exists(dirname):
         tsprint(f"Use existing {dirname} according to --debug flag.")
     else:

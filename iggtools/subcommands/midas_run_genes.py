@@ -14,7 +14,7 @@ from iggtools.common.utils import tsprint, InputStream, OutputStream, select_fro
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
-from iggtools.models.sample import Sample
+from iggtools.models.sample import Sample, create_local_dir
 from iggtools.models.species import Species, parse_species
 
 
@@ -66,6 +66,10 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--cache',
+                           action='store_true',
+                           default=False,
+                           help=f"Cache chunks metadata.")
 
     subparser.add_argument('--species_list',
                            dest='species_list',
@@ -184,10 +188,10 @@ def keep_read(aln):
     return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
-def design_chunks_per_species(args):
-    sp, midas_db, chunk_size = args
-    # Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information
-    sp.fetch_genes_are_markers(midas_db)
+def design_chunks_per_species(pargs):
+    """ Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information """
+    sp, midas_db, chunk_size = pargs
+    sp.fetch_genes_are_markers(midas_db, chunk_size)
     return sp.design_genes_chunks(midas_db, chunk_size)
 
 
@@ -198,8 +202,9 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
-    # Design chunks of genes structure per species
-    assert all([design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()])
+    num_cores = min( midas_db.num_cores, 16)
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
+    assert all(flags)
 
     # Sort species by ascending chunk counts
     sorted_tuples_of_species = sorted(((sp.id, sp.num_of_genes_chunks) for sp in dict_of_species.values()), key=itemgetter(1))
@@ -503,14 +508,18 @@ def midas_run_genes(args):
         species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
         species_counts = len(species_ids_of_interest)
         assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
-        tsprint(species_ids_of_interest)
+        tsprint(len(species_ids_of_interest))
 
 
         tsprint(f"CZ::design_chunks::start")
         global dict_of_species
-        dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
+        dict_of_species = {species_id: Species(species_id, args.cache) for species_id in species_ids_of_interest}
         num_cores_download = min(species_counts, args.num_cores)
         midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores_download)
+        if args.cache:
+            for species_id in species_ids_of_interest:
+                cachedir = os.path.dirname(midas_db.get_target_layout("cache_gene_chunks", False, "chunks_of_centroids", species_id, args.chunk_size))
+                create_local_dir(cachedir, args.debug)
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 

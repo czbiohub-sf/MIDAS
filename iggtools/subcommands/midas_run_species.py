@@ -167,6 +167,7 @@ def query_coverage(aln):
 
 def read_markers_info(fasta_file, map_file):
     """ Extract gene_id_is_marker - marker_id mapping from fasta and map files """
+
     # Read the gene_is_marker_id from phyeco.fa file
     genes_that_are_marker = []
     with InputStream(fasta_file) as file:
@@ -176,6 +177,7 @@ def read_markers_info(fasta_file, map_file):
     # Extract the mapping of <marker_id, genome_id, species_id> from the phyeco.map file
     markers_info = defaultdict(dict)
     markers_length = defaultdict(lambda: defaultdict(dict))
+
     with InputStream(map_file) as map_file_stream:
         for r in select_from_tsv(map_file_stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
             if r["gene_id"] in genes_that_are_marker:
@@ -217,7 +219,7 @@ def find_best_hits(m8_file, markers_info, marker_cutoffs, args):
     return list(best_hits.values())
 
 
-def filter_alns_by_markers(alns, min_mreads=2, min_mcounts=2):
+def filter_species_by_alns(alns, min_mreads=2, min_mcounts=2):
     """ Only species with more then 2 markers covered by 2 reads are reported """
     # Each marker needs to be covered by more than one reads
     filtered_alns = defaultdict(lambda: defaultdict(dict))
@@ -233,7 +235,6 @@ def filter_alns_by_markers(alns, min_mreads=2, min_mcounts=2):
     final_covered_markers = {spid:lom for spid, lom in filtered_covered_markers.items() if len(lom) >= min_mcounts}
 
     final_alns = {spid:_ for spid, _ in filtered_alns.items() if spid in final_covered_markers.keys()}
-    # TODO: can we recycle those reads, e.g. reading the second best alignments?
 
     return final_alns, final_covered_markers
 
@@ -250,11 +251,14 @@ def assign_unique(alns, markers_info, args):
     unique_counts = defaultdict(int)
     non_unique_counts = 0
 
+    unique_reads = defaultdict(lambda: defaultdict(list))
     for aln in alns:
         if len(aln) == 1:
             gid = aln[0]['target']
             spid = markers_info[gid]['species_id']
             mkid = markers_info[gid]['marker_id']
+
+            unique_reads[spid][mkid].append("@"+aln[0]['query'])
 
             if mkid in unique_alns[spid]:
                 unique_alns[spid][mkid]["alns"] += aln[0]['aln']
@@ -266,12 +270,13 @@ def assign_unique(alns, markers_info, args):
         else:
             non_unique_counts += 1
 
-    final_unique_alns, final_covered_markers = filter_alns_by_markers(unique_alns, args.marker_reads, args.marker_covered)
+    # At least two markers covered by at least 2 reads each
+    final_unique_alns, final_covered_markers = filter_species_by_alns(unique_alns, args.marker_reads, args.marker_covered)
 
     tsprint(f" uniquely mapped reads: {sum(unique_counts.values())}")
     tsprint(f" ambiguously mapped reads: {non_unique_counts}")
 
-    return final_unique_alns, final_covered_markers
+    return final_unique_alns, final_covered_markers, unique_reads
 
 
 def assign_non_unique(alns, unique_alns, markers_info, args):
@@ -308,13 +313,14 @@ def assign_non_unique(alns, unique_alns, markers_info, args):
             else:
                 ambiguous_alns[spid][mkid] = {"alns": aln_bps, "readcounts": 1}
 
-    final_ambiguous_alns, final_covered_markers = filter_alns_by_markers(ambiguous_alns, args.marker_reads, args.marker_covered)
+    final_ambiguous_alns, final_covered_markers = filter_species_by_alns(ambiguous_alns, args.marker_reads, args.marker_covered)
 
     return final_ambiguous_alns, final_covered_markers
 
 
 def merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length):
     """ Merge unique and ambiguous alns into full species by marker matrix """
+
     list_of_all_species = set(list(unique_alns.keys()) + list(ambiguous_alns.keys()))
 
     species_alns = defaultdict(lambda: defaultdict(dict))
@@ -322,19 +328,22 @@ def merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_
         for mkid in markers_length[spid].keys():
             uniq_count = unique_alns[spid][mkid]['readcounts'] if spid in unique_alns and mkid in unique_alns[spid] else 0
             amb_count = ambiguous_alns[spid][mkid]['readcounts'] if spid in ambiguous_alns and mkid in ambiguous_alns[spid] else 0
+
             uniq_bps = unique_alns[spid][mkid]['alns'] if spid in unique_alns and mkid in unique_alns[spid] else 0
             amb_bps = ambiguous_alns[spid][mkid]['alns'] if spid in ambiguous_alns and mkid in ambiguous_alns[spid] else 0
-            species_alns[spid][mkid] = {"unique": uniq_count, "ambiguous": amb_count,
-                                        "unique_bps": uniq_bps, "ambiguous_bps": amb_bps}
+
+            species_alns[spid][mkid] = {"unique": uniq_count, "ambiguous": amb_count, "unique_bps": uniq_bps, "ambiguous_bps": amb_bps}
 
     species_covered_markers = defaultdict(dict)
     for spid, marker_dict in species_alns.items():
         lom_uniq = unique_covered_markers[spid] if spid in unique_alns else []
         lom_amb = ambiguous_covered_markers[spid] if spid in ambiguous_alns else []
+
         uniq_covered = len(lom_uniq)
         amb_covered = len(lom_amb)
         total_covered = len(set(lom_uniq + lom_amb))
-        species_covered_markers[spid] = {"total_covered":total_covered, "unique_covered":uniq_covered, "ambiguous_covered":amb_covered}
+
+        species_covered_markers[spid] = {"total_covered":total_covered, "unique_covered":uniq_covered, "ambiguous_covered":amb_covered, "total_marker_counts": len(marker_dict.keys())}
 
     return species_alns, species_covered_markers
 
@@ -343,6 +352,7 @@ def normalize_counts(species_alns, species_covered_markers, markers_length):
     """ Normalize counts by gene length and sum contrain """
     species_abundance = defaultdict(lambda: defaultdict(int)) # indexed by <species_id>
     markers_abundance = defaultdict(lambda: defaultdict(dict)) # indexed by <species_id, marker_id>
+
     for spid, markers_dict in species_alns.items():
         lomc = []
         for mkid, mdict in markers_dict.items():
@@ -373,9 +383,12 @@ def normalize_counts(species_alns, species_covered_markers, markers_length):
         # Second round of collecting information per species
         species_abundance[spid]["coverage"] = species_abundance[spid]["total_bps"] / species_abundance[spid]["total_marker_length"]
         species_abundance[spid]["median_coverage"] = np.median(lomc)
+
         species_abundance[spid]["total_covered"] = species_covered_markers[spid]["total_covered"]
         species_abundance[spid]["unique_covered"] = species_covered_markers[spid]["unique_covered"]
         species_abundance[spid]["ambiguous_covered"] = species_covered_markers[spid]["ambiguous_covered"]
+        species_abundance[spid]["total_marker_counts"] = species_covered_markers[spid]["total_marker_counts"]
+        species_abundance[spid]["unique_fraction_covered"] = species_abundance[spid]["unique_covered"] / species_abundance[spid]["total_marker_counts"]
 
     # Third round: compute relative abundance based on vertical coverage: only among detected species.
     sample_coverage = sum(_['coverage'] for _ in species_abundance.values())
@@ -395,8 +408,9 @@ def write_abundance(species_path, markers_path, species_abundance, markers_abund
         outfile.write('\t'.join(species_profile_schema.keys()) + '\n')
         for species_id in output_order:
             r = species_abundance[species_id]
-            record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'],
-                        r['relative_abundance'], r['total_covered'], r['unique_covered'], r['ambiguous_covered'], r['total_marker_length']]
+            record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'], r['relative_abundance'],
+                        r['total_covered'], r['unique_covered'], r['ambiguous_covered'],
+                        r['total_marker_counts'], r['unique_fraction_covered'], r['total_marker_length']]
             outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
     with OutputStream(markers_path) as outfile:
@@ -443,8 +457,17 @@ def midas_run_species(args):
         tsprint(f"CZ::find_best_hits::finish")
 
         tsprint(f"CZ::assign_unique::start")
-        unique_alns, unique_covered_markers = assign_unique(best_hits, markers_info, args)
+        unique_alns, unique_covered_markers, unique_reads = assign_unique(best_hits, markers_info, args)
         tsprint(f"CZ::assign_unique::finish")
+
+        if False:
+            species_ids_of_interest = list(unique_reads.keys())
+            sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
+            for species_id, vals_dict in unique_reads.items():
+                for marker_id, list_of_reads in vals_dict.items():
+                    out_dir = sample.get_target_layout("species_reads", species_id, marker_id)
+                    with OutputStream(out_dir) as stream:
+                        stream.write("\n".join(list_of_reads) + "\n")
 
         tsprint(f"CZ::assign_non_unique::start")
         ambiguous_alns, ambiguous_covered_markers = assign_non_unique(best_hits, unique_alns, markers_info, args)
