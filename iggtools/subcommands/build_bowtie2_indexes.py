@@ -1,11 +1,9 @@
-import os
 import json
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.species import parse_species
 
 
 def register_args(main_func):
@@ -31,12 +29,16 @@ def register_args(main_func):
                            choices=['repgenomes', 'pangenomes'],
                            help=f"Bowtie2 db name to build")
 
+    subparser.add_argument('--species_csv',
+                           dest='species_csv',
+                           type=str,
+                           metavar="CHAR",
+                           help=f"Comma separated species ids")
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-
     subparser.add_argument('--species_profile',
                            dest='species_profile',
                            type=str,
@@ -47,7 +49,6 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default="sample_counts",
-                           choices=['sample_counts', 'median_marker_coverage'],
                            help=f"Column from species_profile based on which to select species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
@@ -67,8 +68,15 @@ def register_args(main_func):
 def build_bowtie2_indexes(args):
 
     try:
-        if args.species_list:
-            species_ids_of_interest = parse_species(args)
+        # comman-separated species ids
+        if args.species_csv:
+            species_ids_of_interest = args.species_csv.split(",")
+        # one species per line
+        elif args.species_list:
+            species_ids_of_interest = []
+            with InputStream(args.species_list) as stream:
+                for species_id in select_from_tsv(stream, schema={"species_id": str}):
+                    species_ids_of_interest.append(species_id[0])
         # this part is under development
         elif args.species_profile and args.select_by and args.select_threshold:
             species_ids_of_interest = []

@@ -15,11 +15,10 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_in
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
 from iggtools.models.sample import Sample
-from iggtools.models.species import Species, parse_species
+from iggtools.models.species import Species
 
 
 DEFAULT_MARKER_DEPTH = 5.0
-DEFAULT_MARKER_MEDIAN_DEPTH = 0
 
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 2
@@ -67,24 +66,17 @@ def register_args(main_func):
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
 
+    subparser.add_argument('--marker_depth',
+                           type=float,
+                           dest='marker_depth',
+                           metavar='FLOAT',
+                           default=DEFAULT_MARKER_DEPTH,
+                           help=f"Include species with >X marker coverage ({DEFAULT_MARKER_DEPTH})")
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-    subparser.add_argument('--select_by',
-                           dest='select_by',
-                           type=str,
-                           metavar="CHAR",
-                           default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage'],
-                           help=f"Column from species_profile based on which to select species.")
-    subparser.add_argument('--select_threshold',
-                           dest='select_threshold',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_MARKER_MEDIAN_DEPTH,
-                           help=f"Include species with > X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
 
     #  Alignment flags (Bowtie2, or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -470,14 +462,25 @@ def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
 def midas_run_genes(args):
 
     try:
-        global global_args
-        global_args = args
-
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        species_list = parse_species(args)
+        global global_args
+        global_args = args
+
+        if args.species_list:
+            if os.path.exists(args.species_list):
+                species_list = []
+                with InputStream(args.species_list) as stream:
+                    for line in stream:
+                        species_list.append(line.strip())
+            else:
+                species_list = args.species_list.split(",")
+        else:
+            species_list = []
+        print(len(species_list))
+        #species_list = args.species_list.split(",") if args.species_list else []
 
         if args.prebuilt_bowtie2_indexes:
             bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
@@ -500,7 +503,7 @@ def midas_run_genes(args):
             bt2_db_name = "pangenomes"
 
         # Select abundant species present in the sample for SNPs calling
-        species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
+        species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
         species_counts = len(species_ids_of_interest)
         assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(species_ids_of_interest)
