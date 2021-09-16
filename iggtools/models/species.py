@@ -30,6 +30,7 @@ class Species:
         # Pan genes
         #self.centroids = defaultdict(dict)
         self.cluster_info = None
+        self.num_of_centroids = None
         self.chunks_of_centroids = defaultdict(dict)
         self.num_of_genes_chunks = 0
         self.dict_of_genes_are_markers = []
@@ -222,6 +223,7 @@ class Species:
             for r in select_from_tsv(stream, selected_columns=CLUSTER_INFO_SCHEMA, result_structure=dict):
                 cluster_info[r["centroid_99"]] = r
         self.cluster_info = cluster_info
+        self.num_of_centroids = len(cluster_info)
 
 
     def fetch_samples_names(self):

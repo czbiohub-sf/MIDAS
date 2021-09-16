@@ -41,10 +41,10 @@ def get_pool_layout(dbtype=""):
             "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
             "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
             "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
-            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv",
-            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv",
-            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv",
-            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv",
+            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv.lz4",
+            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv.lz4",
+            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv.lz4",
+            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv.lz4",
         }
     return per_species
 

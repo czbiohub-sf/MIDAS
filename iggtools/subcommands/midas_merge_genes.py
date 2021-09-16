@@ -4,10 +4,11 @@ import json
 from collections import defaultdict
 import multiprocessing
 from itertools import repeat
+from math import ceil
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv
+from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, cat_files, multithreading_map
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 
@@ -54,6 +55,12 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=num_physical_cores,
+                           help=f"Number of physical cores to use ({num_physical_cores})")
 
     # Presence/Absence
     subparser.add_argument('--min_copy',
@@ -72,11 +79,58 @@ def register_args(main_func):
     return main_func
 
 
+def process(pargs):
+    global dict_of_species
+
+    midas_db, list_of_species = pargs
+
+    for species_id in list_of_species:
+        sp = dict_of_species[species_id]
+        sp.get_cluster_info(midas_db)
+        accumulator = build_gene_matrices(species_id)
+        assert write_gene_matrices(accumulator, species_id)
+
+    return "worked"
+
+
+def build_gene_matrices(species_id):
+    global global_args
+    global dict_of_species
+
+    pid = global_args.cluster_pid
+    min_copy = global_args.min_copy
+
+    sp = dict_of_species[species_id]
+
+    # First pass: accumulate the gene matrix sample by sample
+    accumulator = defaultdict(dict)
+    for sample_index, sample in enumerate(sp.list_of_samples):
+        genes_coverage_fp = sample.get_target_layout("genes_coverage", species_id)
+        my_args = (species_id, sample_index, genes_coverage_fp)
+        collect(accumulator, my_args)
+
+    # Second pass: infer presence absence based on copy number
+    for gene_id, copynum in accumulator["copynum"].items():
+        accumulator["presabs"][gene_id] = [1 if cn >= min_copy else 0 for cn in copynum]
+
+    return accumulator
+
+
 def collect(accumulator, my_args):
+    # Merge copy_numbers, coverage and read counts across ALl the samples
 
-    species_id, sample_index, genes_coverage_path, pid, total_samples_count, cluster_info = my_args
+    global global_args
+    global pool_of_samples
+    global dict_of_species
+    pid = global_args.cluster_pid
 
-    with InputStream(genes_coverage_path) as stream:
+    species_id, sample_index, genes_coverage_fp = my_args
+
+    sp = dict_of_species[species_id]
+    total_samples_count = sp.samples_count
+    cluster_info = sp.cluster_info
+
+    with InputStream(genes_coverage_fp) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
 
             gene_id = cluster_info[r["gene_id"]][f"centroid_{pid}"]
@@ -100,33 +154,13 @@ def collect(accumulator, my_args):
             acc_reads[sample_index] += r["mapped_reads"]
 
 
-def build_gene_matrices(sp, pid, args_mincopy):
+def write_gene_matrices(accumulator, species_id):
+    global dict_of_species
+    global pool_of_samples
 
-    species_id = sp.id
-    total_samples_count = sp.samples_count
-    cluster_info = sp.cluster_info
+    sp = dict_of_species[species_id]
+    samples_names = dict_of_species[species_id].fetch_samples_names()
 
-    tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::start collect_sample_by_sample")
-
-    accumulator = defaultdict(dict)
-    for sample_index, sample in enumerate(sp.list_of_samples):
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{sample_index}::start collect_one_sample")
-        genes_coverage_path = sample.get_target_layout("genes_coverage", species_id)
-
-        my_args = (species_id, sample_index, genes_coverage_path, pid, total_samples_count, cluster_info)
-        collect(accumulator, my_args)
-        tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}-{sample_index}::finish collect_one_sample")
-
-    tsprint(f"    CZ::process_one_chunk_of_genes::{species_id}::finish collect_sample_by_sample")
-
-    # Second pass: infer presence absence based on copy number
-    for gene_id, copynum in accumulator["copynum"].items():
-        accumulator["presabs"][gene_id] = [1 if cn >= args_mincopy else 0 for cn in copynum]
-
-    return accumulator
-
-
-def write_gene_matrices(accumulator, pool_of_samples, species_id, samples_names):
     for file_type in list(genes_info_schema.keys()):
         outfile = pool_of_samples.get_target_layout(f"genes_{file_type}", species_id)
         with OutputStream(outfile) as stream:
@@ -139,43 +173,37 @@ def write_gene_matrices(accumulator, pool_of_samples, species_id, samples_names)
 def midas_merge_genes(args):
 
     try:
+        global global_args
+        global_args = args
+
+        global pool_of_samples
+        global dict_of_species
+
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "genes")
         dict_of_species = pool_of_samples.select_species("genes", args)
 
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
         species_counts = len(species_ids_of_interest)
         assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
-        tsprint(species_ids_of_interest)
+        tsprint(f"{species_counts} species pass the filter")
 
         pool_of_samples.create_dirs(["outdir"], args.debug)
-        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug, quiet=True)
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
         # Download genes_info for every species in the restricted species profile.
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), 1)
+        def chunkify(L, n): return [L[x: x+n] for x in range(0, len(L), n)]
+        chunk_size = ceil(species_counts / args.num_cores)
+        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), args.num_cores)
 
-        # Merge copy_numbers, coverage and read counts across ALl the samples
-        tsprint(f"CZ::build_and_write_gene_matrices::start")
-
-        for species_id in species_ids_of_interest:
-            sp = dict_of_species[species_id]
-            sp.get_cluster_info(midas_db)
-
-            tsprint(f"  CZ::midas_merge_genes::{species_id}::start build_gene_matrices")
-            accumulator = build_gene_matrices(sp, args.cluster_pid, args.min_copy)
-            tsprint(f"  CZ::midas_merge_genes::{species_id}::finish build_gene_matrices")
-
-            tsprint(f"  CZ::midas_merge_genes::{species_id}::start write_gene_matrices")
-            samples_names = sp.fetch_samples_names()
-            assert write_gene_matrices(accumulator, pool_of_samples, species_id, samples_names)
-            tsprint(f"  CZ::midas_merge_genes::{species_id}::finish write_gene_matrices")
-
-        tsprint(f"CZ::build_and_write_gene_matrices::finish")
+        chunk_lists = chunkify(species_ids_of_interest, chunk_size)
+        proc_flags = multiprocessing_map(process, ((midas_db, los) for los in chunk_lists), args.num_cores)
+        assert all(s == "worked" for s in proc_flags)
 
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
-            pool_of_samples.remove_dirs(["outdir", "tempdir"])
+            pool_of_samples.remove_dirs(["outdir"])
         raise error
 
 
