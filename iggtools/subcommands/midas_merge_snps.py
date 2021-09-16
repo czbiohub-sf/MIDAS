@@ -9,16 +9,17 @@ import time
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv, cat_files
+from iggtools.common.utility import annotate_site, acgt_string
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
-from iggtools.models.species import Species, collect_units_per_chunk
+from iggtools.models.species import Species
 from iggtools.common.argparser import add_subcommand
 
 
 DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
-DEFAULT_CHUNK_SIZE = 50000
+DEFAULT_CHUNK_SIZE = 500000
 
 DEFAULT_SITE_DEPTH = 2
 DEFAULT_SITE_RATIO = 5.0
@@ -145,123 +146,6 @@ def register_args(main_func):
     return main_func
 
 
-def acgt_string(A, C, G, T):
-    return ','.join(map(str, (A, C, G, T)))
-
-
-def translate(codon):
-    """ Translate individual codon """
-    codontable = {
-        'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
-        'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
-        'AAC':'N', 'AAT':'N', 'AAA':'K', 'AAG':'K',
-        'AGC':'S', 'AGT':'S', 'AGA':'R', 'AGG':'R',
-        'CTA':'L', 'CTC':'L', 'CTG':'L', 'CTT':'L',
-        'CCA':'P', 'CCC':'P', 'CCG':'P', 'CCT':'P',
-        'CAC':'H', 'CAT':'H', 'CAA':'Q', 'CAG':'Q',
-        'CGA':'R', 'CGC':'R', 'CGG':'R', 'CGT':'R',
-        'GTA':'V', 'GTC':'V', 'GTG':'V', 'GTT':'V',
-        'GCA':'A', 'GCC':'A', 'GCG':'A', 'GCT':'A',
-        'GAC':'D', 'GAT':'D', 'GAA':'E', 'GAG':'E',
-        'GGA':'G', 'GGC':'G', 'GGG':'G', 'GGT':'G',
-        'TCA':'S', 'TCC':'S', 'TCG':'S', 'TCT':'S',
-        'TTC':'F', 'TTT':'F', 'TTA':'L', 'TTG':'L',
-        'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
-        'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
-    }
-    return codontable[str(codon)]
-
-
-def complement(base):
-    """ Complement nucleotide """
-    d = {'A':'T', 'T':'A', 'G':'C', 'C':'G'}
-    if base in d:
-        return d[base]
-    return base
-
-
-def rev_comp(seq):
-    """ Reverse complement sequence """
-    return ''.join([complement(base) for base in list(seq[::-1])])
-
-
-def get_gen_seq(genome_seq, start, end, strand):
-    seq = genome_seq[start-1 : end]
-    if strand == "-":
-        return rev_comp(seq)
-    return seq
-
-
-def index_replace(codon, allele, pos, strand):
-    """ Replace character at index i in string x with y"""
-    bases = list(codon)
-    bases[pos] = allele if strand == '+' else complement(allele)
-    return ''.join(bases)
-
-
-def binary_search_site(list_of_boundaries, ref_pos):
-    """ Binary search the boundaries, if return odd than within-ranges otherwise between-ranges """
-    flag = bisect(list_of_boundaries, ref_pos)
-    if flag % 2 == 0: # even: intergenic
-        return None
-    index = int((flag + 1) / 2)
-    # Return the index of the ranges (1-based)
-    return index
-
-
-def compute_degenracy(ref_codon, within_codon_pos, strand):
-    """ Compute degenracy """
-    amino_acids = []
-    for allele in ['A', 'C', 'G', 'T']: # + strand
-        codon = index_replace(ref_codon, allele, within_codon_pos, strand) # +/- strand
-        amino_acid = translate(codon)
-        amino_acids.append(amino_acid)
-    unique_aa = set(amino_acids)
-    degeneracy = 4 - len(unique_aa) + 1
-    site_type = f"{degeneracy}D"
-    amino_acids = ','.join(amino_acids)
-    return site_type, amino_acids
-
-
-def fetch_ref_codon(ref_pos, curr_gene, curr_seq):
-    """ Fetch codon within gene for given site """
-    # position of site in gene
-    within_gene_pos = ref_pos - curr_gene['start'] if curr_gene['strand'] == '+' else curr_gene['end'] - ref_pos
-    # position of site in codon
-    within_codon_pos = within_gene_pos % 3
-    # gene sequence (oriented start to stop)
-    ref_codon = curr_seq[within_gene_pos-within_codon_pos:within_gene_pos-within_codon_pos+3]
-    return ref_codon, within_codon_pos
-
-
-def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
-    """ Annotate one genomic site, search against all genes for given species """
-    # Binary search the range of the given genomic site position
-    index = binary_search_site(curr_contig["boundaries"], ref_pos)
-    if index is None:
-        locus_type = "IGR" # even: intergenic
-        return (locus_type,)
-
-    curr_gene_id = curr_contig["genes"][index-1]
-    curr_gene = curr_feature[curr_gene_id]
-    locus_type = curr_gene["gene_type"]
-
-    if locus_type != "CDS":
-        return locus_type, curr_gene_id
-
-    curr_seq = genes_sequence[curr_gene_id]["seq"]
-    assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
-
-    ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
-
-    # Codon contains weird characters.
-    if not all(_ in ['A', 'T', 'C', 'G'] for _ in ref_codon):
-        return locus_type, curr_gene_id
-
-    site_type, amino_acids = compute_degenracy(ref_codon, within_codon_pos, curr_gene['strand'])
-    return locus_type, curr_gene_id, site_type, amino_acids
-
-
 def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     """ Compute the pooled allele frequencies and call SNPs """
 
@@ -282,6 +166,16 @@ def call_alleles(tuple_of_alleles, site_depth, snp_maf):
     return (major_allele, minor_allele, snp_type)
 
 
+def calculate_chunk_size(samples_count, chunk_size):
+    if samples_count <= 10:
+        return 0
+    if samples_count <= 100:
+        return 1000000
+    if samples_count <= 200:
+        return 500000
+    return chunk_size
+
+
 def design_chunks(midas_db, chunk_size):
     global pool_of_samples
     global dict_of_species
@@ -289,13 +183,18 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
-    # TODO: optimal way is to sort chunks by coverage
     arguments_list = []
     for sp in dict_of_species.values():
         species_id = sp.id
+        samples_count = sp.samples_count
+
+        chunk_size = calculate_chunk_size(samples_count, chunk_size)
+        if chunk_size == 0:
+            arguments_list.append((species_id, -2))
+            continue
 
         # The structure of the chunks depends on the representative genome sequences
-        assert sp.design_snps_chunks(midas_db, chunk_size)
+        assert sp.design_snps_chunks_merge(midas_db, chunk_size)
         num_of_chunks = sp.num_of_sites_chunks
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
@@ -304,9 +203,12 @@ def design_chunks(midas_db, chunk_size):
         for _ in range(num_of_chunks):
             semaphore_for_species[species_id].acquire()
 
+    tsprint(arguments_list)
+    tsprint("================= Total number of compute chunks: " + str(len(arguments_list)))
+    
     for species_id in dict_of_species.keys():
-        arguments_list.append((species_id, -1))
-
+        if species_id in semaphore_for_species:
+            arguments_list.append((species_id, -1))
     return arguments_list
 
 
@@ -323,10 +225,11 @@ def prepare_site_annotation(midas_db, num_cores):
         genes_feature_file = midas_db.fetch_files("gene_feature", [species_id])[species_id]
         genes_seq_file = midas_db.fetch_files("gene_seq", [species_id])[species_id]
         args_list.append((sp, genes_feature_file, genes_seq_file))
+    num_cores = min(num_cores, 4)
     multithreading_map(prepare_annotation_per_species, args_list, num_cores)
 
 
-def process_one_chunk_of_sites(packed_args):
+def process(packed_args):
 
     species_id, chunk_id = packed_args
 
@@ -335,79 +238,105 @@ def process_one_chunk_of_sites(packed_args):
         global dict_of_species
         sp = dict_of_species[species_id]
 
-        tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::wait merge_all_chunks_per_species")
+        tsprint(f"  CZ::process::{species_id}--1::wait collect_chunks_per_species")
         for _ in range(sp.num_of_sites_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::start merge_all_chunks_per_species")
-        merge_all_chunks_per_species(species_id)
-        tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}--1::finish merge_all_chunks_per_species")
+        tsprint(f"  CZ::process::{species_id}--1::start collect_chunks_per_species")
+        collect_chunks_per_species(species_id)
+        tsprint(f"  CZ::process::{species_id}--1::finish collect_chunks_per_species")
         return "worked"
 
-    tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::start pool_across_samples_per_chunk")
-    pool_across_samples_per_chunk(species_id, chunk_id)
-    tsprint(f"  CZ::process_one_chunk_of_sites::{species_id}-{chunk_id}::finish pool_across_samples_per_chunk")
+    tsprint(f"  CZ::process::{species_id}-{chunk_id}::start process_one_chunk")
+    process_one_chunk(species_id, chunk_id)
+    tsprint(f"  CZ::process::{species_id}-{chunk_id}::finish process_one_chunk")
 
     return "worked"
 
 
-def pool_across_samples_per_chunk(species_id, chunk_id):
+def process_one_chunk(species_id, chunk_id):
     """ For genome sites from one chunk, scan across all the sample, compute pooled SNPs and write to file """
 
     global semaphore_for_species
-    global pool_of_samples
     global dict_of_species
 
     try:
-        tsprint(f"    CZ::pool_across_samples_per_chunk::{species_id}-{chunk_id}::start accumulate_samples_per_unit")
-
         sp = dict_of_species[species_id]
-        flags = []
-        for pargs in sp.chunks_of_sites[chunk_id]:
-            flags.append(accumulate_samples_per_unit(pargs))
-        assert all(flags)
 
-        contig_counts_per_chunk = len(sp.chunks_of_sites[chunk_id])
-        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_info_by_chunk")
-        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_freq_by_chunk")
-        collect_units_per_chunk(pool_of_samples, contig_counts_per_chunk, species_id, chunk_id, "snps_depth_by_chunk")
-
-        tsprint(f"    CZ::pool_across_samples_per_chunk::{species_id}-{chunk_id}::finish accumulate_samples_per_unit")
+        if chunk_id == -2:
+            species_worker(species_id)
+        else:
+            pooled_snps_per_chunk = defaultdict(dict)
+            for idx, pargs in enumerate(sp.chunks_of_sites[chunk_id]):
+                species_id, chunk_id, contig_id = pargs[:3]
+                if contig_id == -1: # list_of_contigs case
+                    pooled_snps_per_chunk[idx] = chunk_worker(pargs[:4] + (False,))
+                else:
+                    pooled_snps_per_chunk[idx] = chunk_worker(pargs[:5])
+            write_population_snps_chunks(pooled_snps_per_chunk, species_id, chunk_id)
     finally:
-        semaphore_for_species[species_id].release() # no deadlock
+        if species_id in semaphore_for_species:
+            semaphore_for_species[species_id].release() # no deadlock
 
 
-def accumulate_samples_per_unit(packed_args):
+def species_worker(species_id):
+    global dict_of_species
+
+    sp = dict_of_species[species_id]
+    total_samples_count = sp.samples_count
+    list_of_samples_depth = sp.list_of_samples_depth
+    list_of_samples = sp.list_of_samples
+
+    tsprint(f"    CZ::species_worker::{species_id}--2::start accumulate_samples")
+    accumulator = dict()
+    for sample_index, sample in enumerate(list_of_samples):
+        snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
+        proc_args = ("species", sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
+        accumulate(accumulator, proc_args)
+
+    tsprint(f"    CZ::species_worker::{species_id}--2::finish accumulate_samples")
+
+    tsprint(f"    CZ::species_worker::{species_id}--2::start call_population_snps")
+    pooled_snps_dict = call_population_snps(accumulator, species_id)
+    write_population_snps_species(pooled_snps_dict, species_id)
+    tsprint(f"    CZ::species_worker::{species_id}--2::finish call_population_snps")
+
+
+def chunk_worker(packed_args):
+    """ Accumulate sample by sample and filter population SNPs """
     global pool_of_samples
     global dict_of_species
 
-    species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, within_chunk_cid = packed_args
+    species_id, chunk_id, contig_id = packed_args[:3]
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
     list_of_samples_depth = sp.list_of_samples_depth
 
-    # Accumulate sites sample by sample
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start accumulate_sample_by_sample")
+    tsprint(f"    CZ::chunk_worker::{species_id}-{chunk_id}::start accumulate_samples")
     accumulator = dict()
     for sample_index, sample in enumerate(sp.list_of_samples):
-        # USE headerless_chunk_pileup_file if exits
-        species_pileup_path = sample.get_target_layout("snps_pileup", species_id)
-        chunk_pileup_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
+        snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
 
-        snps_pileup_path = chunk_pileup_path if os.path.exists(chunk_pileup_path) else species_pileup_path
-        has_header = not os.path.exists(chunk_pileup_path)
+        if contig_id == -1:
+            list_of_contigs = packed_args[3]
+            contigs_fp = pool_of_samples.get_target_layout("snps_list_of_contigs", species_id, chunk_id)
+            with OutputStream(contigs_fp) as stream:
+                stream.write("\n".join(list_of_contigs) + "\n")
+            proc_args = ("file", contigs_fp, list_of_contigs, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
+        else:
+            # Pileup is 1-based index, close left close right
+            contig_start, contig_end = packed_args[3:5]
+            proc_args = ("range", contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
 
-        # Pileup is 1-based index, close left close right
-        proc_args = (contig_id, contig_start+1, contig_end, sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish accumulate_sample_by_sample")
+    tsprint(f"    CZ::chunk_worker::{species_id}-{chunk_id}::finish accumulate_samples")
 
     # Compute across-samples SNPs and write to chunk file
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::start compute_and_write_pooled_snps_per_unit")
-    flag = compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id, within_chunk_cid)
-    tsprint(f"    CZ::accumulate_samples_per_unit::{species_id}-{chunk_id}::finish compute_and_write_pooled_snps_per_unit")
+    tsprint(f"    CZ::chunk_worker::{species_id}-{chunk_id}::start call_population_snps")
+    pooled_snps_info_dict = call_population_snps(accumulator, species_id)
+    tsprint(f"    CZ::chunk_worker::{species_id}-{chunk_id}::finish call_population_snps")
 
-    return flag
+    return pooled_snps_info_dict
 
 
 def accumulate(accumulator, proc_args):
@@ -416,13 +345,20 @@ def accumulate(accumulator, proc_args):
 
     global global_args
 
-    contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args
+    if proc_args[0] == "file":
+        contigs_fp, list_of_contigs, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args[1:]
+        filter_cmd = f"grep -Fwf {contigs_fp}"
+    if proc_args[0] == "range":
+        contig_id, contig_start, contig_end, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args[1:]
+        filter_cmd = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 <= {contig_end}\'"
+    if proc_args[0] == "species":
+        sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args[1:]
+        filter_cmd = f"tail -n +2"
 
     # Output column indices
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
 
-    awk_command = f"awk \'$1 == \"{contig_id}\" && $2 >= {contig_start} && $2 <= {contig_end}\'"
-    with InputStream(snps_pileup_path, awk_command) as stream:
+    with InputStream(snps_pileup_path, filter_cmd) as stream:
         for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
             # Unpack frequently accessed columns
             ref_id, ref_pos, ref_allele = row["ref_id"], row["ref_pos"], row["ref_allele"]
@@ -471,17 +407,20 @@ def accumulate(accumulator, proc_args):
             acc[9 + sample_index] = acgt_str
 
 
-def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id, within_chunk_cid):
+def call_population_snps(accumulator, species_id):
     """ For each site, compute the pooled-major-alleles, site_depth, and vector of sample_depths and sample_minor_allele_freq"""
+
     global global_args
     global dict_of_species
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
 
-    pooled_snps_info_dict = {}
-    pooled_snps_freq_list = []
-    pooled_snps_depth_list = []
+    pooled_snps_dict = {
+        "info": {},
+        "freq": {},
+        "depth": {},
+    }
 
     for site_id, site_info in accumulator.items():
         # Compute across-all-samples major allele for one genomic site
@@ -533,42 +472,84 @@ def compute_and_write_pooled_snps_per_unit(accumulator, species_id, chunk_id, wi
         site_type = annots[2] if len(annots) > 2 else None
         amino_acids = annots[3] if len(annots) > 2 else None
 
-        pooled_snps_info_dict[site_id] = {"site_id": site_id,
-                                          "major_allele": major_allele,
-                                          "minor_allele": minor_allele,
-                                          "count_samples": count_samples,
-                                          "snp_type": snp_type,
-                                          "rcA": rcA, "rcC": rcC, "rcG": rcG, "rcT": rcT,
-                                          "scA": scA, "scC": scC, "scG": scG, "scT":scT,
-                                          "locus_type": locus_type,
-                                          "gene_id": gene_id,
-                                          "site_type": site_type,
-                                          "amino_acids": amino_acids
-                                         }
-        pooled_snps_freq_list.append([site_id] + sample_mafs)
-        pooled_snps_depth_list.append([site_id] + sample_depths)
 
-    # Write to file
-    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
-    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
-    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk_perc", species_id, chunk_id, within_chunk_cid)
+        pooled_snps_dict["info"][site_id] = {
+            "site_id": site_id,
+            "major_allele": major_allele,
+            "minor_allele": minor_allele,
+            "count_samples": count_samples,
+            "snp_type": snp_type,
+            "rcA": rcA, "rcC": rcC, "rcG": rcG, "rcT": rcT,
+            "scA": scA, "scC": scC, "scG": scG, "scT":scT,
+            "locus_type": locus_type,
+            "gene_id": gene_id,
+            "site_type": site_type,
+            "amino_acids": amino_acids
+        }
+        pooled_snps_dict["freq"][site_id] = [site_id] + sample_mafs
+        pooled_snps_dict["depth"][site_id] = [site_id] + sample_depths
+
+    return pooled_snps_dict
+
+
+def write_population_snps_chunks(pooled_snps_per_chunk, species_id, chunk_id):
+
+    global pool_of_samples
+
+    tsprint(f"    CZ::process_one_chunk::{species_id}-{chunk_id}::start write_population_snps_chunks")
+
+    snps_info_fp = pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id)
+    snps_freq_fp = pool_of_samples.get_target_layout("snps_freq_by_chunk", species_id, chunk_id)
+    snps_depth_fp = pool_of_samples.get_target_layout("snps_depth_by_chunk", species_id, chunk_id)
 
     with OutputStream(snps_info_fp) as out_info:
-        for line in pooled_snps_info_dict.values():
-            out_info.write("\t".join(map(format_data, line.values())) + "\n")
+        for within_chunkid, pooled_snps_dict in pooled_snps_per_chunk.items():
+            for line in pooled_snps_dict["info"].values():
+                out_info.write("\t".join(map(format_data, line.values())) + "\n")
 
     with OutputStream(snps_freq_fp) as out_freq:
-        for line in pooled_snps_freq_list:
-            out_freq.write("\t".join(map(format_data, line)) + "\n")
+        for within_chunkid, pooled_snps_dict in pooled_snps_per_chunk.items():
+            for line in pooled_snps_dict["freq"].values():
+                out_freq.write("\t".join(map(format_data, line)) + "\n")
 
     with OutputStream(snps_depth_fp) as out_depth:
-        for line in pooled_snps_depth_list:
-            out_depth.write("\t".join(map(str, line)) + "\n")
+        for within_chunkid, pooled_snps_dict in pooled_snps_per_chunk.items():
+            for line in pooled_snps_dict["depth"].values():
+                out_depth.write("\t".join(map(str, line)) + "\n")
 
-    return True
+    tsprint(f"    CZ::process_one_chunk::{species_id}-{chunk_id}::finish write_population_snps_chunks")
 
 
-def merge_all_chunks_per_species(species_id):
+def write_population_snps_species(pooled_snps_dict, species_id):
+
+    global pool_of_samples
+    global dict_of_species
+
+    tsprint(f"    CZ::species_worker::{species_id}::start write_population_snps_species")
+
+    samples_names = dict_of_species[species_id].fetch_samples_names()
+    species_snps_info_fp = pool_of_samples.get_target_layout("snps_info", species_id)
+
+    with OutputStream(species_snps_info_fp) as stream:
+        stream.write("\t".join(list(snps_info_schema.keys())) + "\n")
+        for line in pooled_snps_dict["info"].values():
+            stream.write("\t".join(map(format_data, line.values())) + "\n")
+
+    species_snps_freq_fp = pool_of_samples.get_target_layout("snps_freq", species_id)
+    with OutputStream(species_snps_freq_fp) as stream:
+        stream.write("site_id\t" + "\t".join(samples_names) + "\n")
+        for line in pooled_snps_dict["freq"].values():
+            stream.write("\t".join(map(format_data, line)) + "\n")
+
+    species_snps_depth = pool_of_samples.get_target_layout("snps_depth", species_id)
+    with OutputStream(species_snps_depth) as stream:
+        for line in pooled_snps_dict["depth"].values():
+            stream.write("\t".join(map(str, line)) + "\n")
+
+    tsprint(f"    CZ::species_worker::{species_id}::finish write_population_snps_species")
+
+
+def collect_chunks_per_species(species_id):
 
     global global_args
     global dict_of_species
@@ -580,8 +561,6 @@ def merge_all_chunks_per_species(species_id):
 
     list_of_chunks_snps_info = [pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
     species_snps_info_fp = pool_of_samples.get_target_layout("snps_info", species_id)
-
-    # Add header
     with OutputStream(species_snps_info_fp) as stream:
         stream.write("\t".join(list(snps_info_schema.keys())) + "\n")
     cat_files(list_of_chunks_snps_info, species_snps_info_fp, 10)
@@ -598,10 +577,9 @@ def merge_all_chunks_per_species(species_id):
         stream.write("site_id\t" + "\t".join(samples_names) + "\n")
     cat_files(list_of_chunks_snps_depth, species_snps_depth, 10)
 
-    #if not global_args.debug:
-    #    for s_file in list_of_chunks_snps_info + list_of_chunks_snps_freq + list_of_chunks_snps_depth:
-    #        command(f"rm -rf {s_file}", quiet=True)
-
+    if not global_args.debug:
+        for s_file in list_of_chunks_snps_info + list_of_chunks_snps_freq + list_of_chunks_snps_depth:
+            command(f"rm -rf {s_file}", quiet=True)
     return True
 
 
@@ -619,32 +597,30 @@ def midas_merge_snps(args):
 
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
         assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
-        tsprint(species_ids_of_interest)
-
+        species_count = len(species_ids_of_interest)
+        tsprint(f"{species_count} species pass the filter")
 
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
-        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug)
-        pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug, quiet=True)
+        pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug, quiet=True)
         pool_of_samples.write_summary_files(dict_of_species, "snps")
-
 
         # Download representative genomes for every species into midas_db
         num_cores = min(args.num_cores, len(species_ids_of_interest))
         midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"))
 
-        # The unit of compute across-samples pooled SNPs is: chunk_of_sites.
+        # The unit of compute across-samples pop SNPs is: chunk_of_sites.
         tsprint(f"CZ::design_chunks::start")
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
-
+        # TODO: come back to me later....
         tsprint(f"CZ::prepare_site_annotation::start")
         prepare_site_annotation(midas_db, num_cores)
         tsprint(f"CZ::prepare_site_annotation::finish")
 
-
         tsprint(f"CZ::multiprocessing_map::start")
-        proc_flags = multiprocessing_map(process_one_chunk_of_sites, arguments_list, args.num_cores)
+        proc_flags = multiprocessing_map(process, arguments_list, args.num_cores)
         tsprint(f"CZ::multiprocessing_map::finish")
 
         assert all(s == "worked" for s in proc_flags)

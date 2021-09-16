@@ -32,6 +32,7 @@ class Species:
         # Pan genes
         #self.centroids = defaultdict(dict)
         self.cluster_info = None
+        self.num_of_centroids = None
         self.chunks_of_centroids = defaultdict(dict)
         self.num_of_genes_chunks = 0
         self.dict_of_genes_are_markers = []
@@ -146,6 +147,76 @@ class Species:
         return True
 
 
+    def design_snps_chunks_merge(self, midas_db, chunk_size):
+        """ Given the Genome and chunk_size, the structure of the chunks are the same.
+            Each chunk is indexed by (species_id, chunk_id) """
+
+        species_id = self.id
+        self.get_representative_genome(midas_db)
+
+        # Start with full chunks
+        chunk_id = 0
+        dict_of_packed_args = defaultdict(list)
+        priority_chunks = []
+        unassigned_contigs = defaultdict(dict)
+        max_contig_length = 0
+
+        for contig in self.contigs.values():
+            contig_id = contig["id"]
+            contig_length = contig["length"]
+
+            if contig_length > max_contig_length:
+                max_contig_length = contig_length
+
+            # left closed, right open
+            if contig_length < chunk_size:
+                unassigned_contigs[contig_id] = {"contig_id": contig_id,
+                                                 "contig_start": 0,
+                                                 "contig_end": contig_length,
+                                                 "contig_length": contig_length,
+                                                 "is_complete": True}
+            else:
+                number_of_full_chunks = floor(contig_length/chunk_size)
+                for ni, ci in enumerate(range(0, contig_length, chunk_size)):
+                    if ni == number_of_full_chunks: # last chunk
+                        unassigned_contigs[contig_id] = {"contig_id": contig_id,
+                                                         "contig_start": ci,
+                                                         "contig_end": contig_length,
+                                                         "contig_length": contig_length - ci,
+                                                         "is_complete": False}
+                    else:
+                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, ci+chunk_size, False, chunk_id)]
+                        chunk_id += 1
+
+        # Partition unassigned short contigs into subsets
+        dict_of_chunks, chunk_id = partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id)
+
+        # Add the partitioned subsets to chunks
+        for chunk_dict in dict_of_chunks.values():
+            _chunk_id = chunk_dict["chunk_id"]
+            list_of_contigs = chunk_dict["contigs_id"]
+            list_of_full_contigs = []
+            for wc_cidx, _cid in enumerate(list_of_contigs):
+                cstart = unassigned_contigs[_cid]["contig_start"]
+                cend = unassigned_contigs[_cid]["contig_end"]
+                cflag = unassigned_contigs[_cid]["is_complete"]
+                if not cflag:
+                    dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, _cid, cstart, cend, cflag, wc_cidx))
+                else:
+                    list_of_full_contigs.append(_cid)
+            if list_of_full_contigs:
+                dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, -1, list_of_full_contigs))
+        assert chunk_id == _chunk_id+1
+
+        # Finally the merge jobs
+        dict_of_packed_args[-1] = (species_id, -1)
+
+        self.num_of_sites_chunks = chunk_id
+        self.chunks_of_sites = dict_of_packed_args
+
+        return True
+
+
     def get_representative_genome(self, midas_db):
         species_id = self.id
         self.contigs = scan_fasta(midas_db.fetch_files("prokka_genome", [species_id])[species_id])
@@ -164,6 +235,7 @@ class Species:
             for r in select_from_tsv(stream, selected_columns=CLUSTER_INFO_SCHEMA, result_structure=dict):
                 cluster_info[r["centroid_99"]] = r
         self.cluster_info = cluster_info
+        self.num_of_centroids = len(cluster_info)
 
 
     def fetch_samples_names(self):
@@ -243,13 +315,12 @@ def parse_species(args):
                     species_list.append(line.strip())
         else:
             species_list = args.species_list.split(",")
-
     return species_list
 
 
-def sort_list_of_species(list_of_species):
+def sort_list_of_species(list_of_species, rev=True):
     """ Sort list_of_species by samples_count in descending order """
-    species_sorted = sorted(((sp, len(sp.list_of_samples)) for sp in list_of_species), key=lambda x: x[1], reverse=True)
+    species_sorted = sorted(((sp, len(sp.list_of_samples)) for sp in list_of_species), key=lambda x: x[1], reverse=rev)
     return [sp[0] for sp in species_sorted]
 
 
