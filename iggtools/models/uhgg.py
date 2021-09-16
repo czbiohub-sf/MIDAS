@@ -39,6 +39,8 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
 
         "marker_centroids":           f"markers/{inputs.marker_set}/marker_centroids/{species_id}.{component}",
         "marker_centroids_log":       f"markers/{inputs.marker_set}/marker_centroids.log",
+
+        "cache_gene_chunks":          f"cache/genes/chunks_chunksize.{genome_id}/{species_id}/{component}.json",
     }
 
 

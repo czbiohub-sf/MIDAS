@@ -14,11 +14,12 @@ from iggtools.common.utils import tsprint, InputStream, OutputStream, select_fro
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
-from iggtools.models.sample import Sample
-from iggtools.models.species import Species
+from iggtools.models.sample import Sample, create_local_dir
+from iggtools.models.species import Species, parse_species
 
 
 DEFAULT_MARKER_DEPTH = 5.0
+DEFAULT_MARKER_MEDIAN_DEPTH = 0
 
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 2
@@ -65,18 +66,29 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"local MIDAS DB which mirrors the s3 IGG db")
+    subparser.add_argument('--cache',
+                           action='store_true',
+                           default=False,
+                           help=f"Cache chunks metadata.")
 
-    subparser.add_argument('--marker_depth',
-                           type=float,
-                           dest='marker_depth',
-                           metavar='FLOAT',
-                           default=DEFAULT_MARKER_DEPTH,
-                           help=f"Include species with >X marker coverage ({DEFAULT_MARKER_DEPTH})")
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
+    subparser.add_argument('--select_by',
+                           dest='select_by',
+                           type=str,
+                           metavar="CHAR",
+                           default="median_marker_coverage",
+                           choices=['median_marker_coverage', 'marker_coverage'],
+                           help=f"Column from species_profile based on which to select species.")
+    subparser.add_argument('--select_threshold',
+                           dest='select_threshold',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_MARKER_MEDIAN_DEPTH,
+                           help=f"Include species with > X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
 
     #  Alignment flags (Bowtie2, or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -176,10 +188,10 @@ def keep_read(aln):
     return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
-def design_chunks_per_species(args):
-    sp, midas_db, chunk_size = args
-    # Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information
-    sp.fetch_genes_are_markers(midas_db)
+def design_chunks_per_species(pargs):
+    """ Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information """
+    sp, midas_db, chunk_size = pargs
+    sp.fetch_genes_are_markers(midas_db, chunk_size)
     return sp.design_genes_chunks(midas_db, chunk_size)
 
 
@@ -190,8 +202,9 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
-    # Design chunks of genes structure per species
-    assert all([design_chunks_per_species((sp, midas_db, chunk_size)) for sp in dict_of_species.values()])
+    num_cores = min( midas_db.num_cores, 16)
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
+    assert all(flags)
 
     # Sort species by ascending chunk counts
     sorted_tuples_of_species = sorted(((sp.id, sp.num_of_genes_chunks) for sp in dict_of_species.values()), key=itemgetter(1))
@@ -462,25 +475,14 @@ def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
 def midas_run_genes(args):
 
     try:
+        global global_args
+        global_args = args
+
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        global global_args
-        global_args = args
-
-        if args.species_list:
-            if os.path.exists(args.species_list):
-                species_list = []
-                with InputStream(args.species_list) as stream:
-                    for line in stream:
-                        species_list.append(line.strip())
-            else:
-                species_list = args.species_list.split(",")
-        else:
-            species_list = []
-        print(len(species_list))
-        #species_list = args.species_list.split(",") if args.species_list else []
+        species_list = parse_species(args)
 
         if args.prebuilt_bowtie2_indexes:
             bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
@@ -503,17 +505,21 @@ def midas_run_genes(args):
             bt2_db_name = "pangenomes"
 
         # Select abundant species present in the sample for SNPs calling
-        species_ids_of_interest = species_list if args.marker_depth == -1 else sample.select_species(args.marker_depth, species_list)
+        species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
         species_counts = len(species_ids_of_interest)
         assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
-        tsprint(species_ids_of_interest)
+        tsprint(len(species_ids_of_interest))
 
 
         tsprint(f"CZ::design_chunks::start")
         global dict_of_species
-        dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
+        dict_of_species = {species_id: Species(species_id, args.cache) for species_id in species_ids_of_interest}
         num_cores_download = min(species_counts, args.num_cores)
         midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores_download)
+        if args.cache:
+            for species_id in species_ids_of_interest:
+                cachedir = os.path.dirname(midas_db.get_target_layout("cache_gene_chunks", False, "chunks_of_centroids", species_id, args.chunk_size))
+                create_local_dir(cachedir, args.debug)
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 

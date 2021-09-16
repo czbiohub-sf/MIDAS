@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, multithreading_map, command
+from iggtools.common.utils import download_reference, multithreading_map, command, multiprocessing_map
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params.schemas import MARKER_FILE_EXTS
@@ -74,7 +74,11 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
                 args_list.append((s3_file, dest_file))
 
-            _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, num_threads=self.num_cores)
+            if len(list_of_species_ids) > 1:
+                _fetched_files = multiprocessing_map(_fetch_file_from_s3, args_list, self.num_cores) #<-----
+            else:
+                _fetched_files = [_fetch_file_from_s3(args_list[0])]
+
             for species_index, species_id in enumerate(list_of_species_ids):
                 fetched_files[species_id] = _fetched_files[species_index]
             return fetched_files
@@ -95,7 +99,6 @@ def _fetch_file_from_s3(packed_args):
 
     if not os.path.isdir(local_dir):
         command(f"mkdir -p {local_dir}")
-
     if os.path.exists(dest_file):
         return dest_file
 

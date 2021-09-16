@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 from collections import defaultdict
 from math import floor
 import Bio.SeqIO
@@ -11,8 +12,9 @@ from iggtools.params.schemas import genes_feature_schema, CLUSTER_INFO_SCHEMA
 
 class Species:
     """ Base class for species """
-    def __init__(self, species_id):
+    def __init__(self, species_id, cache=False):
         self.id = species_id
+        self.cache = cache
         # SNPs chunks design related
         self.contigs = defaultdict(dict)
         self.max_contig_length = 0
@@ -40,29 +42,39 @@ class Species:
     def design_genes_chunks(self, midas_db, chunk_size):
         """ Each chunk is indexed by (species_id, chunk_id) """
         species_id = self.id
-        self.get_cluster_info(midas_db)
 
-        genes_counter = 0
-        chunk_id = 0
+        chunk_cache_fp = midas_db.get_target_layout("cache_gene_chunks", False, "chunks_of_centroids", species_id, chunk_size)
+        if self.cache and os.path.exists(chunk_cache_fp):
+            with InputStream(chunk_cache_fp) as stream:
+                chunks_of_centroids = json.load(stream)
+                chunk_id = len(chunks_of_centroids.keys())
+        else:
+            self.get_cluster_info(midas_db)
+            genes_counter = 0
+            chunk_id = 0
 
-        curr_chunk_of_genes = dict()
-        chunks_of_centroids = defaultdict(dict)
-        for row in self.cluster_info.values():
-            if not chunk_id*chunk_size <= genes_counter < (chunk_id+1)*chunk_size:
-                chunks_of_centroids[chunk_id] = curr_chunk_of_genes
+            curr_chunk_of_genes = dict()
+            chunks_of_centroids = defaultdict(dict)
+            for row in self.cluster_info.values():
+                if not chunk_id*chunk_size <= genes_counter < (chunk_id+1)*chunk_size:
+                    chunks_of_centroids[chunk_id] = curr_chunk_of_genes
+                    chunk_id += 1
+                    curr_chunk_of_genes = defaultdict()
 
-                chunk_id += 1
-                curr_chunk_of_genes = defaultdict()
+                curr_chunk_of_genes[row["centroid_99"]] = row["centroid_99_length"]
+                genes_counter += 1
 
-            curr_chunk_of_genes[row["centroid_99"]] = row["centroid_99_length"]
-            genes_counter += 1
+            # Last chunk of centroids
+            chunks_of_centroids[chunk_id] = curr_chunk_of_genes
+            chunk_id += 1
 
-        # Last chunk of centroids
-        chunks_of_centroids[chunk_id] = curr_chunk_of_genes
-        chunk_id += 1
+            if self.cache:
+                with OutputStream(chunk_cache_fp) as stream:
+                    json.dump(chunks_of_centroids, stream)
 
         self.num_of_genes_chunks = chunk_id
         self.chunks_of_centroids = chunks_of_centroids
+
         return True
 
 
@@ -253,17 +265,29 @@ class Species:
         self.compute_genes_boundary()
 
 
-    def fetch_genes_are_markers(self, midas_db):
+    def fetch_genes_are_markers(self, midas_db, chunk_size):
         species_id = self.id
         marker_centroids_file = midas_db.fetch_files("marker_centroids", [species_id])[species_id]
 
-        dict_of_genes_are_markers = defaultdict(dict)
-        list_of_marker_genes = []
-        with InputStream(marker_centroids_file) as stream:
-            for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
-                dict_of_genes_are_markers[r["centroid_99"]] = r
-                if r["marker_id"] not in list_of_marker_genes:
-                    list_of_marker_genes.append(r["marker_id"])
+        chunk_cache_fp = midas_db.get_target_layout("cache_gene_chunks", False, "dict_of_genes_are_markers", species_id, chunk_size)
+        if self.cache and os.path.exists(chunk_cache_fp):
+            with InputStream(chunk_cache_fp) as stream:
+                dict_of_genes_are_markers = json.load(stream)
+                list_of_marker_genes = []
+                for _ in dict_of_genes_are_markers.values():
+                    if _["marker_id"] not in list_of_marker_genes:
+                        list_of_marker_genes.append(_["marker_id"])
+        else:
+            dict_of_genes_are_markers = defaultdict(dict)
+            list_of_marker_genes = []
+            with InputStream(marker_centroids_file) as stream:
+                for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
+                    dict_of_genes_are_markers[r["centroid_99"]] = r
+                    if r["marker_id"] not in list_of_marker_genes:
+                        list_of_marker_genes.append(r["marker_id"])
+            if self.cache:
+                with OutputStream(chunk_cache_fp) as stream:
+                    json.dump(dict_of_genes_are_markers, stream)
 
         self.dict_of_genes_are_markers = dict_of_genes_are_markers
         self.list_of_markers = list_of_marker_genes

@@ -3,6 +3,7 @@ import os
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, retry, InputStream, OutputStream, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
 from iggtools.models.midasdb import MIDAS_DB, MARKER_FILE_EXTS
+from iggtools.models.species import parse_species
 
 CONCURRENT_DOWNLOAD = 20
 
@@ -25,18 +26,13 @@ def register_args(main_func):
                            dest='num_cores',
                            type=int,
                            metavar="INT",
-                           default=num_physical_cores,
-                           help=f"Number of physical cores to use ({num_physical_cores})")
+                           default=CONCURRENT_DOWNLOAD,
+                           help=f"Number of physical cores to use ({CONCURRENT_DOWNLOAD})")
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
-    subparser.add_argument('--species_file',
-                           dest='species_file',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Path to list of species ids")
+                           help=f"Path to file OR comma separated list of species ids")
     return main_func
 
 
@@ -48,13 +44,24 @@ def scan_species(filename):
     return splist
 
 
+def parse_species(args):
+    species_list = []
+    if args.species_list:
+        if os.path.exists(args.species_list):
+            with InputStream(args.species_list) as stream:
+                for line in stream:
+                    species_list.append(line.strip())
+        else:
+            species_list = args.species_list.split(",")
+
+    return species_list
+
+
 def download_midasdb(args):
     try:
         midas_db = MIDAS_DB(args.midas_db, args.num_cores)
 
-        species_list1 = args.species_list.split(",") if args.species_list else []
-        species_list2 = scan_species(args.species_file) if args.species_file else []
-        species_list = set(species_list1 + species_list2)
+        species_list = set(parse_species(args))
 
         species = midas_db.uhgg.representatives
         species_all = set(species.keys())
@@ -64,8 +71,7 @@ def download_midasdb(args):
             list_of_species = list(species_all)[:5] if not list_of_species else list_of_species
         else:
             list_of_species = list(species_all)
-
-        tsprint(list_of_species)
+        tsprint(len(list_of_species))
 
         # Marker genes related database files
         midas_db.fetch_files("marker_centroids", list_of_species)
@@ -76,7 +82,7 @@ def download_midasdb(args):
 
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
-        
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy dowdloaded databases. Specify --debug flag to keep.")
