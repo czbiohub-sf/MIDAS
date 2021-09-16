@@ -2,7 +2,9 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
+from iggtools.models.sample import Sample, create_local_dir
 from iggtools.models.species import Species, sort_list_of_species, parse_species
+
 
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id="", contig_idx=""):
@@ -31,7 +33,7 @@ def get_pool_layout(dbtype=""):
             "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
             "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv.lz4",
             "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv.lz4",
-            "snps_list_of_contigs":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
+            "snps_list_of_contigs":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
 
             # genes
             "genes_summary":              f"genes/genes_summary.tsv",
