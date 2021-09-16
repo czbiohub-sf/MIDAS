@@ -2,9 +2,7 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.sample import Sample, create_local_dir
-from iggtools.models.species import Species, sort_list_of_species
-
+from iggtools.models.species import Species, sort_list_of_species, parse_species
 
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id="", contig_idx=""):
@@ -33,9 +31,7 @@ def get_pool_layout(dbtype=""):
             "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
             "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv.lz4",
             "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv.lz4",
-            "snps_info_by_chunk_perc":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_info.tsv.lz4",
-            "snps_freq_by_chunk_perc":    f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_freqs.tsv.lz4",
-            "snps_depth_by_chunk_perc":   f"temp/{dbtype}/{species_id}/cid.{chunk_id}_{contig_idx}_snps_depth.tsv.lz4",
+            "snps_list_of_contigs":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
 
             # genes
             "genes_summary":              f"genes/genes_summary.tsv",
@@ -43,10 +39,10 @@ def get_pool_layout(dbtype=""):
             "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
             "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
             "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
-            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv",
-            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv",
-            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv",
-            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv",
+            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv.lz4",
+            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv.lz4",
+            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv.lz4",
+            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv.lz4",
         }
     return per_species
 
@@ -94,13 +90,16 @@ class SamplePool: # pylint: disable=too-few-public-methods
 
     def select_species(self, dbtype, args):
         """ Initialize dictionary of species given samples """
+        # Parse the species list
+        species_list = parse_species(args)
+
         # Round One: filter <sample, species>
         raw_species = {}
         for sample in self.samples:
             for record in sample.profile.values():
                 species_id = record["species_id"]
                 # Skip unspeficied species
-                if (args.species_list and species_id not in args.species_list.split(",")):
+                if (species_list and species_id not in species_list):
                     continue
                 # Record all the dict_of_species from the profile summary
                 if species_id not in raw_species:
@@ -123,7 +122,7 @@ class SamplePool: # pylint: disable=too-few-public-methods
                 continue
             sp.fetch_samples_depth() # initialize list_of_samples_depth
             species_keep.append(sp)
-        # Sort the species by descending prevalence
+        # Sort the species by descending prevalence (samples_count)
         list_of_species = sort_list_of_species(species_keep)
         return {sp.id:sp for sp in list_of_species}
 
