@@ -24,6 +24,8 @@ def get_single_layout(sample_name, dbtype=""):
             "species_summary":         f"{sample_name}/species/species_profile.tsv",
             "markers_summary":         f"{sample_name}/species/markers_profile.tsv",
             "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
+            "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
+            "species_reads":           f"{sample_name}/temp/species/{species_id}/{chunk_id}.ids",
 
             # snps workflow output
             "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
@@ -69,26 +71,29 @@ class Sample: # pylint: disable=too-few-public-methods
                 tsprint(f"Create TEMP directory for {self.sample_name}.")
             if dirname == "dbsdir":
                 tsprint(f"Create DBS directory for {self.sample_name}.")
-            _create_dir(self.get_target_layout(dirname), debug, quiet)
+            create_local_dir(self.get_target_layout(dirname), debug, quiet)
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         for species_id in species_ids:
             species_subdir = self.get_target_layout(f"{dirname}_subdir", species_id)
-            _create_dir(species_subdir, debug, quiet)
+            create_local_dir(species_subdir, debug, quiet)
 
 
-    def select_species(self, marker_depth, species_list=[]):
+    def select_species(self, args, species_list=[]):
         """ Parse species profile summary and return list of species for SNPs/Genes analysis """
-        assert os.path.exists(self.get_target_layout("species_summary")), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
+        species_profile_fp = self.get_target_layout("species_summary")
+        assert os.path.exists(species_profile_fp), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype("species")
+        assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
+
         species_ids = []
-        with InputStream(self.get_target_layout("species_summary")) as stream:
-            for record in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+        with InputStream(species_profile_fp) as stream:
+            for record in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
                 if len(species_list) > 0 and record["species_id"] not in species_list:
                     continue
-                if record["median_marker_coverage"] > marker_depth: # marker_coverage
+                if float(record[args.select_by]) >= args.select_threshold: #
                     species_ids.append(record["species_id"])
         return species_ids
 
@@ -112,7 +117,7 @@ class Sample: # pylint: disable=too-few-public-methods
             command(f"rm -rf {dirpath}", check=False)
 
 
-def _create_dir(dirname, debug, quiet=False):
+def create_local_dir(dirname, debug, quiet=False):
     if debug and os.path.exists(dirname):
         tsprint(f"Use existing {dirname} according to --debug flag.")
     else:

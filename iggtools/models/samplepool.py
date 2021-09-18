@@ -2,9 +2,7 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.sample import Sample, _create_dir
 from iggtools.models.species import Species, sort_list_of_species, parse_species
-
 
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id="", contig_idx=""):
@@ -70,13 +68,13 @@ class SamplePool: # pylint: disable=too-few-public-methods
                 tsprint(f"Create TEMP directory.")
             if dirname == "dbsdir":
                 tsprint(f"Create DBS directory.")
-            _create_dir(self.get_target_layout(dirname), debug, quiet)
+            create_local_dir(self.get_target_layout(dirname), debug, quiet)
 
 
     def create_species_subdirs(self, species_ids, dirname, debug=False, quiet=False):
         dir_to_create = self.get_target_layout(dirname)
         for species_id in species_ids:
-            _create_dir(f"{dir_to_create}/{species_id}", debug, quiet)
+            create_local_dir(f"{dir_to_create}/{species_id}", debug, quiet)
 
 
     def init_samples(self, dbtype):
