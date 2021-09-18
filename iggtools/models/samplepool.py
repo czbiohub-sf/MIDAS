@@ -3,7 +3,8 @@ import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.species import Species, sort_list_of_species, parse_species
-from iggtools.models.sample import Sample
+from iggtools.models.sample import Sample, create_local_dir
+
 
 def get_pool_layout(dbtype=""):
     def per_species(species_id="", chunk_id="", contig_idx=""):
