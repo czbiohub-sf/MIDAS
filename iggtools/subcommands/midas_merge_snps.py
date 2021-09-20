@@ -215,23 +215,6 @@ def design_chunks(midas_db, chunk_size):
     return arguments_list
 
 
-def prepare_annotation_per_species(args):
-    sp, genes_feature_file, genes_seq_file = args
-    sp.prepare_annotation(genes_feature_file, genes_seq_file)
-
-
-def prepare_site_annotation(midas_db, num_cores):
-    global dict_of_species
-    args_list = []
-    for sp in dict_of_species.values():
-        species_id = sp.id
-        genes_feature_file = midas_db.fetch_files("gene_feature", [species_id])[species_id]
-        genes_seq_file = midas_db.fetch_files("gene_seq", [species_id])[species_id]
-        args_list.append((sp, genes_feature_file, genes_seq_file))
-    num_cores = min(num_cores, 4)
-    multithreading_map(prepare_annotation_per_species, args_list, num_cores)
-
-
 def process(packed_args):
 
     species_id, chunk_id = packed_args
@@ -253,6 +236,7 @@ def process(packed_args):
     worker(species_id, chunk_id)
     tsprint(f"  CZ::process::{species_id}-{chunk_id}::finish worker")
 
+
     return "worked"
 
 
@@ -264,7 +248,6 @@ def worker(species_id, chunk_id):
 
     try:
         sp = dict_of_species[species_id]
-
         if chunk_id == -2:
             species_worker(species_id)
         else:
@@ -294,6 +277,7 @@ def species_worker(species_id):
     pooled_snps_dict = call_population_snps(accumulator, species_id)
     write_population_snps(pooled_snps_dict, species_id, -2)
     tsprint(f"    CZ::species_worker::{species_id}--2::finish call_and_write_population_snps")
+
 
 
 def chunk_worker(packed_args):
@@ -338,7 +322,7 @@ def accumulate(accumulator, proc_args):
     global global_args
 
     flag, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args[:5]
-
+    
     if flag == "file":
         loc_fp = proc_args[5]
         filter_cmd = f"grep -Fwf {loc_fp}"

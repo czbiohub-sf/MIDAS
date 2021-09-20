@@ -196,6 +196,7 @@ class Species:
                 dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, -1, chunk_dict["contigs_id"]))
             assert chunk_id == _chunk_id+1
 
+        dict_of_packed_args[-1] = (species_id, -1)
         self.num_of_sites_chunks = chunk_id
         self.chunks_of_sites = dict_of_packed_args
 
