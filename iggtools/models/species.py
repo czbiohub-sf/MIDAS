@@ -26,6 +26,8 @@ class Species:
         self.samples_count = 0
         self.list_of_samples_depth = [] # mean_coverage
         # GENE Features for representative genomes
+        self.genes_feature_file = None
+        self.genes_seq_file = None
         self.genes_feature = None # indexed by contig_id
         self.genes_boundary = None # indexed by contig_id
         self.genes_sequence = None # indexed by gene_id
@@ -157,7 +159,6 @@ class Species:
         # Start with full chunks
         chunk_id = 0
         dict_of_packed_args = defaultdict(list)
-        priority_chunks = []
         unassigned_contigs = defaultdict(dict)
         max_contig_length = 0
 
@@ -173,44 +174,29 @@ class Species:
                 unassigned_contigs[contig_id] = {"contig_id": contig_id,
                                                  "contig_start": 0,
                                                  "contig_end": contig_length,
-                                                 "contig_length": contig_length,
-                                                 "is_complete": True}
+                                                 "contig_length": contig_length}
             else:
                 number_of_full_chunks = floor(contig_length/chunk_size)
                 for ni, ci in enumerate(range(0, contig_length, chunk_size)):
-                    if ni == number_of_full_chunks: # last chunk
-                        unassigned_contigs[contig_id] = {"contig_id": contig_id,
-                                                         "contig_start": ci,
-                                                         "contig_end": contig_length,
-                                                         "contig_length": contig_length - ci,
-                                                         "is_complete": False}
+                    if ni == number_of_full_chunks - 1: # last full chunk: carry over
+                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, contig_length)]
+                        chunk_id += 1
+                        break
                     else:
-                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, ci+chunk_size, False, chunk_id)]
+                        dict_of_packed_args[chunk_id] = [(species_id, chunk_id, contig_id, ci, ci+chunk_size)]
                         chunk_id += 1
 
-        # Partition unassigned short contigs into subsets
-        dict_of_chunks, chunk_id = partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id)
+        if unassigned_contigs:
+            # Partition unassigned short contigs into subsets
+            dict_of_chunks, chunk_id = partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id)
 
-        # Add the partitioned subsets to chunks
-        for chunk_dict in dict_of_chunks.values():
-            _chunk_id = chunk_dict["chunk_id"]
-            list_of_contigs = chunk_dict["contigs_id"]
-            list_of_full_contigs = []
-            for wc_cidx, _cid in enumerate(list_of_contigs):
-                cstart = unassigned_contigs[_cid]["contig_start"]
-                cend = unassigned_contigs[_cid]["contig_end"]
-                cflag = unassigned_contigs[_cid]["is_complete"]
-                if not cflag:
-                    dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, _cid, cstart, cend, cflag, wc_cidx))
-                else:
-                    list_of_full_contigs.append(_cid)
-            if list_of_full_contigs:
-                dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, -1, list_of_full_contigs))
-        assert chunk_id == _chunk_id+1
+            # Add the partitioned subsets to chunks
+            for chunk_dict in dict_of_chunks.values():
+                _chunk_id = chunk_dict["chunk_id"]
+                dict_of_packed_args[_chunk_id].append((species_id, _chunk_id, -1, chunk_dict["contigs_id"]))
+            assert chunk_id == _chunk_id+1
 
-        # Finally the merge jobs
         dict_of_packed_args[-1] = (species_id, -1)
-
         self.num_of_sites_chunks = chunk_id
         self.chunks_of_sites = dict_of_packed_args
 
