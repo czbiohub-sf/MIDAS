@@ -1,4 +1,4 @@
-name: iggtools-test
+name: iggtools
 channels:
  - conda-forge
  - bioconda
