@@ -23,6 +23,7 @@ def get_single_layout(sample_name, dbtype=""):
             "species_summary":         f"{sample_name}/species/species_profile.tsv",
             "markers_summary":         f"{sample_name}/species/markers_profile.tsv",
             "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
+            "species_marker_genes":    f"{sample_name}/temp/species/genes_that_are_marker",
             "species_reads":           f"{sample_name}/temp/species/{species_id}/{chunk_id}.ids",
 
             # snps workflow output
