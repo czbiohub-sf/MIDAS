@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-import os
-import json
-from collections import defaultdict
-from operator import itemgetter
-import multiprocessing
 from bisect import bisect
-import time
 
 
 def acgt_string(A, C, G, T):
@@ -97,7 +91,7 @@ def fetch_ref_codon(ref_pos, curr_gene, curr_seq):
     return ref_codon, within_codon_pos
 
 
-def annotate_site(ref_id, ref_pos, curr_contig, curr_feature, genes_sequence):
+def annotate_site(ref_pos, curr_contig, curr_feature, genes_sequence):
     """ Annotate one genomic site, search against all genes for given species """
     # Binary search the range of the given genomic site position
     index = binary_search_site(curr_contig["boundaries"], ref_pos)

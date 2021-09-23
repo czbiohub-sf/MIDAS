@@ -1,9 +1,8 @@
-import os
 import json
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
+from iggtools.common.bowtie2 import build_bowtie2_db
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.species import parse_species
 

@@ -276,7 +276,7 @@ def assign_unique(alns, markers_info, args):
     tsprint(f" uniquely mapped reads: {sum(unique_counts.values())}")
     tsprint(f" ambiguously mapped reads: {non_unique_counts}")
 
-    return final_unique_alns, final_covered_markers, unique_reads
+    return final_unique_alns, final_covered_markers
 
 
 def assign_non_unique(alns, unique_alns, markers_info, args):
@@ -409,16 +409,16 @@ def write_abundance(species_path, markers_path, species_abundance, markers_abund
         for species_id in output_order:
             r = species_abundance[species_id]
             record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'], r['relative_abundance'],
-                        r['total_covered'], r['unique_covered'], r['ambiguous_covered'],
-                        r['total_marker_counts'], r['unique_fraction_covered'], r['total_marker_length']]
+                      r['total_covered'], r['unique_covered'], r['ambiguous_covered'],
+                      r['total_marker_counts'], r['unique_fraction_covered'], r['total_marker_length']]
             outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
     with OutputStream(markers_path) as outfile:
         outfile.write('\t'.join(species_marker_profile_schema.keys()) + '\n')
         for species_id in output_order:
             for mid, md in markers_abundance[species_id].items():
-                record = [species_id, mid,  md['length'], md["gene_id"], md['total_reads'], md['total_alnbps'],
-                            md['coverage'], md['uniq_reads'], md['ambi_reads'], md['uniq_alnbps'], md['ambi_alnbps']]
+                record = [species_id, mid, md['length'], md["gene_id"], md['total_reads'], md['total_alnbps'],
+                          md['coverage'], md['uniq_reads'], md['ambi_reads'], md['uniq_alnbps'], md['ambi_alnbps']]
                 outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
@@ -447,7 +447,6 @@ def midas_run_species(args):
         tsprint(f"CZ::map_reads_hsblastn::finish")
 
         tsprint(f"CZ::read in marker information::start")
-        species_info = midas_db.uhgg.species
         markers_info, markers_length = read_markers_info(marker_db_files["fa"], marker_db_files["map"])
         tsprint(f"CZ::read in marker information::finish")
 
@@ -457,17 +456,8 @@ def midas_run_species(args):
         tsprint(f"CZ::find_best_hits::finish")
 
         tsprint(f"CZ::assign_unique::start")
-        unique_alns, unique_covered_markers, unique_reads = assign_unique(best_hits, markers_info, args)
+        unique_alns, unique_covered_markers = assign_unique(best_hits, markers_info, args)
         tsprint(f"CZ::assign_unique::finish")
-
-        if False:
-            species_ids_of_interest = list(unique_reads.keys())
-            sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
-            for species_id, vals_dict in unique_reads.items():
-                for marker_id, list_of_reads in vals_dict.items():
-                    out_dir = sample.get_target_layout("species_reads", species_id, marker_id)
-                    with OutputStream(out_dir) as stream:
-                        stream.write("\n".join(list_of_reads) + "\n")
 
         tsprint(f"CZ::assign_non_unique::start")
         ambiguous_alns, ambiguous_covered_markers = assign_non_unique(best_hits, unique_alns, markers_info, args)

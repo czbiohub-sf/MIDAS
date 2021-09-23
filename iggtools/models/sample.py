@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-from collections import defaultdict
 from iggtools.params.schemas import fetch_schema_by_dbtype
 from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
 
@@ -23,7 +22,6 @@ def get_single_layout(sample_name, dbtype=""):
             # species workflow output
             "species_summary":         f"{sample_name}/species/species_profile.tsv",
             "markers_summary":         f"{sample_name}/species/markers_profile.tsv",
-            "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
             "species_alignments_m8":   f"{sample_name}/temp/species/alignments.m8",
             "species_reads":           f"{sample_name}/temp/species/{species_id}/{chunk_id}.ids",
 
@@ -88,10 +86,10 @@ class Sample: # pylint: disable=too-few-public-methods
         schema = fetch_schema_by_dbtype("species")
         assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
 
-        species_ids = []
+        species_ids = list()
         with InputStream(species_profile_fp) as stream:
             for record in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
-                if len(species_list) > 0 and record["species_id"] not in species_list:
+                if species_list and record["species_id"] not in species_list:
                     continue
                 if float(record[args.select_by]) >= args.select_threshold: #
                     species_ids.append(record["species_id"])

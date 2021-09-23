@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, multithreading_map, command, multiprocessing_map
+from iggtools.common.utils import download_reference, command, multiprocessing_map
 from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params.schemas import MARKER_FILE_EXTS

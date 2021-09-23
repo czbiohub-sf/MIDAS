@@ -3,9 +3,9 @@ import json
 import os
 import multiprocessing
 from operator import itemgetter
-import numpy as np
-
 from collections import defaultdict
+
+import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
@@ -187,7 +187,7 @@ def register_args(main_func):
 
 
 def reference_overlap(p, q):
-    return max(0.0,  min(p[1], q[1]) - max(p[0], q[0]) + 1)
+    return max(0.0, min(p[1], q[1]) - max(p[0], q[0]) + 1)
 
 
 def hamming_distance(str1, str2):
@@ -237,7 +237,7 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
     ri = []
     qi = []
 
-    for i in range(0,len(aligned_pos)):
+    for i in range(0, len(aligned_pos)):
 
         boundary = aln.query_alignment_end - reads_overlap if strand == "fwd" else aln.query_alignment_start + reads_overlap - 1
 
@@ -283,8 +283,7 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
 
 
     row = ["func::mismatches_within_overlaps", aln.query_alignment_length, alned_no_gaps, ngaps_r, ngaps_q, aln.query_name,
-            aln.reference_name, aln.reference_start, aln.reference_end, aln.query_length,
-            aln.get_aligned_pairs()]
+           aln.reference_name, aln.reference_start, aln.reference_end, aln.query_length, aln.get_aligned_pairs()]
     if ngaps_qi > 0:
         print("\t".join(map(str, row)))
 
@@ -297,22 +296,20 @@ def mismatches_within_overlaps(aln, reads_overlap, strand):
 
 def debug_overlap(alns):
     aln = alns["fwd"]
-    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
-            aln.reference_name, aln.reference_start, aln.reference_end,
-            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-            reads_overlap, fragment_length, mismatches]
+    row = [aln.reference_name, aln.reference_start, aln.reference_end,
+           aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+           "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+           dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length]
+           #reads_overlap, fragment_length, mismatches, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd]
     print("+++++++++++++++++++++++++++++++++++++++++++")
     print("\t".join(map(format_data, row)))
     print(aln.get_aligned_pairs())
     aln = alns["rev"]
-    row = [reads_overlap_raw, reads_overlap, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd,
-            aln.reference_name, aln.reference_start, aln.reference_end,
-            aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-            "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-            dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length,
-            reads_overlap, fragment_length, mismatches]
+    row = [aln.reference_name, aln.reference_start, aln.reference_end,
+           aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
+           "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
+           dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length]
+           #reads_overlap, fragment_length, mismatches, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd]
     print("\t".join(map(format_data, row)))
     print(aln.get_aligned_pairs())
     assert False, aln.reference_name
@@ -493,7 +490,7 @@ def filter_bam_by_proper_pair(pargs):
                     r = alns["rev"].query_qualities[:b2+1]
                     for i, _ in enumerate(zip(f, r)):
                         (x, y) = _
-                        if x>=y:
+                        if x >= y:
                             r[i] = 0
                         else:
                             f[i] = 0
@@ -693,7 +690,7 @@ def merge_chunks_per_species(species_id):
     cat_files(list_of_chunks_pileup, species_snps_pileup_file, 20)
 
     # The chunk_pilup_path will be used in merge_midas_snps.
-    if False: #not global_args.debug:
+    if not global_args.debug:
         tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
         for s_file in list_of_chunks_pileup:
             command(f"rm -rf {s_file}", quiet=True)
@@ -706,8 +703,8 @@ def merge_chunks_per_species(species_id):
 def assign_contig_reads_to_chunks(lalns_stats_by_contig, species_ids_of_interest):
     global dict_of_species
     dchunk_alns_stats = dict()
-    for spidx in range(0, len(species_ids_of_interest)):
-        species_id = species_ids_of_interest[spidx]
+
+    for spidx, species_id in enumerate(species_ids_of_interest):
         sp = dict_of_species[species_id]
 
         cc_to_ch = defaultdict(lambda: defaultdict(dict))

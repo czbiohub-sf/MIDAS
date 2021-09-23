@@ -5,8 +5,7 @@ from collections import defaultdict
 from math import floor
 import Bio.SeqIO
 
-from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv, cat_files
-from iggtools.models.sample import Sample
+from iggtools.common.utils import InputStream, OutputStream, command, select_from_tsv, cat_files
 from iggtools.params.schemas import genes_feature_schema, CLUSTER_INFO_SCHEMA
 
 
@@ -32,7 +31,7 @@ class Species:
         self.genes_boundary = None # indexed by contig_id
         self.genes_sequence = None # indexed by gene_id
         # Pan genes
-        #self.centroids = defaultdict(dict)
+        self.centroids = defaultdict(dict)
         self.cluster_info = None
         self.num_of_centroids = None
         self.chunks_of_centroids = defaultdict(dict)
@@ -51,7 +50,7 @@ class Species:
                 chunks_of_centroids = json.load(stream)
                 chunk_id = len(chunks_of_centroids.keys())
                 # conver back to int key
-                chunks_of_centroids = {int(k):v for k,v in chunks_of_centroids.items()}
+                chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
         else:
             self.get_cluster_info(midas_db)
             genes_counter = 0

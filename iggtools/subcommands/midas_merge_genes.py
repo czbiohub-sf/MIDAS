@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-import os
 import json
 from collections import defaultdict
-import multiprocessing
 from itertools import repeat
 from math import ceil
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores, cat_files, multithreading_map
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 
@@ -97,7 +95,6 @@ def build_gene_matrices(species_id):
     global global_args
     global dict_of_species
 
-    pid = global_args.cluster_pid
     min_copy = global_args.min_copy
 
     sp = dict_of_species[species_id]
@@ -158,7 +155,6 @@ def write_gene_matrices(accumulator, species_id):
     global dict_of_species
     global pool_of_samples
 
-    sp = dict_of_species[species_id]
     samples_names = dict_of_species[species_id].fetch_samples_names()
 
     for file_type in list(genes_info_schema.keys()):
@@ -192,7 +188,8 @@ def midas_merge_genes(args):
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
         # Download genes_info for every species in the restricted species profile.
-        def chunkify(L, n): return [L[x: x+n] for x in range(0, len(L), n)]
+        def chunkify(L, n):
+            return [L[x: x+n] for x in range(0, len(L), n)]
         chunk_size = ceil(species_counts / args.num_cores)
         midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), args.num_cores)
 

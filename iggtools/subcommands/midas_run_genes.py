@@ -202,7 +202,7 @@ def design_chunks(midas_db, chunk_size):
     global semaphore_for_species
     semaphore_for_species = dict()
 
-    num_cores = min( midas_db.num_cores, 16)
+    num_cores = min(midas_db.num_cores, 16)
     flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
     assert all(flags)
 
@@ -487,17 +487,16 @@ def midas_run_genes(args):
         if args.prebuilt_bowtie2_indexes:
             bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
             bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
 
-            # We only need a list of species that we need to pull the
+            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
             assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+
             tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
             bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
                 for species_id in select_from_tsv(stream, schema={"species_id": str}):
                     bt2_species_list.append(species_id[0])
-
-            # Update species_list: either particular species of interest or species in the bowtie2 indexes
+            # Update species_list: either/or
             species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
         else:
             sample.create_dirs(["bt2_indexes_dir"], args.debug)
@@ -509,7 +508,6 @@ def midas_run_genes(args):
         species_counts = len(species_ids_of_interest)
         assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(len(species_ids_of_interest))
-
 
         tsprint(f"CZ::design_chunks::start")
         global dict_of_species
@@ -523,13 +521,11 @@ def midas_run_genes(args):
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
-
         # Build Bowtie indexes for species in the restricted species profile
         centroids_files = midas_db.fetch_files("centroids", species_ids_of_interest)
         tsprint(f"CZ::build_bowtie2_indexes::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2_indexes::finish")
-
 
         # Align reads to pangenome database
         tsprint(f"CZ::bowtie2_align::start")
@@ -539,14 +535,12 @@ def midas_run_genes(args):
         samtools_index(pangenome_bamfile, args.debug, args.num_cores)
         tsprint(f"CZ::bowtie2_align::finish")
 
-
         tsprint(f"CZ::multiprocessing_map::start")
         total_chunk_counts = sum((sp.num_of_genes_chunks for sp in dict_of_species.values()))
         num_cores = min(args.num_cores, total_chunk_counts)
         tsprint(f"The number of cores will be used to compute coverage is {num_cores}")
         chunks_gene_coverage = multiprocessing_map(_process_one_chunk_of_genes, arguments_list, num_cores)
         tsprint(f"CZ::multiprocessing_map::finish")
-
 
         tsprint(f"CZ::write_species_coverage_summary::start")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))

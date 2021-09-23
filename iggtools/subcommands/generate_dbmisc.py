@@ -258,7 +258,7 @@ def species_cluster_work(args):
     gene_length_file = destpath(get_uhgg_layout(species_id, "genes.len")["pangenome_file"])
     gene_length_dict = dict()
     with InputStream(gene_length_file) as stream:
-        for r in select_from_tsv(stream, schema = PAN_GENE_LENGTH_SCHEMA, result_structure=dict):
+        for r in select_from_tsv(stream, schema=PAN_GENE_LENGTH_SCHEMA, result_structure=dict):
             gene_length_dict[r["gene_id"]] = r["gene_length"]
 
 
