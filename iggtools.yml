@@ -18,3 +18,4 @@ dependencies:
  - bioconda::prokka=1.13
  - bioconda::hs-blastn=0.0.5
  - bioconda::vsearch=2.17.1
+ - bioconda::gffutils=0.10.1

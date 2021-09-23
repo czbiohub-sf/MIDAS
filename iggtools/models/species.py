@@ -50,6 +50,8 @@ class Species:
             with InputStream(chunk_cache_fp) as stream:
                 chunks_of_centroids = json.load(stream)
                 chunk_id = len(chunks_of_centroids.keys())
+                # conver back to int key
+                chunks_of_centroids = {int(k):v for k,v in chunks_of_centroids.items()}
         else:
             self.get_cluster_info(midas_db)
             genes_counter = 0
