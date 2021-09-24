@@ -93,7 +93,17 @@ species_profile_schema = {
     "total_covered_marker": int,
     "unique_covered_marker": int,
     "ambiguous_covered_marker": int,
+    "total_marker_counts": int,
+    "unique_fraction_covered": float,
     "total_marker_length": int,
+}
+
+species_merge_schema = {
+    "species_id": str,
+    "marker_read_counts": int,
+    "median_marker_coverage": float,
+    "marker_coverage": float,
+    "marker_relative_abundance": float,
 }
 
 
@@ -271,7 +281,7 @@ def fetch_schema_by_dbtype(dbtype):
     return schema
 
 
-def format_data(x, decimal = DECIMALS3):
+def format_data(x, decimal=DECIMALS3):
     return format(x, decimal) if isinstance(x, float) else str(x)
 
 

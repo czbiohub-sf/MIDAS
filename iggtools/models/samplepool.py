@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import os
-from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, species_profile_schema, format_data
+from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
 from iggtools.models.species import Species, sort_list_of_species, parse_species
 from iggtools.models.sample import Sample, create_local_dir
-from iggtools.models.species import Species, sort_list_of_species, parse_species
 
 
 def get_pool_layout(dbtype=""):

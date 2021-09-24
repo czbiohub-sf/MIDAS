@@ -5,8 +5,7 @@ from collections import defaultdict
 from math import floor
 import Bio.SeqIO
 
-from iggtools.common.utils import tsprint, InputStream, OutputStream, command, select_from_tsv, cat_files
-from iggtools.models.sample import Sample
+from iggtools.common.utils import InputStream, OutputStream, command, select_from_tsv, cat_files
 from iggtools.params.schemas import genes_feature_schema, CLUSTER_INFO_SCHEMA
 
 
@@ -32,7 +31,7 @@ class Species:
         self.genes_boundary = None # indexed by contig_id
         self.genes_sequence = None # indexed by gene_id
         # Pan genes
-        #self.centroids = defaultdict(dict)
+        self.centroids = defaultdict(dict)
         self.cluster_info = None
         self.num_of_centroids = None
         self.chunks_of_centroids = defaultdict(dict)
@@ -51,7 +50,7 @@ class Species:
                 chunks_of_centroids = json.load(stream)
                 chunk_id = len(chunks_of_centroids.keys())
                 # conver back to int key
-                chunks_of_centroids = {int(k):v for k,v in chunks_of_centroids.items()}
+                chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
         else:
             self.get_cluster_info(midas_db)
             genes_counter = 0
@@ -304,6 +303,17 @@ def parse_species(args):
         else:
             species_list = args.species_list.split(",")
     return species_list
+
+
+def filter_species(profile_fp, select_by, select_threhold, species_list = []):
+    species_ids = list()
+    with InputStream(profile_fp) as stream:
+        for record in select_from_tsv(stream, selected_columns=["species_id", select_by], result_structure=dict):
+            if species_list and record["species_id"] not in species_list:
+                continue
+            if float(record[select_by]) >= select_threhold: #<--
+                species_ids.append(record["species_id"])
+    return species_ids
 
 
 def sort_list_of_species(list_of_species, rev=True):

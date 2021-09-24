@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-import os
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, retry, InputStream, OutputStream, command, multithreading_map, find_files, upload, num_physical_cores, split, upload_star
-from iggtools.models.midasdb import MIDAS_DB, MARKER_FILE_EXTS
+from iggtools.common.utils import tsprint, command
+from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.species import parse_species
 
 CONCURRENT_DOWNLOAD = 20
@@ -36,27 +35,6 @@ def register_args(main_func):
     return main_func
 
 
-def scan_species(filename):
-    splist = []
-    with InputStream(filename) as stream:
-        for line in stream:
-            splist.append(line.strip("\n"))
-    return splist
-
-
-def parse_species(args):
-    species_list = []
-    if args.species_list:
-        if os.path.exists(args.species_list):
-            with InputStream(args.species_list) as stream:
-                for line in stream:
-                    species_list.append(line.strip())
-        else:
-            species_list = args.species_list.split(",")
-
-    return species_list
-
-
 def download_midasdb(args):
     try:
         midas_db = MIDAS_DB(args.midas_db, args.num_cores)
@@ -80,8 +58,8 @@ def download_midasdb(args):
         midas_db.fetch_files("prokka_genome", list_of_species)
         midas_db.fetch_files("centroids", list_of_species)
 
-        marker_db_files = midas_db.fetch_files("marker_db")
-        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
+        midas_db.fetch_files("marker_db")
+        midas_db.fetch_files("marker_db_hmm_cutoffs")
 
     except Exception as error:
         if not args.debug:

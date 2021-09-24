@@ -1,11 +1,10 @@
-import os
 import json
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_index_exists
+from iggtools.common.bowtie2 import build_bowtie2_db
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.species import parse_species
+from iggtools.models.species import parse_species, filter_species
 
 
 def register_args(main_func):
@@ -69,17 +68,11 @@ def build_bowtie2_indexes(args):
     try:
         if args.species_list:
             species_ids_of_interest = parse_species(args)
-        # this part is under development
         elif args.species_profile and args.select_by and args.select_threshold:
-            species_ids_of_interest = []
-            with InputStream(args.species_profile) as stream:
-                for row in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
-                    if float(row[args.select_by]) >= args.select_threshold:
-                        species_ids_of_interest.append(row["species_id"])
+            species_ids_of_interest = filter_species(args.species_profile, args.select_by, args.select_threshold)
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
         tsprint(f"CZ::build_bowtie2_indexes::build bt2 indexees for the listed species: {species_ids_of_interest}")
-
 
         # Fetch UHGG related files
         midas_db = MIDAS_DB(args.midas_db, args.num_cores)

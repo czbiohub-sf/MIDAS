@@ -6,10 +6,10 @@ import numpy as np
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, OutputStream
-from iggtools.params.schemas import species_profile_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
+from iggtools.params.schemas import species_merge_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
 
 
-DEFAULT_MARKER_DEPTH = fetch_default_genome_depth("species")
+DEFAULT_MARKER_DEPTH = 0.0
 
 
 def register_args(main_func):
@@ -88,8 +88,7 @@ def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
 def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
     sample_names = pool_of_samples.fetch_samples_names()
-    #col_names = list(species_profile_schema.keys())[1:]
-    col_names = ["marker_read_counts", "median_marker_coverage", "marker_coverage", "marker_relative_abundance"]
+    col_names = list(species_merge_schema.keys())[1:]
 
     for col in col_names:
         outpath = pool_of_samples.get_target_layout(f"species_{col}")
@@ -112,15 +111,14 @@ def midas_merge_species(args):
 
         # Slice the across-samples species profile matrix by species_id
         tsprint(f"CZ::write_species_results::start")
-        #cols = list(species_profile_schema.keys())[1:]
-        cols = ["marker_read_counts", "median_marker_coverage", "marker_coverage", "marker_relative_abundance"]
+        cols = list(species_merge_schema.keys())[1:]
         transposed = transpose(pool_of_samples, cols)
         write_species_results(pool_of_samples, transposed)
         tsprint(f"CZ::write_species_results::finish")
 
         # Calculate summary statistics for coverage and relative abundance
         tsprint(f"CZ::write_stats::start")
-        stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])
+        stats = compute_stats(transposed["marker_relative_abundance"], transposed["median_marker_coverage"]) #<-- marker_coverage
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
         tsprint(f"CZ::write_stats::finish")
 

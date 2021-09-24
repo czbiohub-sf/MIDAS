@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
-import os
 import json
-from collections import defaultdict
 from operator import itemgetter
 import multiprocessing
-from bisect import bisect
-import time
 
 from iggtools.models.samplepool import SamplePool
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, multithreading_map, select_from_tsv, cat_files
+from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files
 from iggtools.common.utility import annotate_site, acgt_string
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
-from iggtools.models.species import Species, read_gene_features, scan_fasta, generate_boundaries
+from iggtools.models.species import read_gene_features, scan_fasta, generate_boundaries
 from iggtools.common.argparser import add_subcommand
 
 
@@ -322,7 +318,6 @@ def accumulate(accumulator, proc_args):
     global global_args
 
     flag, sample_index, snps_pileup_path, total_samples_count, genome_coverage = proc_args[:5]
-    
     if flag == "file":
         loc_fp = proc_args[5]
         filter_cmd = f"grep -Fwf {loc_fp}"
@@ -448,7 +443,7 @@ def call_population_snps(accumulator, species_id):
         if ref_id not in genes_boundary:
             annots = ("IGR",) # short contigs may not carry any gene
         else:
-            annots = annotate_site(ref_id, ref_pos, genes_boundary[ref_id], genes_feature[ref_id], genes_sequence) #<--
+            annots = annotate_site(ref_pos, genes_boundary[ref_id], genes_feature[ref_id], genes_sequence) #<--
 
         locus_type = annots[0]
         gene_id = annots[1] if len(annots) > 1 else None
