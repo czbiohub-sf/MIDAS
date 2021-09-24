@@ -144,7 +144,8 @@ def parse_reads(filename, max_reads=None):
 
 def map_reads_hsblastn(m8_file, r1, r2, word_size, markers_db, max_reads, num_cores):
     assert os.path.exists(os.path.dirname(m8_file)), f"{m8_file} doesn't exit."
-    blast_command = f"hs-blastn align -word_size {word_size} -query /dev/stdin -db {markers_db} -outfmt 6 -num_threads {num_cores} -evalue 1e-3"
+    blast_command = f"hs-blastn align -outfmt 6 -num_threads {num_cores} -evalue 1e-3 -word_size {word_size} -query /dev/stdin -db {markers_db}"
+    #blast_command = f"hs-blastn -outfmt 6 -num_threads {num_cores} -evalue 1e-3 /dev/stdin {markers_db}"
     with OutputStream(m8_file, through=blast_command) as blast_input:
         for qid, seq in chain(parse_reads(r1, max_reads), parse_reads(r2, max_reads)):
             blast_input.write(">" + qid + "\n" + seq + "\n")
