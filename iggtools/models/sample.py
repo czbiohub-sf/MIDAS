@@ -88,7 +88,7 @@ class Sample: # pylint: disable=too-few-public-methods
         schema = fetch_schema_by_dbtype("species")
         assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
 
-        species_ids = filter_species(args.species_profile, args.select_by, args.select_threshold, species_list)
+        species_ids = filter_species(species_profile_fp, args.select_by, args.select_threshold, species_list)
         return species_ids
 
 
