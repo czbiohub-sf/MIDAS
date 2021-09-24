@@ -52,6 +52,8 @@ RUN ln -s /usr/local/queries/Linux-amd64/bin/hs-blastn /usr/local/bin/hs-blastn
 RUN apt-get install -y mdadm xfsprogs htop
 RUN pip3 install awscli --upgrade
 RUN pip3 install --upgrade 'git+git://github.com/chanzuckerberg/s3mi.git'
+# We need sudo to exist for some s3mi commands, even though it doesn't do anything
+RUN apt-get install -y sudo
 
 
 # This layer re-installs tbl2asn, which is a component of blast that expires after 6 months,
