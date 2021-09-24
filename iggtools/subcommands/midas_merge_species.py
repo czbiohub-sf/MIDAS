@@ -9,7 +9,7 @@ from iggtools.common.utils import tsprint, OutputStream
 from iggtools.params.schemas import species_merge_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
 
 
-DEFAULT_MARKER_DEPTH = fetch_default_genome_depth("species")
+DEFAULT_MARKER_DEPTH = 0.0
 
 
 def register_args(main_func):
@@ -118,7 +118,7 @@ def midas_merge_species(args):
 
         # Calculate summary statistics for coverage and relative abundance
         tsprint(f"CZ::write_stats::start")
-        stats = compute_stats(transposed["relative_abundance"], transposed["coverage"])
+        stats = compute_stats(transposed["marker_relative_abundance"], transposed["median_marker_coverage"]) #<-- marker_coverage
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
         tsprint(f"CZ::write_stats::finish")
 
