@@ -305,6 +305,17 @@ def parse_species(args):
     return species_list
 
 
+def filter_species(profile_fp, select_by, select_threhold, species_list = []):
+    species_ids = list()
+    with InputStream(profile_fp) as stream:
+        for record in select_from_tsv(stream, selected_columns=["species_id", select_by], result_structure=dict):
+            if species_list and record["species_id"] not in species_list:
+                continue
+            if float(record[select_by]) >= select_threhold: #<--
+                species_ids.append(record["species_id"])
+    return species_ids
+
+
 def sort_list_of_species(list_of_species, rev=True):
     """ Sort list_of_species by samples_count in descending order """
     species_sorted = sorted(((sp, len(sp.list_of_samples)) for sp in list_of_species), key=lambda x: x[1], reverse=rev)

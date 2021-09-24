@@ -2,6 +2,7 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype
 from iggtools.common.utils import InputStream, select_from_tsv, command, tsprint
+from iggtools.models.species import filter_species
 
 
 # Executable Documentation
@@ -87,13 +88,7 @@ class Sample: # pylint: disable=too-few-public-methods
         schema = fetch_schema_by_dbtype("species")
         assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
 
-        species_ids = list()
-        with InputStream(species_profile_fp) as stream:
-            for record in select_from_tsv(stream, selected_columns=["species_id", args.select_by], result_structure=dict):
-                if species_list and record["species_id"] not in species_list:
-                    continue
-                if float(record[args.select_by]) >= args.select_threshold: #
-                    species_ids.append(record["species_id"])
+        species_ids = filter_species(args.species_profile, args.select_by, args.select_threshold, species_list)
         return species_ids
 
 
