@@ -3,7 +3,7 @@ FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND noninteractive
 
 # File Author / Maintainer
-MAINTAINER MICROBIOME-IGG Contributors bdimitrov@chanzuckerberg.com chunyu.zhao@czbiohub.org
+MAINTAINER MICROBIOME-IGG Contributors bdimitrov@chanzuckerberg.com
 
 
 # Ubuntu
