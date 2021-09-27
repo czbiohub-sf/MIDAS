@@ -249,6 +249,15 @@ def _process_one_chunk_of_genes(packed_args):
     return ret
 
 
+def load_chunks_of_centroids_cache(chunk_cache_fp):
+    assert os.path.exists(chunk_cache_fp), f"{chunk_cache_fp} doesn't exit"
+    with InputStream(chunk_cache_fp) as stream:
+        chunks_of_centroids = json.load(stream)
+        # conver back to int key
+        chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
+    return chunks_of_centroids
+
+
 def compute_coverage_per_chunk(species_id, chunk_id):
     """ Count number of bp mapped to each pan-gene. """
 
@@ -259,7 +268,8 @@ def compute_coverage_per_chunk(species_id, chunk_id):
 
     try:
         sp = dict_of_species[species_id]
-        chunks_of_centroids = sp.chunks_of_centroids
+        chunks_of_centroids = load_chunks_of_centroids_cache(sp.chunks_of_centroids_fp)
+        #chunks_of_centroids = sp.chunks_of_centroids
         dict_of_genes_are_markers = sp.dict_of_genes_are_markers
 
         chunk_of_genes_length = chunks_of_centroids[chunk_id]

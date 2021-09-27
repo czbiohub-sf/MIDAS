@@ -34,7 +34,8 @@ class Species:
         self.centroids = defaultdict(dict)
         self.cluster_info = None
         self.num_of_centroids = None
-        self.chunks_of_centroids = defaultdict(dict)
+        self.chunks_of_centroids_fp = None
+        #self.chunks_of_centroids = defaultdict(dict)
         self.num_of_genes_chunks = 0
         self.dict_of_genes_are_markers = []
         self.list_of_markers = []
@@ -45,12 +46,14 @@ class Species:
         species_id = self.id
 
         chunk_cache_fp = midas_db.get_target_layout("cache_gene_chunks", False, "chunks_of_centroids", species_id, chunk_size)
+        self.chunks_of_centroids_fp = chunk_cache_fp
+
         if self.cache and os.path.exists(chunk_cache_fp):
             with InputStream(chunk_cache_fp) as stream:
                 chunks_of_centroids = json.load(stream)
                 chunk_id = len(chunks_of_centroids.keys())
                 # conver back to int key
-                chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
+                #chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
         else:
             self.get_cluster_info(midas_db)
             genes_counter = 0
@@ -71,12 +74,12 @@ class Species:
             chunks_of_centroids[chunk_id] = curr_chunk_of_genes
             chunk_id += 1
 
-            if self.cache:
+            if not os.path.exists(chunk_cache_fp):
                 with OutputStream(chunk_cache_fp) as stream:
                     json.dump(chunks_of_centroids, stream)
 
         self.num_of_genes_chunks = chunk_id
-        self.chunks_of_centroids = chunks_of_centroids
+        #self.chunks_of_centroids = chunks_of_centroids
 
         return True
 
