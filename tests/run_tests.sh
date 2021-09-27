@@ -41,7 +41,7 @@ cat ${samples_fp} | xargs -Ixx bash -c "python3 -m iggtools midas_run_snps --sam
 
 
 echo "test midas_run_genes"
-cat ${samples_fp} | xargs -Ixx bash -c "python3 -m iggtools midas_run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} --midas_db ${midas_db} --select_by median_marker_coverage --select_threshold 0.5 ${midas_outdir}  &> ${logs_dir}/xx_genes_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "python3 -m iggtools midas_run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} --midas_db ${midas_db} --select_by median_marker_coverage --select_threshold 0.5 --cache ${midas_outdir}  &> ${logs_dir}/xx_genes_${num_cores}.log"
 
 
 echo "test midas_merge_species"
