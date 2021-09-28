@@ -41,12 +41,11 @@ RUN prokka --version
 # In future we should append a layer that re-installs tbl2asn, which is a component
 # of blast that expires after 6 months, and is needed by prokka.  Uncomment this layer
 # when your jobs started failing in Prokka with error that tbl2asn is expired.
-WORKDIR /tmp
-RUN wget ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/converters/by_program/tbl2asn/linux64.tbl2asn.gz && \
-    gunzip linux64.tbl2asn.gz && \
-    mv linux64.tbl2asn tbl2asn && \
-    chmod +x tbl2asn && \
-    mv tbl2asn /usr/local/prokka/binaries/linux/
+#RUN wget ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/converters/by_program/tbl2asn/linux64.tbl2asn.gz && \
+#    gunzip linux64.tbl2asn.gz && \
+#    mv linux64.tbl2asn tbl2asn && \
+#    chmod +x tbl2asn && \
+#    mv tbl2asn /usr/local/prokka/binaries/linux/
 
 # AWS instance setup
 RUN apt-get install -y mdadm xfsprogs htop
