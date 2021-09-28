@@ -2,11 +2,13 @@
 import os
 import sys
 from multiprocessing import Semaphore
+from itertools import chain
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, download_reference
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath, unified_genome_id
 from iggtools.params import outputs
 from iggtools.subcommands.import_uhgg import decode_genomes_arg
+from iggtools.subcommands.build_pangenome import decode_species_arg
 
 
 CONCURRENT_PROKKA_RUNS = Semaphore(6)
@@ -106,8 +108,16 @@ def annotate_genome_master(args):
                 if not args.debug:
                     command(f"rm -rf {slave_subdir}", check=False)
 
-    genome_id_list = decode_genomes_arg(args, species_for_genome)
-    multithreading_map(genome_work, genome_id_list, num_threads=20)
+    if args.genomes:
+        genome_id_list = decode_genomes_arg(args, species_for_genome)
+    if args.species:
+        species = db.species
+        species_id_list = decode_species_arg(args, species)
+        print(species_id_list)
+        genome_id_list = list(chain.from_iterable([list(species[spid].keys()) for spid in species_id_list]))
+        print(len(species_id_list), len(genome_id_list))
+    exit(0)
+    #multithreading_map(genome_work, genome_id_list, num_threads=20)
 
 
 def annotate_genome_slave(args):
@@ -150,6 +160,10 @@ def register_args(main_func):
                            dest='genomes',
                            required=False,
                            help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning annotate genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
+    subparser.add_argument('--species',
+                           dest='species',
+                           required=False,
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
     subparser.add_argument('--zzz_slave_toc',
                            dest='zzz_slave_toc',
                            required=False,
