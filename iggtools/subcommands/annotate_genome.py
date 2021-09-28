@@ -113,11 +113,9 @@ def annotate_genome_master(args):
     if args.species:
         species = db.species
         species_id_list = decode_species_arg(args, species)
-        print(species_id_list)
         genome_id_list = list(chain.from_iterable([list(species[spid].keys()) for spid in species_id_list]))
-        print(len(species_id_list), len(genome_id_list))
-    exit(0)
-    #multithreading_map(genome_work, genome_id_list, num_threads=20)
+    
+    multithreading_map(genome_work, genome_id_list, num_threads=20)
 
 
 def annotate_genome_slave(args):
