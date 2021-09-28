@@ -59,11 +59,12 @@ RUN apt-get install -y sudo
 # This layer re-installs tbl2asn, which is a component of blast that expires after 6 months,
 # and is needed by prokka.  Force rebuild of this layer when your jobs start failing in Prokka
 # with error message indicating that tbl2asn has expired.
-#RUN wget ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/converters/by_program/tbl2asn/linux.tbl2asn.gz && \
-#    gunzip linux.tbl2asn.gz && \
-#    mv linux.tbl2asn tbl2asn && \
-#    chmod +x tbl2asn && \
-#    mv tbl2asn /usr/local/prokka/binaries/linux/
+WORKDIR /tmp
+RUN wget ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/converters/by_program/tbl2asn/linux64.tbl2asn.gz && \
+    gunzip linux64.tbl2asn.gz && \
+    mv linux64.tbl2asn tbl2asn && \
+    chmod +x tbl2asn && \
+    mv tbl2asn /usr/local/prokka/binaries/linux/
 
 
 # Cleanup
