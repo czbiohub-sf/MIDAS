@@ -173,6 +173,18 @@ snps_chunk_summary_schema = {
 }
 
 
+snps_pileup_basic_schema = {
+    "ref_id": str,
+    "ref_pos": int,
+    "ref_allele": str,
+    "depth": int,
+    "count_a": int,
+    "count_c": int,
+    "count_g": int,
+    "count_t": int,
+}
+
+
 snps_pileup_schema = {
     "ref_id": str,
     "ref_pos": int,
@@ -182,6 +194,11 @@ snps_pileup_schema = {
     "count_c": int,
     "count_g": int,
     "count_t": int,
+    "major_allele": str,
+    "minor_allele": str,
+    "major_allele_freq": float,
+    "minor_allele_freq": float,
+    "allele_counts": int,
 }
 
 

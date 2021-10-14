@@ -169,19 +169,6 @@ def register_args(main_func):
     return main_func
 
 
-def _print_aln(aln):
-    """ For debugging purpose, print out filter related information """
-    rname = aln.reference_name
-    qname = aln.query_name
-    align_len = len(aln.query_alignment_sequence)
-    query_len = aln.query_length
-    pid = 100 * (align_len - dict(aln.tags)['NM']) / float(align_len)
-    readq = np.mean(aln.query_qualities)
-    mapq = aln.mapping_quality
-    alncov = align_len / float(query_len)
-    return [rname, qname, aln.qstart, aln.qend, pid, readq, mapq, alncov, aln.is_secondary]
-
-
 def keep_read(aln):
     global global_args
     args = global_args

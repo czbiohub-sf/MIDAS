@@ -6,8 +6,9 @@ import multiprocessing
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files
 from iggtools.common.utility import annotate_site, acgt_string
+from iggtools.common.snvs import call_alleles
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.schemas import snps_pileup_schema, snps_info_schema, format_data
+from iggtools.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
 from iggtools.models.species import read_gene_features, scan_fasta, generate_boundaries
 from iggtools.common.argparser import add_subcommand
 
@@ -142,26 +143,6 @@ def register_args(main_func):
     return main_func
 
 
-def call_alleles(tuple_of_alleles, site_depth, snp_maf):
-    """ Compute the pooled allele frequencies and call SNPs """
-
-    # Only when you have seen all the revelant samples, you can call SNPs
-    # keep alleles passing the min allele frequency
-    alleles_above_cutoff = tuple(al for al in tuple_of_alleles if al[1] / site_depth >= snp_maf)
-
-    # classify SNPs type
-    number_alleles = len(alleles_above_cutoff)
-    snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
-
-    # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
-    # the one that comes later in the "ACGT" lexicographic order.
-    alleles_above_cutoff = sorted(alleles_above_cutoff, key=itemgetter(1), reverse=True)[:2]
-    major_allele = alleles_above_cutoff[0][0]
-    minor_allele = alleles_above_cutoff[-1][0] # for fixed sites, same as major allele
-
-    return (major_allele, minor_allele, snp_type)
-
-
 def calculate_chunk_size(samples_count, chunk_size):
     if samples_count <= 10:
         return 0
@@ -275,7 +256,6 @@ def species_worker(species_id):
     tsprint(f"    CZ::species_worker::{species_id}--2::finish call_and_write_population_snps")
 
 
-
 def chunk_worker(packed_args):
     """ Accumulate sample by sample and filter population SNPs """
     global pool_of_samples
@@ -331,7 +311,7 @@ def accumulate(accumulator, proc_args):
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
 
     with InputStream(snps_pileup_path, filter_cmd) as stream:
-        for row in select_from_tsv(stream, schema=snps_pileup_schema, result_structure=dict):
+        for row in select_from_tsv(stream, schema=snps_pileup_schema, selected_columns=snps_pileup_basic_schema, result_structure=dict):
             # Unpack frequently accessed columns
             ref_id, ref_pos, ref_allele = row["ref_id"], row["ref_pos"], row["ref_allele"]
             A, C, G, T, depth = row["count_a"], row["count_c"], row["count_g"], row["count_t"], row["depth"]
@@ -419,7 +399,10 @@ def call_population_snps(accumulator, species_id):
             site_depth = count_samples
             tuple_of_alleles = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
 
-        major_allele, minor_allele, snp_type = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
+        major_allele, minor_allele, snp_type, number_alleles = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
+        if number_alleles == 0:
+            continue
+
         major_index = 'ACGT'.index(major_allele)
         minor_index = 'ACGT'.index(minor_allele)
 

@@ -15,11 +15,11 @@ from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_so
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema
 from iggtools.models.sample import Sample
 from iggtools.models.species import Species, collect_units_per_chunk, parse_species
+from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
 
 
 DEFAULT_MARKER_DEPTH = 5.0
 DEFAULT_MARKER_MEDIAN_DEPTH = 0
-
 
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 10
@@ -30,6 +30,9 @@ DEFAULT_ALN_TRIM = 0
 
 DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
+
+DEFAULT_SITE_DEPTH = 2
+DEFAULT_SNP_MAF = 0.05
 
 
 def register_args(main_func):
@@ -156,10 +159,6 @@ def register_args(main_func):
                            help=f"Only recruit properly paired reads for pileup.")
 
     # File related
-    subparser.add_argument('--sparse',
-                           action='store_true',
-                           default=True,
-                           help=f"Omit zero rows from output.")
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
@@ -178,141 +177,20 @@ def register_args(main_func):
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
 
-    subparser.add_argument('--sim_exp',
-                           dest='sim_exp',
-                           action='store_true',
-                           default=False,
-                           help=f"Simulation experiments")
+    subparser.add_argument('--site_depth',
+                           dest='site_depth',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SITE_DEPTH,
+                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
+    subparser.add_argument('--snp_maf',
+                           dest='snp_maf',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_SNP_MAF,
+                           help=f"Minimum single sample minor-allele_frequency to call an allele present ({DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
+
     return main_func
-
-
-def reference_overlap(p, q):
-    return max(0.0, min(p[1], q[1]) - max(p[0], q[0]) + 1)
-
-
-def hamming_distance(str1, str2):
-    assert len(str1) == len(str2), f"Two input strings for hamming_distance are different length."
-    hd = 0
-    for i in range(len(str1)):
-        if str1[i] != str2[i]:
-            hd += 1
-    return hd
-
-
-def position_within_overlap(pos, strand, boundary):
-    """ Check if given position is within the overlap range """
-    if strand == "fwd" and pos is not None and pos >= boundary:
-        return True
-    if strand == "rev" and pos is not None and pos <= boundary:
-        return True
-    return False
-
-
-def update_overlap(reads_overlap, aln):
-    """ The actual overlap should substract the number of gaps in the forward read """
-    aligned_pos = aln.get_aligned_pairs()
-    ngaps = 0
-    for i in range(0, len(aligned_pos)):
-        if aligned_pos[i][1] is not None and aligned_pos[i][1] >= aln.reference_end - reads_overlap and aligned_pos[i][0] is None:
-            ngaps += 1
-    return reads_overlap - ngaps
-
-
-def mismatches_within_overlaps(aln, reads_overlap, strand):
-    """ For given alignment, compute NM within and outside overlap with paired read """
-
-    # reference sequence that is covered by reads alignment
-    ref_seq = aln.get_reference_sequence()
-    # aligned portion of the read
-    qry_seq = aln.query_alignment_sequence
-    # a list of aligned read (query) and reference positions
-    aligned_pos = aln.get_aligned_pairs()
-
-    ngaps_qi = 0
-    ngaps_ri = 0
-    ngaps_qo = 0
-    ngaps_ro = 0
-    ro = []
-    qo = []
-    ri = []
-    qi = []
-
-    for i in range(0, len(aligned_pos)):
-
-        boundary = aln.query_alignment_end - reads_overlap if strand == "fwd" else aln.query_alignment_start + reads_overlap - 1
-
-        if position_within_overlap(aligned_pos[i][0], strand, boundary):
-            # The aligned position is witin the overlap
-            if aligned_pos[i][0] is None:
-                qi.append("-")
-                ngaps_qi += 1
-            else:
-                qi.append(qry_seq[aligned_pos[i][0] - aln.query_alignment_start])
-
-            if aligned_pos[i][1] is None:
-                ri.append("-")
-                ngaps_ri += 1
-            else:
-                ri.append(ref_seq[aligned_pos[i][1] - aln.reference_start])
-        else:
-            # The aligned position is outside the overlap
-            if aligned_pos[i][0] is None:
-                qo.append("-")
-                ngaps_qo += 1
-            else:
-                qo.append(qry_seq[aligned_pos[i][0] - aln.query_alignment_start])
-
-            if aligned_pos[i][1] is None:
-                ro.append("-")
-                ngaps_ro += 1
-            else:
-                ro.append(ref_seq[aligned_pos[i][1] - aln.reference_start])
-
-    ro = "".join(ro)
-    qo = "".join(qo)
-    nm_out = hamming_distance(ro.upper(), qo.upper())
-
-    ri = "".join(ri)
-    qi = "".join(qi)
-    nm_in = hamming_distance(ri.upper(), qi.upper())
-
-    alned_no_gaps = len((ri + ro).replace("-", ""))
-
-    ngaps_q = ngaps_qi + ngaps_qo
-    ngaps_r = ngaps_ri + ngaps_ro
-
-
-    row = ["func::mismatches_within_overlaps", aln.query_alignment_length, alned_no_gaps, ngaps_r, ngaps_q, aln.query_name,
-           aln.reference_name, aln.reference_start, aln.reference_end, aln.query_length, aln.get_aligned_pairs()]
-    if ngaps_qi > 0:
-        print("\t".join(map(str, row)))
-
-    #assert ngaps_qi == 0
-    #assert aln.query_alignment_length == len((qi + qo).replace("-", ""))
-    #assert aln.query_alignment_length + ngaps_q == alned_no_gaps + ngaps_r, "\n".join(map(str, row)) + "\n"
-
-    return (nm_out, nm_in, ngaps_ri, ngaps_ro)
-
-
-def debug_overlap(alns):
-    aln = alns["fwd"]
-    row = [aln.reference_name, aln.reference_start, aln.reference_end,
-           aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-           "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-           dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length]
-           #reads_overlap, fragment_length, mismatches, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd]
-    print("+++++++++++++++++++++++++++++++++++++++++++")
-    print("\t".join(map(format_data, row)))
-    print(aln.get_aligned_pairs())
-    aln = alns["rev"]
-    row = [aln.reference_name, aln.reference_start, aln.reference_end,
-           aln.query_name, aln.query_alignment_start, aln.query_alignment_end,
-           "R1" if aln.is_read1 else "R2", "rev" if aln.is_reverse else "fwd",
-           dict(aln.tags)['NM'], aln.query_alignment_length, aln.query_length]
-           #reads_overlap, fragment_length, mismatches, ngaps_ri_rev, ngaps_ro_rev, ngaps_ri_fwd, ngaps_ro_fwd]
-    print("\t".join(map(format_data, row)))
-    print(aln.get_aligned_pairs())
-    assert False, aln.reference_name
 
 
 def keep_read(aln):
@@ -322,6 +200,48 @@ def keep_read(aln):
     if not args.paired_only:
         return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
     return True
+
+
+def design_chunks_per_species(args):
+    sp, midas_db, chunk_size = args
+    return sp.design_snps_chunks(midas_db, chunk_size)
+
+
+def design_chunks(species_ids_of_interest, midas_db, chunk_size):
+    """ Chunks of continuous genomics sites, indexed by species_id, chunk_id """
+
+    global semaphore_for_species
+    global dict_of_species
+
+    # Read-only global variables
+    semaphore_for_species = dict()
+    dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
+
+    # Design chunks structure per species
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4) #<---
+    assert all(flags)
+
+    # Sort species by the largest contig length
+    sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
+
+    arguments_list = []
+    for species_id, _ in sorted_tuples_of_species:
+        sp = dict_of_species[species_id]
+
+        # The structure of the chunks depends on the representative genome sequences
+        num_of_sites_chunks = sp.num_of_sites_chunks
+        for chunk_id in range(0, num_of_sites_chunks):
+            arguments_list.append((species_id, chunk_id))
+
+        # Create a semaphore with number_of_chunks of elements
+        semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
+        for _ in range(num_of_sites_chunks):
+            semaphore_for_species[species_id].acquire()
+
+    for species_id in dict_of_species.keys():
+        arguments_list.append((species_id, -1))
+
+    return arguments_list
 
 
 def filter_bam_by_single_read(pargs):
@@ -523,48 +443,6 @@ def filter_bam_by_proper_pair(pargs):
     return reads_stats
 
 
-def design_chunks_per_species(args):
-    sp, midas_db, chunk_size = args
-    return sp.design_snps_chunks(midas_db, chunk_size)
-
-
-def design_chunks(species_ids_of_interest, midas_db, chunk_size):
-    """ Chunks of continuous genomics sites, indexed by species_id, chunk_id """
-
-    global semaphore_for_species
-    global dict_of_species
-
-    # Read-only global variables
-    semaphore_for_species = dict()
-    dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
-
-    # Design chunks structure per species
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], 4) #<---
-    assert all(flags)
-
-    # Sort species by the largest contig length
-    sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
-
-    arguments_list = []
-    for species_id, _ in sorted_tuples_of_species:
-        sp = dict_of_species[species_id]
-
-        # The structure of the chunks depends on the representative genome sequences
-        num_of_sites_chunks = sp.num_of_sites_chunks
-        for chunk_id in range(0, num_of_sites_chunks):
-            arguments_list.append((species_id, chunk_id))
-
-        # Create a semaphore with number_of_chunks of elements
-        semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_sites_chunks)
-        for _ in range(num_of_sites_chunks):
-            semaphore_for_species[species_id].acquire()
-
-    for species_id in dict_of_species.keys():
-        arguments_list.append((species_id, -1))
-
-    return arguments_list
-
-
 def process_one_chunk_of_sites(packed_args):
     """ Process one chunk: either pileup or merge and write results to disk """
 
@@ -626,7 +504,6 @@ def pileup_per_unit(packed_args):
     repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
     headerless_sliced_path = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, within_chunk_cid)
 
-    zero_rows_allowed = not global_args.sparse
     current_chunk_size = contig_end - contig_start
     contig_seq = dict_of_species[species_id].contigs[contig_id]["seq"]
 
@@ -656,13 +533,28 @@ def pileup_per_unit(packed_args):
 
             ref_pos = within_chunk_index + contig_start
             ref_allele = contig_seq[ref_pos]
-            row = (contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t)
+            row = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
 
             aln_stats["contig_total_depth"] += depth
-            if depth > 0:
-                aln_stats["contig_covered_bases"] += 1
-            if depth > 0 or zero_rows_allowed:
-                stream.write("\t".join(map(format_data, row)) + "\n")
+            if depth < global_args.site_depth:
+                continue
+            aln_stats["contig_covered_bases"] += 1
+
+            rc_ACGT = [count_a, count_c, count_g, count_t]
+            tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
+            major_allele, minor_allele, snp_type, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
+
+            if allele_counts == 0:
+                continue
+            
+            major_index = 'ACGT'.index(major_allele)
+            minor_index = 'ACGT'.index(minor_allele)
+            major_allelefreq = rc_ACGT[major_index] / depth
+            minor_allelefreq = 0.0 if major_index == minor_index else rc_ACGT[minor_index] / depth
+
+            row.extend([major_allele, minor_allele, major_allelefreq, minor_allelefreq, allele_counts])
+
+            stream.write("\t".join(map(format_data, row)) + "\n")
         assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
 
     # Delete temporary bam file <== TODO
@@ -676,6 +568,7 @@ def pileup_per_unit(packed_args):
 def merge_chunks_per_species(species_id):
     """ merge the pileup results from chunks into one file per species """
 
+    global global_args
     global sample
     global dict_of_species
 
