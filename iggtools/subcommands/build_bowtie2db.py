@@ -1,14 +1,14 @@
 import json
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, num_physical_cores, command, select_from_tsv
+from iggtools.common.utils import tsprint, num_physical_cores, command
 from iggtools.common.bowtie2 import build_bowtie2_db
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.species import parse_species, filter_species
 
 
 def register_args(main_func):
-    subparser = add_subcommand('build_bowtie2_indexes', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
+    subparser = add_subcommand('build_bowtie2db', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
 
     subparser.add_argument('--midas_db',
                            dest='midas_db',
@@ -63,7 +63,7 @@ def register_args(main_func):
     return main_func
 
 
-def build_bowtie2_indexes(args):
+def build_bowtie2db(args):
 
     try:
         if args.species_list:
@@ -72,21 +72,21 @@ def build_bowtie2_indexes(args):
             species_ids_of_interest = filter_species(args.species_profile, args.select_by, args.select_threshold)
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
-        tsprint(f"CZ::build_bowtie2_indexes::build bt2 indexees for the listed species: {species_ids_of_interest}")
+        tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
 
         # Fetch UHGG related files
         midas_db = MIDAS_DB(args.midas_db, args.num_cores)
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::start")
-            contigs_files = midas_db.fetch_files("prokka_genome", species_ids_of_interest)
+            contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
             tsprint(contigs_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, contigs_files, args.num_cores)
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::finish")
 
         if args.bt2_indexes_name == "pangenomes":
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::start")
-            centroids_files = midas_db.fetch_files("centroids", species_ids_of_interest)
+            centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
             tsprint(centroids_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, centroids_files, args.num_cores)
             tsprint(f"CZ::build_bowtie2_pangenomes_indexes::finish")
@@ -101,4 +101,4 @@ def build_bowtie2_indexes(args):
 @register_args
 def main(args):
     tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    build_bowtie2_indexes(args)
+    build_bowtie2db(args)

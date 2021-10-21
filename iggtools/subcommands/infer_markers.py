@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 import os
 import sys
-import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
-from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
-from iggtools.params import outputs
-from iggtools.params.schemas import hmmsearch_max_evalue, hmmsearch_min_cov
+from iggtools.common.utilities import scan_genes
+from iggtools.models.midasdb import MIDAS_DB
+from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov
 from iggtools.subcommands.import_uhgg import decode_genomes_arg
 
 
-CONCURRENT_MARKER_GENES_IDENTIFY = num_physical_cores
+CONCURRENT_INFER_MARKERS = num_physical_cores
 
 
 @retry
@@ -18,25 +17,11 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-@retry
-def fetch_genes(annotated_genes):
-    """" Lookup of seq_id to sequence for PATRIC genes """
-    gene_seqs = {}
-    with InputStream(annotated_genes) as genes:
-        for rec in Bio.SeqIO.parse(genes, 'fasta'):
-            gene_seqs[rec.id] = str(rec.seq).upper()
-    return gene_seqs
-
-
-def hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1):
+def hmm_search(genome_id, input_annotations, marker_genes_hmm, num_threads=1):
     """ Performance HMM search using prokka annotated protein sequences """
-
-    input_annotations = destpath(get_uhgg_layout(species_id, "faa", genome_id)["annotation_file"])
     annotated_genes = download_reference(input_annotations)
-
     hmmsearch_file = f"{genome_id}.hmmsearch"
 
-    # Command
     if find_files(hmmsearch_file):
         # This only happens in debug mode, where we can use pre-existing file.
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
@@ -47,7 +32,6 @@ def hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1):
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {hmmsearch_file} {hmmsearch_file}.bogus", check=False)
             raise
-
     return hmmsearch_file
 
 
@@ -80,14 +64,14 @@ def find_hits(hmmsearch_file):
     return list(hits.values())
 
 
-def compute_marker_genes(genome_id, species_id, marker_genes_hmm):
+def compute_marker_genes(genome_id, species_id, marker_genes_hmm, midas_db):
+    """ Parse local HMM search output file """
+    s3_gene_faa = midas_db.get_target_layout("annotation_faa", True, species_id, genome_id)
+    hmmsearch_file = hmm_search(genome_id, s3_gene_faa, marker_genes_hmm, num_threads=1)
 
-    hmmsearch_file = hmmsearch(genome_id, species_id, marker_genes_hmm, num_threads=1)
+    s3_gene_seq = midas_db.get_target_layout("annotation_ffn", True, species_id, genome_id)
+    genes = scan_genes(s3_gene_seq)
 
-    input_annotations = destpath(get_uhgg_layout(species_id, "ffn", genome_id)["annotation_file"])
-    genes = fetch_genes(input_annotations)
-
-    # Parse local hmmsearch file
     hmmsearch_seq = f"{genome_id}.markers.fa"
     hmmsearch_map = f"{genome_id}.markers.map"
     with open(hmmsearch_seq, "w") as o_seq, open(hmmsearch_map, "w") as o_map:
@@ -96,12 +80,12 @@ def compute_marker_genes(genome_id, species_id, marker_genes_hmm):
             marker_info = [species_id, genome_id, rec["query"], len(marker_gene), rec["target"]]
             o_map.write('\t'.join(str(mi) for mi in marker_info) + '\n')
             o_seq.write('>%s\n%s\n' % (rec['query'], marker_gene))
-    return {"hmmsearch": hmmsearch_file, "markers.fa": hmmsearch_seq, "markers.map": hmmsearch_map}
+    return {"marker_genes_hmmsearch": hmmsearch_file, "marker_genes_seq": hmmsearch_seq, "marker_genes_map": hmmsearch_map}
 
 
 def infer_markers(args):
-    if args.zzz_slave_toc:
-        infer_markers_slave(args)
+    if args.zzz_worker_mode:
+        infer_markers_worker(args)
     else:
         infer_markers_master(args)
 
@@ -110,17 +94,17 @@ def infer_markers_master(args):
 
     # Fetch table of contents and marker genes HMM model from s3.
     # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = download_reference(outputs.genomes)
-    marker_genes_hmm = download_reference(destpath(get_uhgg_layout("")["marker_genes_hmm"]))
+    midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
+    species_for_genome = midas_db.uhgg.genomes
 
-    db = UHGG(local_toc)
-    species_for_genome = db.genomes
+    marker_genes_hmm = midas_db.fetch_files("marker_db_hmm")
 
     def genome_work(genome_id):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = destpath(get_uhgg_layout(species_id, "markers.map", genome_id)["marker_genes"])
+        dest_file = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
+
         msg = f"Running HMMsearch for genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -129,64 +113,64 @@ def infer_markers_master(args):
             msg = msg.replace("Running", "Rerunning")
 
         tsprint(msg)
-        logfile = get_uhgg_layout(species_id, "", genome_id)["marker_genes_log"]
-        slave_log = os.path.basename(logfile)
-        slave_subdir = f"{species_id}__{genome_id}"
+        logfile = midas_db.get_target_layout("marker_genes_log", False, species_id, genome_id)
+        worker_log = os.path.basename(logfile)
+        worker_subdir = f"{midas_db.db_dir}/{species_id}__{genome_id}"
         if not args.debug:
-            command(f"rm -rf {slave_subdir}")
-        if not os.path.isdir(slave_subdir):
-            command(f"mkdir {slave_subdir}")
+            command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools infer_markers --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} --zzz_slave_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {slave_log}"
-        with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {worker_log}"
+        with open(f"{worker_subdir}/{worker_log}", "w") as slog:
             slog.write(msg + "\n")
-            slog.write(slave_cmd + "\n")
+            slog.write(worker_cmd + "\n")
+
         try:
-            command(slave_cmd)
+            command(worker_cmd)
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            upload(f"{slave_subdir}/{slave_log}", destpath(logfile), check=False)
+            upload(f"{worker_subdir}/{worker_log}", midas_db.get_target_layout("marker_genes_log", True, species_id, genome_id), check=False)
             if not args.debug:
-                command(f"rm -rf {slave_subdir}", check=False)
+                command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
-    multithreading_map(genome_work, genome_id_list, num_threads=CONCURRENT_MARKER_GENES_IDENTIFY)
+    multithreading_map(genome_work, genome_id_list, num_threads=CONCURRENT_INFER_MARKERS)
 
 
-def infer_markers_slave(args):
+def infer_markers_worker(args):
     """
     https://github.com/czbiohub/iggtools/wiki
     """
 
-    violation = "Please do not call build_merker_genes_slave directly.  Violation"
-    assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
-    assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
-    assert os.path.isfile(args.zzz_slave_marker_genes_hmm), f"{violation}: Maker genes HMM model file does not exist: {args.zzz_slave_marker_genes_hmm}"
+    violation = "Please do not call infer_markers_worker directly.  Violation"
+    assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
+    assert os.path.isfile(args.zzz_worker_marker_genes_hmm), f"{violation}: Maker genes HMM model file does not exist: {args.zzz_worker_marker_genes_hmm}"
 
-    db = UHGG(args.zzz_slave_toc)
-    species_for_genome = db.genomes
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name)
+    species_for_genome = midas_db.uhgg.genomes
 
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
-    marker_genes_hmm = args.zzz_slave_marker_genes_hmm
+    marker_genes_hmm = args.zzz_worker_marker_genes_hmm
 
-    output_files = compute_marker_genes(genome_id, species_id, marker_genes_hmm)
+    output_files = compute_marker_genes(genome_id, species_id, marker_genes_hmm, midas_db)
 
     # Upload to S3
-    last_dest = destpath(get_uhgg_layout(species_id, "markers.map", genome_id)["marker_genes"])
+    last_dest = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
     command(f"aws s3 rm --recursive {os.path.dirname(last_dest)}")
 
     upload_tasks = []
     for k, o in output_files.items():
-        if k == "markers.map":
+        if k == "marker_genes_map":
             continue
-        upload_tasks.append((o, destpath(get_uhgg_layout(species_id, k, genome_id)["marker_genes"])))
+        upload_tasks.append((o, midas_db.get_target_layout(k, True, species_id, genome_id)))
     multithreading_map(upload_star, upload_tasks)
 
     # Upload this last because it indicates all other work has succeeded.
-    upload(output_files["markers.map"], last_dest)
+    upload(output_files["marker_genes_map"], last_dest)
 
 
 def register_args(main_func):
@@ -195,14 +179,26 @@ def register_args(main_func):
                            dest='genomes',
                            required=False,
                            help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
-    subparser.add_argument('--zzz_slave_toc',
-                           dest='zzz_slave_toc',
+    subparser.add_argument('--zzz_worker_mode',
+                           dest='zzz_worker_mode',
+                           action='store_true',
+                           default=False,
+                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
+    subparser.add_argument('--zzz_worker_marker_genes_hmm',
+                           dest='zzz_worker_marker_genes_hmm',
                            required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
-    subparser.add_argument('--zzz_slave_marker_genes_hmm',
-                           dest='zzz_slave_marker_genes_hmm',
-                           required=False,
-                           help=SUPPRESS) # "reserved to common database from master to slave"
+                           help=SUPPRESS) # "reserved to common database from master to worker"
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
+                           type=str,
+                           default="uhgg",
+                           choices=['uhgg', 'gtdb'],
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default=".",
+                           help=f"Local MIDAS Database path mirroing S3.")
     return main_func
 
 

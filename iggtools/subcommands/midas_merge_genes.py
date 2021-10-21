@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import json
 from collections import defaultdict
 from itertools import repeat
@@ -9,6 +10,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
+from iggtools.models.species import scan_cluster_info
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -48,6 +50,17 @@ def register_args(main_func):
                            default=DEFAULT_SAMPLE_COUNTS,
                            help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
+                           type=str,
+                           default="uhgg",
+                           choices=['uhgg', 'gtdb'],
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default=".",
+                           help=f"Local MIDAS Database path mirroing S3.")
     subparser.add_argument('--midas_db',
                            dest='midas_db',
                            type=str,
@@ -84,7 +97,7 @@ def process(pargs):
 
     for species_id in list_of_species:
         sp = dict_of_species[species_id]
-        sp.get_cluster_info(midas_db)
+        sp.get_cluster_info_fp(midas_db)
         accumulator = build_gene_matrices(species_id)
         assert write_gene_matrices(accumulator, species_id)
 
@@ -125,7 +138,7 @@ def collect(accumulator, my_args):
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
-    cluster_info = sp.cluster_info
+    cluster_info = scan_cluster_info(sp.cluster_info_fp)
 
     with InputStream(genes_coverage_fp) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
@@ -191,7 +204,9 @@ def midas_merge_genes(args):
         def chunkify(L, n):
             return [L[x: x+n] for x in range(0, len(L), n)]
         chunk_size = ceil(species_counts / args.num_cores)
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir"), args.num_cores)
+
+        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir")
+        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, args.num_cores)
 
         chunk_lists = chunkify(species_ids_of_interest, chunk_size)
         proc_flags = multiprocessing_map(process, ((midas_db, los) for los in chunk_lists), args.num_cores)

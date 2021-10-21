@@ -6,7 +6,7 @@ import numpy as np
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, OutputStream
-from iggtools.params.schemas import species_merge_schema, species_prevalence_schema, fetch_default_genome_depth, format_data
+from iggtools.params.schemas import species_merge_schema, species_prevalence_schema, format_data
 
 
 DEFAULT_MARKER_DEPTH = 0.0

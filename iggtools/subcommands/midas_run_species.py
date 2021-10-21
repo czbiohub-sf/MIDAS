@@ -435,6 +435,7 @@ def midas_run_species(args):
         midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), 1)
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
+
         tsprint(f"CZ::fetch_iggdb_files::finish")
 
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:

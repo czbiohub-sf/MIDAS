@@ -11,11 +11,12 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, num_physical_cores, cat_files
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from iggtools.common.utilities import fetch_genes_are_markers
 from iggtools.models.midasdb import MIDAS_DB
+from iggtools.models.sample import Sample
+from iggtools.models.species import Species, parse_species, load_chunks_cache
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
-from iggtools.models.sample import Sample, create_local_dir
-from iggtools.models.species import Species, parse_species
+from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 
 
 DEFAULT_MARKER_DEPTH = 5.0
@@ -61,11 +62,22 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"List of species used for building the prebuild bowtie2 indexes.")
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
+                           type=str,
+                           default="uhgg",
+                           choices=['uhgg', 'gtdb'],
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default=".",
+                           help=f"Local MIDAS Database path mirroing S3.")
     subparser.add_argument('--midas_db',
                            dest='midas_db',
                            type=str,
                            metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+                           help=f"Local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--cache',
                            action='store_true',
                            default=False,
@@ -178,8 +190,7 @@ def keep_read(aln):
 def design_chunks_per_species(pargs):
     """ Fetch given species's pre-computed gene_id - centroid_99 - marker_id mapping information """
     sp, midas_db, chunk_size = pargs
-    sp.fetch_genes_are_markers(midas_db, chunk_size)
-    return sp.design_genes_chunks(midas_db, chunk_size)
+    return sp.compute_gene_chunks(midas_db, chunk_size)
 
 
 def design_chunks(midas_db, chunk_size):
@@ -187,10 +198,11 @@ def design_chunks(midas_db, chunk_size):
 
     global dict_of_species
     global semaphore_for_species
+
     semaphore_for_species = dict()
 
     num_cores = min(midas_db.num_cores, 16)
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], midas_db.num_cores) #<---
     assert all(flags)
 
     # Sort species by ascending chunk counts
@@ -221,12 +233,12 @@ def _process_one_chunk_of_genes(packed_args):
         global semaphore_for_species
         num_of_genes_chunks = packed_args[2]
 
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}--1::wait merge_chunks_per_species")
+        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::wait merge_chunks_per_species")
         for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}--1::start merge_chunks_per_species")
+        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}--1::finish merge_chunks_per_species")
+        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::finish merge_chunks_per_species")
 
         return ret
 
@@ -234,15 +246,6 @@ def _process_one_chunk_of_genes(packed_args):
     ret = compute_coverage_per_chunk(species_id, chunk_id)
     tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
     return ret
-
-
-def load_chunks_of_centroids_cache(chunk_cache_fp):
-    assert os.path.exists(chunk_cache_fp), f"{chunk_cache_fp} doesn't exit"
-    with InputStream(chunk_cache_fp) as stream:
-        chunks_of_centroids = json.load(stream)
-        # conver back to int key
-        chunks_of_centroids = {int(k):v for k, v in chunks_of_centroids.items()}
-    return chunks_of_centroids
 
 
 def compute_coverage_per_chunk(species_id, chunk_id):
@@ -255,9 +258,9 @@ def compute_coverage_per_chunk(species_id, chunk_id):
 
     try:
         sp = dict_of_species[species_id]
-        chunks_of_centroids = load_chunks_of_centroids_cache(sp.chunks_of_centroids_fp)
-        #chunks_of_centroids = sp.chunks_of_centroids
-        dict_of_genes_are_markers = sp.dict_of_genes_are_markers
+
+        chunks_of_centroids = load_chunks_cache(sp.chunks_of_centroids_fp)
+        dict_of_genes_are_markers, _ = fetch_genes_are_markers(sp.cluster_info_fp)
 
         chunk_of_genes_length = chunks_of_centroids[chunk_id]
         list_of_centroids_id = sorted(list(chunk_of_genes_length.keys()))
@@ -319,7 +322,6 @@ def compute_coverage_per_chunk(species_id, chunk_id):
                     chunk_genes_are_marker[gene_id] = dict_of_genes_are_markers[gene_id]
                     chunk_genes_are_marker[gene_id]["gene_coverage"] = gene_coverage
 
-
         # Write chunk gene coverage results to file
         with OutputStream(headerless_genes_coverage_path) as stream:
             for vals in chunk_genes_values.values():
@@ -329,20 +331,19 @@ def compute_coverage_per_chunk(species_id, chunk_id):
             for rec in chunk_genes_are_marker.values():
                 vals = rec.values()
                 stream2.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
-
         return chunk_cov_stats
     finally:
         semaphore_for_species[species_id].release()
 
 
-def compute_marker_coverage_xschunks(species_id):
+def compute_scg_coverage_across_chunks(species_id):
     """ Extract gene depth for mapped centroids_99 that are markers and Compute the median marker coverage """
 
     global dict_of_species
     sp = dict_of_species[species_id]
 
     number_of_chunks = sp.num_of_genes_chunks
-    list_of_markers = sp.list_of_markers
+    _, list_of_markers = fetch_genes_are_markers(sp.cluster_info_fp)
 
     # Include ALL the marker centroids, not only the covered one
     markers_coverage = dict(zip(list_of_markers, [0.0]*len(list_of_markers)))
@@ -354,7 +355,6 @@ def compute_marker_coverage_xschunks(species_id):
                 if r["marker_id"] not in markers_coverage:
                     markers_coverage[r["marker_id"]] = 0.0
                 markers_coverage[r["marker_id"]] += r["gene_coverage"]
-
     median_marker_coverage = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_coverage.values())))
 
     return median_marker_coverage
@@ -391,9 +391,9 @@ def merge_chunks_per_species(species_id):
     number_of_chunks = sp.num_of_genes_chunks
 
     # Compute the median read coverage for all mapped marker genes for given species
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start compute_marker_coverage_xschunks")
-    median_marker_coverage = compute_marker_coverage_xschunks(species_id)
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish compute_marker_coverage_xschunks")
+    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start compute_scg_coverage_across_chunks")
+    median_marker_coverage = compute_scg_coverage_across_chunks(species_id)
+    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish compute_scg_coverage_across_chunks")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     list_of_chunks_coverage = [sample.get_target_layout("chunk_coverage", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
@@ -509,20 +509,19 @@ def midas_run_genes(args):
         tsprint(f"CZ::design_chunks::start")
         global dict_of_species
         dict_of_species = {species_id: Species(species_id, args.cache) for species_id in species_ids_of_interest}
+
         num_cores_download = min(species_counts, args.num_cores)
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), num_cores_download)
-        if args.cache:
-            for species_id in species_ids_of_interest:
-                cachedir = os.path.dirname(midas_db.get_target_layout("cache_gene_chunks", False, "chunks_of_centroids", species_id, args.chunk_size))
-                create_local_dir(cachedir, args.debug)
+        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else sample.get_target_layout("midas_db_dir")
+        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores_download)
+
         arguments_list = design_chunks(midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
-        centroids_files = midas_db.fetch_files("centroids", species_ids_of_interest)
-        tsprint(f"CZ::build_bowtie2_indexes::start")
+        centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
+        tsprint(f"CZ::build_bowtie2db::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
-        tsprint(f"CZ::build_bowtie2_indexes::finish")
+        tsprint(f"CZ::build_bowtie2db::finish")
 
         # Align reads to pangenome database
         tsprint(f"CZ::bowtie2_align::start")

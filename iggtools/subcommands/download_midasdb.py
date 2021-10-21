@@ -38,7 +38,6 @@ def register_args(main_func):
 def download_midasdb(args):
     try:
         midas_db = MIDAS_DB(args.midas_db, args.num_cores)
-
         species_list = set(parse_species(args))
 
         species = midas_db.uhgg.representatives
@@ -53,10 +52,10 @@ def download_midasdb(args):
 
         # Marker genes related database files
         midas_db.fetch_files("marker_centroids", list_of_species)
-        midas_db.fetch_files("cluster_info", list_of_species)
 
-        midas_db.fetch_files("prokka_genome", list_of_species)
-        midas_db.fetch_files("centroids", list_of_species)
+        midas_db.fetch_files("representative_genome", list_of_species)
+        midas_db.fetch_files("pangenome_centroids", list_of_species)
+        midas_db.fetch_files("pangenome_cluster_info", list_of_species)
 
         midas_db.fetch_files("marker_db")
         midas_db.fetch_files("marker_db_hmm_cutoffs")

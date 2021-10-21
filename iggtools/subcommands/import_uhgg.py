@@ -63,8 +63,8 @@ def clean_genome(genome_id, representative_id):
 
 
 def import_uhgg(args):
-    if args.zzz_slave_toc:
-        import_uhgg_slave(args)
+    if args.zzz_worker_toc:
+        import_uhgg_worker(args)
     else:
         import_uhgg_master(args)
 
@@ -95,40 +95,40 @@ def import_uhgg_master(args):
 
         tsprint(msg)
         logfile = get_uhgg_layout(species_id, "", genome_id)["imported_genome_log"]
-        slave_log = os.path.basename(logfile)
-        slave_subdir = f"{species_id}__{genome_id}"
+        worker_log = os.path.basename(logfile)
+        worker_subdir = f"{species_id}__{genome_id}"
         if not args.debug:
-            command(f"rm -rf {slave_subdir}")
-        if not os.path.isdir(slave_subdir):
-            command(f"mkdir {slave_subdir}")
+            command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir {worker_subdir}")
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools import_uhgg --genome {genome_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
-        with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools import_uhgg --genome {genome_id} --zzz_worker_mode --zzz_worker_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {worker_log}"
+        with open(f"{worker_subdir}/{worker_log}", "w") as slog:
             slog.write(msg + "\n")
-            slog.write(slave_cmd + "\n")
+            slog.write(worker_cmd + "\n")
         try:
-            command(slave_cmd)
+            command(worker_cmd)
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            upload(f"{slave_subdir}/{slave_log}", destpath(logfile), check=False)
+            upload(f"{worker_subdir}/{worker_log}", destpath(logfile), check=False)
             if not args.debug:
-                command(f"rm -rf {slave_subdir}", check=False)
+                command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
     multithreading_map(genome_work, genome_id_list, num_threads=CONCURRENT_GENOME_IMPORTS)
 
 
-def import_uhgg_slave(args):
+def import_uhgg_worker(args):
     """
     https://github.com/czbiohub/iggtools/wiki
     """
 
-    violation = "Please do not call import_uhgg_slave directly.  Violation"
-    assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
-    assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
+    violation = "Please do not call import_uhgg_worker directly.  Violation"
+    assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
+    assert os.path.isfile(args.zzz_worker_toc), f"{violation}: File does not exist: {args.zzz_worker_toc}"
 
-    db = UHGG(args.zzz_slave_toc)
+    db = UHGG(args.zzz_worker_toc)
     representatives = db.representatives
     species_for_genome = db.genomes
 
@@ -148,10 +148,10 @@ def register_args(main_func):
                            dest='genomes',
                            required=False,
                            help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
-    subparser.add_argument('--zzz_slave_toc',
-                           dest='zzz_slave_toc',
+    subparser.add_argument('--zzz_worker_toc',
+                           dest='zzz_worker_toc',
                            required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
+                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 
