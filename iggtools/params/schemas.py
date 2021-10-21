@@ -6,11 +6,6 @@ DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
 
 
-MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
-hmmsearch_max_evalue = 1e-5
-hmmsearch_min_cov = 0.00
-
-
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
@@ -62,6 +57,7 @@ CLUSTER_INFO_SCHEMA = {
     "centroid_80": str,
     "centroid_75": str,
     "centroid_99_length": int,
+    "marker_id": str,
 }
 
 
@@ -97,6 +93,7 @@ species_profile_schema = {
     "unique_fraction_covered": float,
     "total_marker_length": int,
 }
+
 
 species_merge_schema = {
     "species_id": str,

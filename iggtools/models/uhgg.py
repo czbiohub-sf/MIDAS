@@ -7,14 +7,9 @@ from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream
 from iggtools.params import inputs
 
 
-# The "output" or built DB layout in S3.
-# See https://github.com/czbiohub/iggtools/wiki#target-layout-in-s3
-
-def get_uhgg_layout(species_id, component="", genome_id=""):
+def get_uhgg_layout(species_id="", component="", genome_id=""):
     return {
         "genomes_toc":                f"genomes.tsv",
-
-        # External storage of collections of genomes
         "raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.{component}",
 
         "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
@@ -22,25 +17,9 @@ def get_uhgg_layout(species_id, component="", genome_id=""):
 
         "annotation_file":            f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
         "annotation_log":             f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
-        "gene_features_log":          f"gene_annotations/{species_id}/{genome_id}/build_gene_features.log",
 
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
         "pangenome_log":              f"pangenomes/{species_id}/pangenome_build.log",
-        "cluster_info_log":           f"pangenomes/{species_id}/cluster_info.log",
-
-        "marker_genes":               f"markers/{inputs.marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
-        "marker_genes_log":           f"markers/{inputs.marker_set}/temp/{species_id}/{genome_id}/build_marker_genes.log",
-
-        "marker_genes_hmm":           f"markers_models/{inputs.marker_set}/marker_genes.hmm",
-        "marker_db_hmm_cutoffs":      f"markers_models/{inputs.marker_set}/marker_genes.mapping_cutoffs{component}",
-
-        "marker_db":                  f"markers/{inputs.marker_set}/{inputs.marker_set}.{component}",
-        "build_marker_log":           f"markers/{inputs.marker_set}/build_markerdb.log",
-
-        "marker_centroids":           f"markers/{inputs.marker_set}/marker_centroids/{species_id}.{component}",
-        "marker_centroids_log":       f"markers/{inputs.marker_set}/marker_centroids.log",
-
-        "cache_gene_chunks":          f"cache/genes/chunks_chunksize.{genome_id}/{species_id}/{component}.json",
     }
 
 
@@ -62,7 +41,7 @@ class UHGG:  # pylint: disable=too-few-public-methods
 
         self.species, self.representatives, self.genomes = _UHGG_load(self.toc_tsv)
 
-    def fetch_representative_genome_id(self, species_id):
+    def fetch_repgenome_id(self, species_id):
         return self.representatives[species_id]
 
 

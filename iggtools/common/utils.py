@@ -651,6 +651,11 @@ def cat_files(files_of_chunks, one_file, number_of_chunks=20):
     for temp_files in split(files_of_chunks, number_of_chunks):
         command("cat " + " ".join(temp_files) + f" >> {one_file}", quiet=True)
 
+
+def drop_lz4(filename):
+    assert filename.endswith(".lz4")
+    return filename[:-4]
+
 # -------------- testing testing testing ---------------------
 
 def random_sleep(args):
