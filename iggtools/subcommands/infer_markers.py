@@ -2,7 +2,7 @@
 import os
 import sys
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
+from iggtools.common.utils import tsprint, InputStream, retry, command, drop_lz4, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
 from iggtools.common.utilities import scan_genes
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov
@@ -113,8 +113,9 @@ def infer_markers_master(args):
             msg = msg.replace("Running", "Rerunning")
 
         tsprint(msg)
-        logfile = midas_db.get_target_layout("marker_genes_log", False, species_id, genome_id)
-        worker_log = os.path.basename(logfile)
+        last_dest = midas_db.get_target_layout("marker_genes_log", True, species_id, genome_id)
+
+        worker_log = drop_lz4(os.path.basename(last_dest))
         worker_subdir = f"{midas_db.db_dir}/{species_id}__{genome_id}"
         if not args.debug:
             command(f"rm -rf {worker_subdir}")
@@ -132,8 +133,8 @@ def infer_markers_master(args):
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            upload(f"{worker_subdir}/{worker_log}", midas_db.get_target_layout("marker_genes_log", True, species_id, genome_id), check=False)
             if not args.debug:
+                upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
                 command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -159,18 +160,19 @@ def infer_markers_worker(args):
     output_files = compute_marker_genes(genome_id, species_id, marker_genes_hmm, midas_db)
 
     # Upload to S3
-    last_dest = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
-    command(f"aws s3 rm --recursive {os.path.dirname(last_dest)}")
+    if not args.debug:
+        last_dest = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
+        command(f"aws s3 rm --recursive {os.path.dirname(last_dest)}")
 
-    upload_tasks = []
-    for k, o in output_files.items():
-        if k == "marker_genes_map":
-            continue
-        upload_tasks.append((o, midas_db.get_target_layout(k, True, species_id, genome_id)))
-    multithreading_map(upload_star, upload_tasks)
+        upload_tasks = []
+        for k, o in output_files.items():
+            if k == "marker_genes_map":
+                continue
+            upload_tasks.append((o, midas_db.get_target_layout(k, True, species_id, genome_id)))
+        multithreading_map(upload_star, upload_tasks)
 
-    # Upload this last because it indicates all other work has succeeded.
-    upload(output_files["marker_genes_map"], last_dest)
+        # Upload this last because it indicates all other work has succeeded.
+        upload(output_files["marker_genes_map"], last_dest)
 
 
 def register_args(main_func):

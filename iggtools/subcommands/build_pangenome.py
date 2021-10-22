@@ -57,8 +57,10 @@ def decode_species_arg(args, species):
 @retry
 def clean_genes(packed_ids):
     species_id, genome_id = packed_ids
-    input_annotations = destpath(get_uhgg_layout(species_id, "ffn", genome_id)["annotation_file"])
-
+    #input_annotations = destpath(get_uhgg_layout(species_id, "ffn", genome_id)["annotation_file"])
+    input_annotations = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "ffn")
+    #TODO: double check the above
+    
     output_genes = f"{genome_id}.genes.ffn"
     output_info = f"{genome_id}.genes.len"
 

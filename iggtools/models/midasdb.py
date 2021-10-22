@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, command, multiprocessing_map, tsprint, InputStream, select_from_tsv
+from iggtools.common.utils import download_reference, command, multiprocessing_map, tsprint, InputStream, select_from_tsv, drop_lz4
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
 
@@ -12,17 +12,22 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
         "table_of_contents":             f"genomes.tsv",
 
+        "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+        "imported_genome_log":           f"cleaned_imports/{species_id}/{genome_id}/import_uhgg.log",
+
+        "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+
         "marker_db":                     [f"markers/{marker_set}/{marker_set}.{ext}" for ext in MARKER_FILE_EXTS],
         "marker_db_hmm":                 f"markers_models/{marker_set}/marker_genes.hmm",
         "marker_db_hmm_cutoffs":         f"markers_models/{marker_set}/marker_genes.mapping_cutoffs",
-
-        "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+        "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
         "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
         "pangenome_genes_info":          f"pangenomes/{species_id}/gene_info.txt",
         "pangenome_genes_len":           f"pangenomes/{species_id}/genes.len",
         "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
+        "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
 
         "chunks_centroids":              f"chunks/genes/chunksize.{component}/{species_id}.json",
         "chunks_sites_run":              f"chunks/sites/run/chunksize.{component}/{species_id}/{genome_id}.json",
@@ -38,15 +43,12 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "annotation_faa":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.faa",
         "annotation_ffn":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.ffn",
         "annotation_fna":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
-        "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
         "annotation_gff":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.gff",
         "annotation_tsv":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.tsv",
         "annotation_log":                f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
+        "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
 
         "gene_features_log":             f"gene_annotations/{species_id}/{genome_id}/build_gene_features.log",
-        "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
-        "marker_centroids_log":          f"markers/{marker_set}/marker_centroids.log",
-        "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
     }
 
 
@@ -159,6 +161,38 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
                     list_of_marker_genes.append(r["marker_id"])
         print(dict_of_genes_are_markers)
         tsprint("2")
+
+    def test(self):
+        species_id = "100001" #117082
+        genome_id = "GUT_GENOME000001" #GCA_003451595.1
+        print(destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome"]))
+        print(self.get_target_layout("imported_genome", True, species_id, genome_id, "fna"))
+        print(self.fetch_file("imported_genome", species_id, genome_id, "fna"))
+
+        dest_file = self.get_target_layout("annotation_fna", True, species_id, genome_id)
+        print(self.get_target_layout("annotation_file", True, species_id, genome_id, "fna"))
+        last_output = drop_lz4(os.path.basename(dest_file))
+        print(last_output)
+        print(dest_file)
+
+        output_files = [
+            f"{genome_id}.faa",
+            f"{genome_id}.ffn",
+            f"{genome_id}.fna",
+            f"{genome_id}.gff",
+            f"{genome_id}.tsv"
+        ]
+        upload_tasks = []
+        upload_tasks2 = []
+        for o in output_files:
+            #olz = o + ".lz4"
+            otype = o.rsplit(".")[-1]
+            if o != last_output:
+                upload_tasks2.append((o, self.get_target_layout("annotation_file", True, species_id, genome_id, otype)))
+                upload_tasks.append((o, destpath(get_uhgg_layout(species_id, otype, genome_id)["annotation_file"])))
+        print(upload_tasks)
+        print("\n\n")
+        print(upload_tasks2)
 
 
 def _get_dest_path(file_name, db_name):

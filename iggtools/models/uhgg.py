@@ -12,11 +12,8 @@ def get_uhgg_layout(species_id="", component="", genome_id=""):
         "genomes_toc":                f"genomes.tsv",
         "raw_genome_file":            f"{inputs.uhgg_genomes}/{species_id}/{genome_id}.{component}",
 
-        "imported_genome_file":       f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+        "imported_genome":            f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
         "imported_genome_log":        f"cleaned_imports/{species_id}/{genome_id}/import_uhgg.log",
-
-        "annotation_file":            f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
-        "annotation_log":             f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
 
         "pangenome_file":             f"pangenomes/{species_id}/{component}",
         "pangenome_log":              f"pangenomes/{species_id}/pangenome_build.log",
