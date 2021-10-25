@@ -3,10 +3,9 @@ import os
 import sys
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, drop_lz4, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
-from iggtools.common.utilities import scan_genes
+from iggtools.common.utilities import scan_genes, decode_genomes_arg
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov
-from iggtools.subcommands.import_uhgg import decode_genomes_arg
 
 
 CONCURRENT_INFER_MARKERS = num_physical_cores
@@ -194,7 +193,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

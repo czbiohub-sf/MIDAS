@@ -4,8 +4,56 @@ from bisect import bisect
 from collections import defaultdict
 import Bio.SeqIO
 
-from iggtools.common.utils import InputStream, retry, select_from_tsv
+from iggtools.common.utils import InputStream, retry, select_from_tsv, tsprint
 from iggtools.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
+
+
+def decode_species_arg(args, species):
+    selected_species = set()
+    try:  # pylint: disable=too-many-nested-blocks
+        if args.species.upper() == "ALL":
+            selected_species = set(species)
+        else:
+            for s in args.species.split(","):
+                if ":" not in s:
+                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
+                    selected_species.add(s)
+                else:
+                    i, n = s.split(":")
+                    i = int(i)
+                    n = int(n)
+                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
+                    for sid in species:
+                        if int(sid) % n == i:
+                            selected_species.add(sid)
+    except:
+        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
+        raise
+    return sorted(selected_species)
+
+
+def decode_genomes_arg(args, genomes):
+    selected_genomes = set()
+    try:  # pylint: disable=too-many-nested-blocks
+        if args.genomes.upper() == "ALL":
+            selected_genomes = set(genomes)
+        else:
+            for g in args.genomes.split(","):
+                if ":" not in g:
+                    selected_genomes.add(g)
+                else:
+                    i, n = g.split(":")
+                    i = int(i)
+                    n = int(n)
+                    assert 0 <= i < n, f"Genome class and modulus make no sense: {i}, {n}"
+                    for gid in genomes:
+                        gid_int = int(gid.replace("GUT_GENOME", ""))
+                        if gid_int % n == i:
+                            selected_genomes.add(gid)
+    except:
+        tsprint(f"ERROR:  Genomes argument is not a list of genome ids or slices: {g}")
+        raise
+    return sorted(selected_genomes)
 
 
 def acgt_string(A, C, G, T):

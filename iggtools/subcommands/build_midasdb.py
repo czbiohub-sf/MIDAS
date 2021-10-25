@@ -7,9 +7,8 @@ import gffutils
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, OutputStream, drop_lz4, download_reference, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star
 from iggtools.common.utilities import scan_mapfile, scan_gene_info, scan_gene_length
+from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.subcommands.import_uhgg import decode_genomes_arg
-from iggtools.subcommands.build_pangenome import decode_species_arg
 from iggtools.params.schemas import CLUSTER_INFO_SCHEMA
 from iggtools.params.inputs import MARKER_FILE_EXTS
 
@@ -80,7 +79,7 @@ def generate_gene_feature_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_midasdb --generate_gene_feature --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_midasdb --generate_gene_feature --genomes {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
             with open(f"{worker_subdir}/{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -181,7 +180,6 @@ def generate_cluster_info_worker(args):
 
     species_id = args.species
     midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name)
-
     species = midas_db.uhgg.species
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
@@ -282,7 +280,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

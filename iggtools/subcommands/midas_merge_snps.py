@@ -183,7 +183,8 @@ def design_chunks(midas_db, chunk_size):
             arguments_list.append((species_id, -2))
             continue
 
-        assert sp.design_snps_chunks_merge(midas_db, chunk_size)
+        sp.get_repgenome(midas_db)
+        assert sp.compute_snps_chunks_merge(midas_db, chunk_size)
         num_of_chunks = sp.num_of_sites_chunks
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))

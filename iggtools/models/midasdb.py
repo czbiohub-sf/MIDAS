@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, command, multiprocessing_map, tsprint, InputStream, select_from_tsv, drop_lz4
+from iggtools.common.utils import download_reference, command, multiprocessing_map
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
 from iggtools.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
+from iggtools.params import outputs
 
 
 # The "output" or built DB layout in S3.
@@ -23,9 +24,11 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
+        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
         "pangenome_genes_info":          f"pangenomes/{species_id}/gene_info.txt",
         "pangenome_genes_len":           f"pangenomes/{species_id}/genes.len",
+
         "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
         "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
 
@@ -124,13 +127,6 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         return _fetch_file_from_s3((s3_path, local_path))
 
 
-    def get_target_layout_old(self, filename, remote, component="", species_id="", genome_id=""):
-        ## TODO: (1) left over outside this function (2) keys in uhgg_layout but not in midasdb_layout
-        local_path = get_uhgg_layout(species_id, component, genome_id)[filename]
-        target_path = destpath(local_path) if remote else os.path.join(self.db_dir, local_path)
-        return target_path
-
-
     def get_target_layout(self, filename, remote, species_id="", genome_id="", component=""):
         local_path = self.construct_local_path(filename, species_id, genome_id, component)
         s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
@@ -138,61 +134,20 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         return target_path
 
 
-    def test_markers(self):
-        # this is only the structured file, no absoluate path
-        species_id = "117086" #117082
-        genome_id = "GCA_900552055.1" #GCA_003451595.1
-        chunk_size = 50000
-
-        list_of_genomes = self.uhgg.species[species_id].keys()
-        list_of_mapfiles = [self.fetch_file("marker_genes_map", species_id, genome_id) for genome_id in list_of_genomes]
-        #cat_files(list_of_mapfiles, "mapfile", 20)
-
-        tsprint("1")
-        filter_cmd = f"awk \'$8 != \"\"\'"
-        cluster_info_fp = self.fetch_file("pangenome_cluster_info", species_id)
-        print(cluster_info_fp)
-        list_of_marker_genes = []
-        dict_of_genes_are_markers = dict()
-        with InputStream(cluster_info_fp, filter_cmd) as stream:
-            for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
-                dict_of_genes_are_markers[r["centroid_99"]] = r # r only has two elements: centroids_99 and marker_id
-                if r["marker_id"] not in list_of_marker_genes:
-                    list_of_marker_genes.append(r["marker_id"])
-        print(dict_of_genes_are_markers)
-        tsprint("2")
-
     def test(self):
-        species_id = "100001" #117082
-        genome_id = "GUT_GENOME000001" #GCA_003451595.1
-        print(destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome"]))
-        print(self.get_target_layout("imported_genome", True, species_id, genome_id, "fna"))
-        print(self.fetch_file("imported_genome", species_id, genome_id, "fna"))
-
-        dest_file = self.get_target_layout("annotation_fna", True, species_id, genome_id)
-        print(self.get_target_layout("annotation_file", True, species_id, genome_id, "fna"))
-        last_output = drop_lz4(os.path.basename(dest_file))
-        print(last_output)
-        print(dest_file)
-
-        output_files = [
-            f"{genome_id}.faa",
-            f"{genome_id}.ffn",
-            f"{genome_id}.fna",
-            f"{genome_id}.gff",
-            f"{genome_id}.tsv"
-        ]
-        upload_tasks = []
-        upload_tasks2 = []
-        for o in output_files:
-            #olz = o + ".lz4"
-            otype = o.rsplit(".")[-1]
-            if o != last_output:
-                upload_tasks2.append((o, self.get_target_layout("annotation_file", True, species_id, genome_id, otype)))
-                upload_tasks.append((o, destpath(get_uhgg_layout(species_id, otype, genome_id)["annotation_file"])))
-        print(upload_tasks)
-        print("\n\n")
-        print(upload_tasks2)
+        species_id = "100001" #117086
+        genome_id = "GUT_GENOME000001" #GCA_900552055.1
+        print(destpath(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"]))
+        print(self.get_target_layout("pangenome_file", True, species_id, "", "gene_info.txt"))
+        print(destpath(get_uhgg_layout(species_id, "genes.ffn")["pangenome_file"]))
+        print(self.get_target_layout("pangenome_file", True, species_id, "", "genes.ffn"))
+        print("============")
+        print(get_uhgg_layout(species_id)["pangenome_log"]) # relative path within the infrasturecure
+        print() #<-- abosulte path
+        print("=================")
+        print(os.path.basename(outputs.genomes))
+        print(os.path.basename(self.local_toc))
+        print(self.local_toc)
 
 
 def _get_dest_path(file_name, db_name):

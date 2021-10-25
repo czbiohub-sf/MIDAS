@@ -5,6 +5,7 @@ from hashlib import md5
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
+from iggtools.common.utilities import decode_genomes_arg
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id, destpath
 from iggtools.params import outputs
 
@@ -15,30 +16,6 @@ CONCURRENT_GENOME_IMPORTS = 20
 @retry
 def find_files_with_retry(f):
     return find_files(f)
-
-
-def decode_genomes_arg(args, genomes):
-    selected_genomes = set()
-    try:  # pylint: disable=too-many-nested-blocks
-        if args.genomes.upper() == "ALL":
-            selected_genomes = set(genomes)
-        else:
-            for g in args.genomes.split(","):
-                if ":" not in g:
-                    selected_genomes.add(g)
-                else:
-                    i, n = g.split(":")
-                    i = int(i)
-                    n = int(n)
-                    assert 0 <= i < n, f"Genome class and modulus make no sense: {i}, {n}"
-                    for gid in genomes:
-                        gid_int = int(gid.replace("GUT_GENOME", ""))
-                        if gid_int % n == i:
-                            selected_genomes.add(gid)
-    except:
-        tsprint(f"ERROR:  Genomes argument is not a list of genome ids or slices: {g}")
-        raise
-    return sorted(selected_genomes)
 
 
 # 1. Occasional failures in aws s3 cp require a retry.
@@ -84,7 +61,7 @@ def import_uhgg_master(args):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome_file"])
+        dest_file = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome"])
 
         msg = f"Importing genome {genome_id} from species {species_id}."
         if find_files_with_retry(dest_file):
@@ -136,7 +113,7 @@ def import_uhgg_worker(args):
     species_id = species_for_genome[genome_id]
     representative_id = representatives[species_id]
 
-    dest = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome_file"])
+    dest = destpath(get_uhgg_layout(species_id, "fna", genome_id)["imported_genome"])
     command(f"aws s3 rm --recursive {os.path.dirname(dest)}")
     cleaned = clean_genome(genome_id, representative_id)
     upload(cleaned, dest)

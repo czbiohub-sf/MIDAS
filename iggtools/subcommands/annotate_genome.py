@@ -5,10 +5,9 @@ from multiprocessing import Semaphore
 from itertools import chain
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
+from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
 from iggtools.models.uhgg import unified_genome_id
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.subcommands.import_uhgg import decode_genomes_arg
-from iggtools.subcommands.build_pangenome import decode_species_arg
 
 
 CONCURRENT_PROKKA_RUNS = Semaphore(6)
@@ -159,15 +158,11 @@ def register_args(main_func):
                            dest='species',
                            required=False,
                            help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
-    subparser.add_argument('--zzz_worker_toc',
-                           dest='zzz_worker_toc',
-                           required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

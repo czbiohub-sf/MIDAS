@@ -6,8 +6,8 @@ from multiprocessing import Semaphore
 
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, num_physical_cores, retry, find_files, pythonpath, upload, OutputStream, command, multithreading_map
+from iggtools.common.utilities import decode_species_arg
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.subcommands.build_pangenome import decode_species_arg
 from iggtools.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
 
 
@@ -134,7 +134,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
