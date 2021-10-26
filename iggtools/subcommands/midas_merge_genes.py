@@ -11,6 +11,7 @@ from iggtools.common.utils import tsprint, InputStream, OutputStream, select_fro
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 from iggtools.models.species import scan_cluster_info
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
@@ -54,7 +55,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -205,7 +206,7 @@ def midas_merge_genes(args):
             return [L[x: x+n] for x in range(0, len(L), n)]
         chunk_size = ceil(species_counts / args.num_cores)
 
-        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir")
+        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else pool_of_samples.get_target_layout("midas_db_dir")
         midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, args.num_cores)
 
         chunk_lists = chunkify(species_ids_of_interest, chunk_size)

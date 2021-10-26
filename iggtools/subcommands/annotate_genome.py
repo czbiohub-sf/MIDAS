@@ -8,6 +8,7 @@ from iggtools.common.utils import tsprint, retry, command, multithreading_map, d
 from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
 from iggtools.models.uhgg import unified_genome_id
 from iggtools.models.midasdb import MIDAS_DB
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 CONCURRENT_PROKKA_RUNS = Semaphore(6)
@@ -81,8 +82,9 @@ def annotate_genome_master(args):
             tsprint(msg)
             last_dest = midas_db.get_target_layout("annotation_log", True, species_id, genome_id)
 
-            worker_log = drop_lz4(os.path.basename(last_dest))
-            worker_subdir = f"{midas_db.db_dir}/{species_id}__{genome_id}"
+            worker_log = midas_db.get_target_layout("annotation_log", False, species_id, genome_id)
+            worker_subdir = os.path.dirname(worker_log)
+
             if not args.debug:
                 command(f"rm -rf {worker_subdir}")
             if not os.path.isdir(worker_subdir):
@@ -90,7 +92,7 @@ def annotate_genome_master(args):
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
             worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools annotate_genome --genome {genome_id} --zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} &>> {worker_log}"
-            with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+            with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
 
@@ -100,7 +102,7 @@ def annotate_genome_master(args):
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
                 if not args.debug:
-                    upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
+                    upload(f"{worker_log}", last_dest, check=False)
                     command(f"rm -rf {worker_subdir}", check=False)
 
     if args.genomes:
@@ -162,7 +164,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

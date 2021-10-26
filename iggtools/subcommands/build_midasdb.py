@@ -10,7 +10,7 @@ from iggtools.common.utilities import scan_mapfile, scan_gene_info, scan_gene_le
 from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import CLUSTER_INFO_SCHEMA
-from iggtools.params.inputs import MARKER_FILE_EXTS
+from iggtools.params.inputs import MARKER_FILE_EXTS, MIDASDB_NAMES
 
 
 # Up to this many concurrent species builds.
@@ -71,8 +71,10 @@ def generate_gene_feature_master(args):
         with CONCURRENT_BUILDS:
             tsprint(msg)
             last_dest = midas_db.get_target_layout("gene_features_log", True, species_id, genome_id)
-            worker_log = drop_lz4(os.path.basename(last_dest))
-            worker_subdir = f"{midas_db.db_dir}/misc/{species_id}__{genome_id}"
+
+            worker_log = midas_db.get_target_layout("gene_features_log", False, species_id, genome_id)
+            worker_subdir = os.path.dirname(worker_log)
+
             if not args.debug:
                 command(f"rm -rf {worker_subdir}")
             if not os.path.isdir(worker_subdir):
@@ -80,7 +82,7 @@ def generate_gene_feature_master(args):
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
             worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_midasdb --generate_gene_feature --genomes {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
-            with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+            with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
 
@@ -88,7 +90,7 @@ def generate_gene_feature_master(args):
                 command(worker_cmd)
             finally:
                 if not args.debug:
-                    upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
+                    upload(f"{worker_log}", last_dest, check=False)
                     command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -109,16 +111,13 @@ def generate_gene_feature_worker(args):
     species_for_genome = midas_db.uhgg.genomes
     species_id = species_for_genome[genome_id]
 
-    input_annotation = midas_db.get_target_layout("annotation_gff", True, species_id, genome_id)
-    local_annotation = drop_lz4(os.path.basename(input_annotation))
-    download_reference(input_annotation)
-
-    dest_file = midas_db.get_target_layout("annotation_genes", True, species_id, genome_id)
-    last_output = drop_lz4(os.path.basename(dest_file))
-    assert parse_gff_to_tsv(local_annotation, last_output)
+    input_annotation = midas_db.fetch_file("annotation_gff", species_id, genome_id)
+    output_genes = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
+    assert parse_gff_to_tsv(input_annotation, output_genes)
 
     if not args.debug:
-        upload(last_output, dest_file)
+        dest_file = midas_db.get_target_layout("annotation_genes", True, species_id, genome_id)
+        upload(output_genes, dest_file)
 
 
 def generate_cluster_info(args):
@@ -149,8 +148,9 @@ def generate_cluster_info_master(args):
             tsprint(msg)
             last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
 
-            worker_log = drop_lz4(os.path.basename(last_dest))
-            worker_subdir = f"{midas_db.db_dir}/cluster_info/{species_id}"
+            worker_log = midas_db.get_target_layout("cluster_info_log", False, species_id)
+            worker_subdir = os.path.dirname(worker_log)
+
             if not args.debug:
                 command(f"rm -rf {worker_subdir}")
             if not os.path.isdir(worker_subdir):
@@ -158,7 +158,7 @@ def generate_cluster_info_master(args):
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
             worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_midasdb --generate_cluster_info --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
-            with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+            with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
 
@@ -166,7 +166,7 @@ def generate_cluster_info_master(args):
                 command(worker_cmd)
             finally:
                 if not args.debug:
-                    upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
+                    upload(f"{worker_log}", last_dest, check=False)
                     command(f"rm -rf {worker_subdir}", check=False)
 
     species_id_list = decode_species_arg(args, species)
@@ -188,19 +188,20 @@ def generate_cluster_info_worker(args):
     list_of_mapfiles = [midas_db.fetch_file("marker_genes_map", species_id, genome_id) for genome_id in list_of_genomes]
     species_mapfile = f"mapfile"
     cat_files(list_of_mapfiles, species_mapfile, 20)
+
     # <gene_id, marker_id>
     dict_of_markers = scan_mapfile(species_mapfile)
 
     # <centroid_99> as the key
-    gene_info_fp = midas_db.get_target_layout("pangenome_genes_info", True, species_id)
+    gene_info_fp = midas_db.fetch_file("pangenome_genes_info", species_id)
     dict_of_centroids = scan_gene_info(gene_info_fp)
 
     # <gene_id:gene_length>
-    gene_length_file = midas_db.get_target_layout("pangenome_genes_len", True, species_id)
+    gene_length_file = midas_db.fetch_file("pangenome_genes_len", species_id)
     dict_of_gene_length = scan_gene_length(gene_length_file)
 
     dest_file = midas_db.get_target_layout("pangenome_cluster_info", True, species_id)
-    local_file = drop_lz4(os.path.basename(dest_file))
+    local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
 
     with OutputStream(local_file) as stream:
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
@@ -234,6 +235,9 @@ def build_markerdb(args):
 
     build_markerdb_log = midas_db.get_target_layout("build_markerdb_log", remote=False)
     build_marker_subdir = os.path.dirname(build_markerdb_log)
+
+    if not args.debug:
+        command(f"rm -rf {build_marker_subdir}")
     if not os.path.isdir(build_marker_subdir):
         command(f"mkdir -p {build_marker_subdir}")
 
@@ -261,9 +265,10 @@ def build_markerdb(args):
     command(cmd_index)
 
     # Upload generated fasta and index files
-    upload_tasks = list(zip(midas_db.get_target_layout("marker_db", False), midas_db.get_target_layout("marker_db", True)))
-    multithreading_map(upload_star, upload_tasks)
-    upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
+    if not args.debug:
+        upload_tasks = list(zip(midas_db.get_target_layout("marker_db", False), midas_db.get_target_layout("marker_db", True)))
+        multithreading_map(upload_star, upload_tasks)
+        upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
 
 
 def register_args(main_func):
@@ -280,7 +285,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

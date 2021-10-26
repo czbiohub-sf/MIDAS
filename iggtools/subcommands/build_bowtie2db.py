@@ -1,21 +1,16 @@
 import json
-
+import os
 from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, command
 from iggtools.common.bowtie2 import build_bowtie2_db
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.species import parse_species, filter_species
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 def register_args(main_func):
     subparser = add_subcommand('build_bowtie2db', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
 
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           required=True,
-                           help=f"Local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--bt2_indexes_dir',
                            dest='bt2_indexes_dir',
                            type=str,
@@ -29,6 +24,18 @@ def register_args(main_func):
                            default="repgenomes",
                            choices=['repgenomes', 'pangenomes'],
                            help=f"Bowtie2 db name to build")
+
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
+                           type=str,
+                           default="uhgg",
+                           choices=MIDASDB_NAMES,
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default=".",
+                           help=f"Path to local MIDAS Database.")
 
     subparser.add_argument('--species_list',
                            dest='species_list',
@@ -75,7 +82,7 @@ def build_bowtie2db(args):
         tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
 
         # Fetch UHGG related files
-        midas_db = MIDAS_DB(args.midas_db, args.num_cores)
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::start")

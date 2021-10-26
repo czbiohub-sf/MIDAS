@@ -3,6 +3,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, command
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.species import parse_species
+from iggtools.params.inputs import MIDASDB_NAMES
 
 CONCURRENT_DOWNLOAD = 20
 
@@ -12,7 +13,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

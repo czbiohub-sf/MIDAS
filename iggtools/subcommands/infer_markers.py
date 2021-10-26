@@ -2,10 +2,10 @@
 import os
 import sys
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, retry, command, drop_lz4, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores, download_reference
+from iggtools.common.utils import tsprint, InputStream, retry, command, drop_lz4, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores
 from iggtools.common.utilities import scan_genes, decode_genomes_arg
 from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov
+from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov, MIDASDB_NAMES
 
 
 CONCURRENT_INFER_MARKERS = num_physical_cores
@@ -18,15 +18,13 @@ def find_files_with_retry(f):
 
 def hmm_search(genome_id, input_annotations, marker_genes_hmm, num_threads=1):
     """ Performance HMM search using prokka annotated protein sequences """
-    annotated_genes = download_reference(input_annotations)
     hmmsearch_file = f"{genome_id}.hmmsearch"
-
     if find_files(hmmsearch_file):
         # This only happens in debug mode, where we can use pre-existing file.
         tsprint(f"Found hmmsearch results for genome {genome_id} from prior run.")
     else:
         try:
-            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} {marker_genes_hmm} {annotated_genes}")
+            command(f"hmmsearch --noali --cpu {num_threads} --domtblout {hmmsearch_file} {marker_genes_hmm} {input_annotations}")
         except:
             # Do not keep bogus zero-length files;  those are harmful if we rerun in place.
             command(f"mv {hmmsearch_file} {hmmsearch_file}.bogus", check=False)
@@ -65,10 +63,10 @@ def find_hits(hmmsearch_file):
 
 def compute_marker_genes(genome_id, species_id, marker_genes_hmm, midas_db):
     """ Parse local HMM search output file """
-    s3_gene_faa = midas_db.get_target_layout("annotation_faa", True, species_id, genome_id)
+    s3_gene_faa = midas_db.fetch_file("annotation_faa", species_id, genome_id)
     hmmsearch_file = hmm_search(genome_id, s3_gene_faa, marker_genes_hmm, num_threads=1)
 
-    s3_gene_seq = midas_db.get_target_layout("annotation_ffn", True, species_id, genome_id)
+    s3_gene_seq = midas_db.fetch_file("annotation_ffn", species_id, genome_id)
     genes = scan_genes(s3_gene_seq)
 
     hmmsearch_seq = f"{genome_id}.markers.fa"
@@ -114,8 +112,9 @@ def infer_markers_master(args):
         tsprint(msg)
         last_dest = midas_db.get_target_layout("marker_genes_log", True, species_id, genome_id)
 
-        worker_log = drop_lz4(os.path.basename(last_dest))
-        worker_subdir = f"{midas_db.db_dir}/{species_id}__{genome_id}"
+        worker_log = midas_db.get_target_layout("marker_genes_log", False, species_id, genome_id)
+        worker_subdir = os.path.dirname(worker_log)
+
         if not args.debug:
             command(f"rm -rf {worker_subdir}")
         if not os.path.isdir(worker_subdir):
@@ -123,7 +122,7 @@ def infer_markers_master(args):
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {worker_log}"
-        with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+        with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
 
@@ -133,7 +132,7 @@ def infer_markers_master(args):
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
             if not args.debug:
-                upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
+                upload(f"{worker_log}", last_dest, check=False)
                 command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -193,7 +192,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

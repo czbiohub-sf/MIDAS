@@ -10,6 +10,7 @@ from iggtools.common.snvs import call_alleles
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
 from iggtools.common.argparser import add_subcommand
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_SAMPLE_COUNTS = 2
@@ -50,7 +51,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -558,7 +559,7 @@ def midas_merge_snps(args):
 
         # Download representative genomes for every species into midas_db
         num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else pool_of_samples.get_target_layout("midas_db_dir")
+        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else pool_of_samples.get_target_layout("midas_db_dir")
         midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores)
 
         # The unit of compute across-samples pop SNPs is: chunk_of_sites.

@@ -15,8 +15,10 @@ igg_dict = {
     "uhgg": "s3://microbiome-igg/2.0",
     "gtdb": "s3://microbiome-igg/gtdb_r202",
     "testdb": "s3://microbiome-igg/testdb",
+    "custom": "s3://microbiome-igg/custom",
 }
 
+MIDASDB_NAMES = ['uhgg', 'gtdb', 'testdb', 'custom']
 
 MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
 hmmsearch_max_evalue = 1e-5

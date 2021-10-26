@@ -8,6 +8,7 @@ from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, drop_lz4, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
 from iggtools.common.utilities import decode_species_arg
 from iggtools.models.midasdb import MIDAS_DB
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
@@ -168,8 +169,9 @@ def build_pangenome_master(args):
             tsprint(msg)
             last_dest = midas_db.get_target_layout("pangenome_log", True, species_id)
 
-            worker_log = drop_lz4(os.path.basename(last_dest))
-            worker_subdir = f"{midas_db.db_dir}/build_pangenome/{species_id}"
+            worker_log = midas_db.get_target_layout("pangenome_log", False, species_id)
+            worker_subdir = os.path.dirname(worker_log)
+
             if not args.debug:
                 command(f"rm -rf {worker_subdir}")
             if not os.path.isdir(worker_subdir):
@@ -177,7 +179,7 @@ def build_pangenome_master(args):
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
             worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
-            with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+            with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
 
@@ -187,7 +189,7 @@ def build_pangenome_master(args):
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
                 if not args.debug:
-                    upload(f"{worker_subdir}/{worker_log}", last_dest, check=False)
+                    upload(f"{worker_log}", last_dest, check=False)
                     command(f"rm -rf {worker_subdir}", check=False)
 
     # Check for destination presence in s3 with up to 10-way concurrency.
@@ -213,7 +215,7 @@ def build_pangenome_worker(args):
 
     species_genomes_ids = species[species_id].keys()
 
-    cleaned = multiprocessing_map(clean_genes, ((genome_id, midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "ffn")) for genome_id in species_genomes_ids))
+    cleaned = multiprocessing_map(clean_genes, ((genome_id, midas_db.fetch_file("annotation_file", species_id, genome_id, "ffn")) for genome_id in species_genomes_ids))
 
     command("rm -f genes.ffn genes.len")
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
@@ -230,6 +232,7 @@ def build_pangenome_worker(args):
     cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
+    command(f"cp centroids.{max_percent}.ffn centroids.ffn")
 
     if not args.debug:
         # Create list of (source, dest) pairs for uploading.
@@ -268,7 +271,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',

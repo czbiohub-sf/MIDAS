@@ -17,6 +17,7 @@ from iggtools.models.sample import Sample
 from iggtools.models.species import Species, parse_species, load_chunks_cache
 from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_MARKER_DEPTH = 5.0
@@ -66,7 +67,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -511,7 +512,7 @@ def midas_run_genes(args):
         dict_of_species = {species_id: Species(species_id, args.cache) for species_id in species_ids_of_interest}
 
         num_cores_download = min(species_counts, args.num_cores)
-        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else sample.get_target_layout("midas_db_dir")
+        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
         midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores_download)
 
         arguments_list = design_chunks(midas_db, args.chunk_size)

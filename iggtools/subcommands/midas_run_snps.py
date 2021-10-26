@@ -17,6 +17,7 @@ from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, for
 from iggtools.models.sample import Sample
 from iggtools.models.species import Species, parse_species, collect_chunk_pileup, load_chunks_cache
 from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_MARKER_DEPTH = 5.0
@@ -69,18 +70,13 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb'],
+                           choices=['uhgg', 'gtdb', 'testdb'],
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
 
     # Species related
     subparser.add_argument('--species_list',
@@ -756,7 +752,7 @@ def midas_run_snps(args):
         tsprint(f"CZ::design_chunks::start")
         num_cores = min(args.num_cores, species_counts)
 
-        midasdb_dir = os.path.abspath(args.midas_db) if args.midas_db else sample.get_target_layout("midas_db_dir")
+        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
         midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores)
 
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)

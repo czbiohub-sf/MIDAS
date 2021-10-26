@@ -68,15 +68,16 @@ def compute_chunks_master(args):
             tsprint(msg)
             local_file = midas_db.get_target_layout(dest_filename, False, species_id, genome_id, args.chunk_size)
 
-            worker_log = f"{dest_filename}.log"
+            worker_log = f"{species_id}_{dest_filename}.log"
             worker_subdir = os.path.dirname(local_file)
+
             if not args.debug:
                 command(f"rm -rf {worker_subdir}")
             if not os.path.isdir(worker_subdir):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_subdir}/{worker_log}"
             with open(f"{worker_subdir}/{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -103,10 +104,10 @@ def compute_chunks_worker(args):
     genome_id = repgenome_for_species[species_id]
 
     if args.chunk_type == "run_snps":
-        contigs_fp = midas_db.get_target_layout("representative_genome", True, species_id, genome_id)
+        contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
         chunks_to_cache = design_run_snps_chunks(species_id, contigs_fp, args.chunk_size)
     if args.chunk_type == "merge_snps":
-        contigs_fp = midas_db.get_target_layout("representative_genome", True, species_id, genome_id)
+        contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
         chunks_to_cache = design_merge_snps_chunks(species_id, contigs_fp, args.chunk_size)
     if args.chunk_type == "genes":
         cluster_info_fp = midas_db.fetch_file("pangenome_cluster_info", species_id)
