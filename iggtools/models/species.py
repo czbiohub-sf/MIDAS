@@ -78,14 +78,14 @@ class Species:
 
         species_id = self.id
         genome_id = midas_db.uhgg.representatives[species_id]
-
+        
         s3_file = midas_db.get_target_layout("chunks_sites_run", True, species_id, genome_id, chunk_size)
         local_file = midas_db.get_target_layout("chunks_sites_run", False, species_id, genome_id, chunk_size)
 
         if os.path.exists(local_file):
             pass
         elif find_files_with_retry(s3_file):
-            midas_db.fetch_file("chunks_sites_run", species_id, "", chunk_size)
+            midas_db.fetch_file("chunks_sites_run", species_id, genome_id, chunk_size)
         else:
             # Compute gene chunks and write to local file
             contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
@@ -115,7 +115,7 @@ class Species:
         if os.path.exists(local_file):
             pass
         elif find_files_with_retry(s3_file):
-            midas_db.fetch_file("chunks_sites_merge", species_id, "", chunk_size)
+            midas_db.fetch_file("chunks_sites_merge", species_id, genome_id, chunk_size)
         else:
             # Compute gene chunks and write to local file
             contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)

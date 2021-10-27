@@ -72,7 +72,7 @@ def compute_chunks_master(args):
             worker_subdir = os.path.dirname(local_file)
 
             if not args.debug:
-                command(f"rm -rf {worker_subdir}")
+                command(f"rm -f {local_file}")
             if not os.path.isdir(worker_subdir):
                 command(f"mkdir -p {worker_subdir}")
 

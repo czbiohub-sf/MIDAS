@@ -16,8 +16,12 @@ python -m iggtools build_pangenome --species all --midasdb_name testdb --midasdb
 python -m iggtools build_midasdb --generate_cluster_info --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
 
 
-python -m iggtools compute_chunks --chunk_type genes --chunk_size 50000 --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
-python -m iggtools compute_chunks --chunk_type run_snps --chunk_size 100000 --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
+myArray=(50000 100000 500000 1000000 2000000)
+for chunksize in ${myArray[@]}; do
+  python -m iggtools compute_chunks --chunk_type genes --chunk_size $chunksize --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
+  python -m iggtools compute_chunks --chunk_type run_snps --chunk_size $chunksize --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
+done
+
 python -m iggtools compute_chunks --chunk_type merge_snps --chunk_size 500000 --species all --midasdb_name testdb --midasdb_dir local_testdb --debug
 
 

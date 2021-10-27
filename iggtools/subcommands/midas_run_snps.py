@@ -13,7 +13,7 @@ from iggtools.common.argparser import add_subcommand
 from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema
+from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
 from iggtools.models.sample import Sample
 from iggtools.models.species import Species, parse_species, collect_chunk_pileup, load_chunks_cache
 from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
@@ -34,7 +34,7 @@ DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
 
 DEFAULT_SITE_DEPTH = 2
-DEFAULT_SNP_MAF = 0.05
+DEFAULT_SNP_MAF = 0.1
 
 
 def register_args(main_func):
@@ -95,7 +95,7 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_MARKER_MEDIAN_DEPTH,
-                           help=f"Include species with > X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
+                           help=f"Include species with >= X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
 
     # Alignment flags (Bowtie2 or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -119,8 +119,7 @@ def register_args(main_func):
                            dest='fragment_length',
                            metavar='FLOAT',
                            default=DEFAULT_MAX_FRAGLEN,
-                           help=f"Maximum fragment length for paired reads.")
-
+                           help=f"Maximum fragment length for paired reads ({DEFAULT_MAX_FRAGLEN}).")
 
     #  Pileup flags (samtools, or postprocessing)
     subparser.add_argument('--aln_mapid',
@@ -164,6 +163,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Only recruit properly paired reads for pileup.")
+    subparser.add_argument('--advanced',
+                           action='store_true',
+                           default=False,
+                           help=f"Report majore/minor allele for each genomic sites.")
 
     # File related
     subparser.add_argument('--chunk_size',
@@ -230,14 +233,13 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
     assert all(flags)
 
-    # Sort species by the largest contig length
-    sorted_tuples_of_species = sorted(((sp.id, sp.max_contig_length) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
+    # Sort species by the max_contig_length or num_of_snps_chunks
+    sorted_tuples_of_species = sorted(((sp.id, sp.num_of_snps_chunks) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
 
     arguments_list = []
     for species_id, _ in sorted_tuples_of_species:
         sp = dict_of_species[species_id]
 
-        # The structure of the chunks depends on the representative genome sequences
         num_of_snps_chunks = sp.num_of_snps_chunks
         for chunk_id in range(0, num_of_snps_chunks):
             arguments_list.append((species_id, chunk_id))
@@ -247,7 +249,6 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
         for _ in range(num_of_snps_chunks):
             semaphore_for_species[species_id].acquire()
 
-    tsprint(arguments_list)
     tsprint("================= Total number of compute chunks: " + str(len(arguments_list)))
 
     for species_id in dict_of_species.keys():
@@ -457,7 +458,7 @@ def filter_bam(pargs):
     repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam") # input
     filtered_bamfile = sample.get_target_layout("species_bam", species_id) # <species_id> output
 
-    if global_args.paried_only:
+    if global_args.paired_only:
         reads_stats = filter_bam_by_proper_pair(species_id, repgenome_bamfile, filtered_bamfile)
     else:
         reads_stats = filter_bam_by_single_read(species_id, repgenome_bamfile, filtered_bamfile)
@@ -568,19 +569,20 @@ def midas_pileup(packed_args):
                 continue
             aln_stats["contig_covered_bases"] += 1
 
-            rc_ACGT = [count_a, count_c, count_g, count_t]
-            tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
-            major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
+            if global_args.advanced:
+                rc_ACGT = [count_a, count_c, count_g, count_t]
+                tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
+                major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
 
-            if allele_counts == 0:
-                continue
+                if allele_counts == 0:
+                    continue
 
-            major_index = 'ACGT'.index(major_allele)
-            minor_index = 'ACGT'.index(minor_allele)
-            major_allelefreq = rc_ACGT[major_index] / depth
-            minor_allelefreq = 0.0 if major_index == minor_index else rc_ACGT[minor_index] / depth
+                major_index = 'ACGT'.index(major_allele)
+                minor_index = 'ACGT'.index(minor_allele)
+                major_allelefreq = rc_ACGT[major_index] / depth
+                minor_allelefreq = 0.0 if major_index == minor_index else rc_ACGT[minor_index] / depth
 
-            row.extend([major_allele, minor_allele, major_allelefreq, minor_allelefreq, allele_counts])
+                row.extend([major_allele, minor_allele, major_allelefreq, minor_allelefreq, allele_counts])
 
             stream.write("\t".join(map(format_data, row)) + "\n")
         assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
@@ -607,7 +609,10 @@ def merge_chunks_per_species(species_id):
     species_snps_pileup_file = sample.get_target_layout("snps_pileup", species_id)
 
     with OutputStream(species_snps_pileup_file) as stream:
-        stream.write('\t'.join(snps_pileup_schema.keys()) + '\n')
+        if global_args.advanced:
+            stream.write("\t".join(snps_pileup_schema.keys()) + "\n")
+        else:
+            stream.write("\t".join(snps_pileup_basic_schema.keys()) + "\n")
     cat_files(list_of_chunks_pileup, species_snps_pileup_file, 20)
 
     # The chunk_pilup_path will be used in merge_midas_snps.
@@ -656,8 +661,10 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, ch
     """ Collect species pileup aln stats from all chunks and write to file """
 
     species_pileup_summary = defaultdict(dict)
+
     with OutputStream(chunk_output) as stream:
         stream.write("\t".join(snps_chunk_summary_schema.keys()) + "\n")
+
         for records in chunks_pileup_summary:
             if records is True:
                 continue
@@ -723,15 +730,13 @@ def midas_run_snps(args):
         if args.prebuilt_bowtie2_indexes:
             bt2db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
             bt2db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
-            assert bowtie2_index_exists(bt2db_dir, bt2db_name), f"Provided {bt2db_dir}/{bt2db_name} don't exist."
 
-            # Required list of species used to build bowtie2 database to fetch the genome sequences.
-            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            assert bowtie2_index_exists(bt2db_dir, bt2db_name), f"Provided {bt2db_dir}/{bt2db_name} don't exist."
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Require list of speices used to build the provided Bowtie2 indexes." # to fetch fasta seq
+
             tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2db_dir}/{bt2db_name}")
-            bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
-                for species_id in select_from_tsv(stream, schema={"species_id": str}):
-                    bt2_species_list.append(species_id[0])
+                bt2_species_list = [spid[0] for spid in select_from_tsv(stream, schema={"species_id": str})]
 
             # Update the species list
             species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
@@ -752,8 +757,8 @@ def midas_run_snps(args):
         tsprint(f"CZ::design_chunks::start")
         num_cores = min(args.num_cores, species_counts)
 
-        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores)
+        midasdb_dir = args.midasdb_dir if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
+        midas_db = MIDAS_DB(os.path.abspath(midasdb_dir), args.midasdb_name, num_cores)
 
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
@@ -771,7 +776,7 @@ def midas_run_snps(args):
         tsprint(f"CZ::bowtie2_align::finish")
 
         tsprint(f"CZ::filter_bam::start")
-        cores_per_species = floor(args.num_cores/species_counts)
+        cores_per_species = max(1, floor(args.num_cores/species_counts))
         list_of_contig_aln_summary = multiprocessing_map(filter_bam, [(species_id, cores_per_species) for species_id in species_ids_of_interest], args.num_cores)
         tsprint(f"CZ::filter_bam::finish")
 

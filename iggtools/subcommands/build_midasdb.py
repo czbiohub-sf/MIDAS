@@ -5,7 +5,7 @@ from multiprocessing import Semaphore
 
 import gffutils
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, OutputStream, drop_lz4, download_reference, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star
+from iggtools.common.utils import tsprint, OutputStream, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star
 from iggtools.common.utilities import scan_mapfile, scan_gene_info, scan_gene_length
 from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
 from iggtools.models.midasdb import MIDAS_DB

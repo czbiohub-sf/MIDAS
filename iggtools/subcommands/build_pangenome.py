@@ -5,7 +5,7 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, drop_lz4, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
+from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
 from iggtools.common.utilities import decode_species_arg
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.inputs import MIDASDB_NAMES
