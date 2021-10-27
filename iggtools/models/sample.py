@@ -17,7 +17,7 @@ def get_single_layout(sample_name, dbtype=""):
             "tempdir":                 f"{sample_name}/temp/{dbtype}",
             "temp_subdir":             f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            "midas_db_dir":            f"midas2_db",
+            "midas_db_dir":            f"midasdb",
             "bt2_indexes_dir":         f"{sample_name}/bt2_indexes/{dbtype}",
 
             # species workflow output

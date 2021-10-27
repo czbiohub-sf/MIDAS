@@ -14,7 +14,7 @@ from iggtools.models.species import scan_cluster_info
 from iggtools.params.inputs import MIDASDB_NAMES
 
 
-DEFAULT_GENOME_DEPTH = fetch_default_genome_depth("genes")
+DEFAULT_GENOME_DEPTH = 1.0
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35
@@ -55,12 +55,12 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
-                           default=".",
+                           default="midasdb",
                            help=f"Local MIDAS Database path mirroing S3.")
     subparser.add_argument('--midas_db',
                            dest='midas_db',
@@ -91,14 +91,11 @@ def register_args(main_func):
     return main_func
 
 
-def process(pargs):
+def process(list_of_species):
     global dict_of_species
-
-    midas_db, list_of_species = pargs
 
     for species_id in list_of_species:
         sp = dict_of_species[species_id]
-        sp.get_cluster_info_fp(midas_db)
         accumulator = build_gene_matrices(species_id)
         assert write_gene_matrices(accumulator, species_id)
 
@@ -133,6 +130,7 @@ def collect(accumulator, my_args):
     global global_args
     global pool_of_samples
     global dict_of_species
+
     pid = global_args.cluster_pid
 
     species_id, sample_index, genes_coverage_fp = my_args
@@ -194,6 +192,7 @@ def midas_merge_genes(args):
 
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
         species_counts = len(species_ids_of_interest)
+
         assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(f"{species_counts} species pass the filter")
 
@@ -206,11 +205,15 @@ def midas_merge_genes(args):
             return [L[x: x+n] for x in range(0, len(L), n)]
         chunk_size = ceil(species_counts / args.num_cores)
 
-        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else pool_of_samples.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, args.num_cores)
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
+        cluster_info_files = midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
+
+        for species_id in species_ids_of_interest:
+            sp = dict_of_species[species_id]
+            sp.get_cluster_info_fp(midas_db)
 
         chunk_lists = chunkify(species_ids_of_interest, chunk_size)
-        proc_flags = multiprocessing_map(process, ((midas_db, los) for los in chunk_lists), args.num_cores)
+        proc_flags = multiprocessing_map(process, chunk_lists, args.num_cores)
         assert all(s == "worked" for s in proc_flags)
 
     except Exception as error:

@@ -75,7 +75,7 @@ def register_args(main_func):
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
-                           default=".",
+                           default="midasdb",
                            help=f"Local MIDAS Database path mirroing S3.")
 
     # Species related
@@ -755,10 +755,8 @@ def midas_run_snps(args):
 
         # Fetch representative genome fastas for each species (multiprocessing)
         tsprint(f"CZ::design_chunks::start")
-        num_cores = min(args.num_cores, species_counts)
-
-        midasdb_dir = args.midasdb_dir if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(os.path.abspath(midasdb_dir), args.midasdb_name, num_cores)
+        num_cores_download = min(args.num_cores, species_counts)
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")

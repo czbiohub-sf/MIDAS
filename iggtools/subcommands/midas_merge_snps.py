@@ -56,13 +56,8 @@ def register_args(main_func):
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
-                           default=".",
+                           default="midasdb",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
@@ -151,11 +146,16 @@ def register_args(main_func):
                                     any: keep sites regardless of observed alleles
                                     (Default: {%s})""" % DEFAULT_SNP_TYPE)
 
+    subparser.add_argument('--advanced',
+                           action='store_true',
+                           default=False,
+                           help=f"Report majore/minor allele for each genomic sites.")
+
     return main_func
 
 
 def calculate_chunk_size(samples_count, chunk_size):
-    if samples_count <= 10:
+    if samples_count <= 20:
         return 0
     if samples_count <= 100:
         return 1000000
@@ -176,8 +176,8 @@ def design_chunks(midas_db, chunk_size):
         species_id = sp.id
         samples_count = sp.samples_count
 
-        sp.gene_feature_file = midas_db.fetch_files("gene_feature", [species_id])[species_id]
-        sp.genes_seq_file = midas_db.fetch_files("gene_seq", [species_id])[species_id]
+        sp.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
+        sp.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 
         chunk_size = calculate_chunk_size(samples_count, chunk_size)
         if chunk_size == 0:
@@ -186,6 +186,7 @@ def design_chunks(midas_db, chunk_size):
 
         sp.get_repgenome(midas_db)
         assert sp.compute_snps_chunks_merge(midas_db, chunk_size)
+
         num_of_chunks = sp.num_of_sites_chunks
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
@@ -194,7 +195,6 @@ def design_chunks(midas_db, chunk_size):
         for _ in range(num_of_chunks):
             semaphore_for_species[species_id].acquire()
 
-    tsprint(arguments_list)
     tsprint("================= Total number of compute chunks: " + str(len(arguments_list)))
 
     for species_id in dict_of_species.keys():
@@ -323,8 +323,9 @@ def accumulate(accumulator, proc_args):
     # Output column indices
     c_A, c_C, c_G, c_T, c_count_samples, c_scA, c_scC, c_scG, c_scT = range(9)
 
+    curr_schema = snps_pileup_schema if global_args.advanced else snps_pileup_basic_schema
     with InputStream(snps_pileup_path, filter_cmd) as stream:
-        for row in select_from_tsv(stream, schema=snps_pileup_schema, selected_columns=snps_pileup_basic_schema, result_structure=dict):
+        for row in select_from_tsv(stream, schema=curr_schema, selected_columns=snps_pileup_basic_schema, result_structure=dict):
             # Unpack frequently accessed columns
             ref_id, ref_pos, ref_allele = row["ref_id"], row["ref_pos"], row["ref_allele"]
             A, C, G, T, depth = row["count_a"], row["count_c"], row["count_g"], row["count_t"], row["depth"]
@@ -558,9 +559,8 @@ def midas_merge_snps(args):
         pool_of_samples.write_summary_files(dict_of_species, "snps")
 
         # Download representative genomes for every species into midas_db
-        num_cores = min(args.num_cores, len(species_ids_of_interest))
-        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else pool_of_samples.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores)
+        num_cores_download = min(args.num_cores, len(species_ids_of_interest))
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
         # The unit of compute across-samples pop SNPs is: chunk_of_sites.
         tsprint(f"CZ::design_chunks::start")

@@ -34,7 +34,7 @@ class Species:
 
         # MERGE Flow: select species
         self.list_of_samples = [] # samples associate with current species
-        self.samples_count = None
+        self.samples_count = 0
         self.list_of_samples_depth = [] # mean_coverage
 
         # Merge Genes
@@ -75,10 +75,11 @@ class Species:
 
 
     def compute_snps_chunks_run(self, midas_db, chunk_size):
+        # The structure of the chunks depends on the representative genome sequences
 
         species_id = self.id
         genome_id = midas_db.uhgg.representatives[species_id]
-        
+
         s3_file = midas_db.get_target_layout("chunks_sites_run", True, species_id, genome_id, chunk_size)
         local_file = midas_db.get_target_layout("chunks_sites_run", False, species_id, genome_id, chunk_size)
 

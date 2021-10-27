@@ -40,21 +40,16 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
-                           default=".",
+                           default="midasdb",
                            help=f"Local MIDAS Database path mirroing S3.")
 
     subparser.add_argument('--word_size',
@@ -445,8 +440,7 @@ def midas_run_species(args):
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
         tsprint(f"CZ::fetch_midasdb_files::start")
-        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name)
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
 
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")

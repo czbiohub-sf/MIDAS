@@ -72,17 +72,8 @@ def register_args(main_func):
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
-                           default=".",
+                           default="midasdb",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"Local MIDAS DB which mirrors the s3 IGG db")
-    subparser.add_argument('--cache',
-                           action='store_true',
-                           default=False,
-                           help=f"Cache chunks metadata.")
 
     subparser.add_argument('--species_list',
                            dest='species_list',
@@ -92,9 +83,8 @@ def register_args(main_func):
     subparser.add_argument('--select_by',
                            dest='select_by',
                            type=str,
-                           metavar="CHAR",
                            default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage'],
+                           choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
                            help=f"Column from species_profile based on which to select species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
@@ -194,30 +184,34 @@ def design_chunks_per_species(pargs):
     return sp.compute_gene_chunks(midas_db, chunk_size)
 
 
-def design_chunks(midas_db, chunk_size):
+def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     """ Each chunk_of_genes is indexed by (species_id, chunk_id) """
 
     global dict_of_species
     global semaphore_for_species
 
     semaphore_for_species = dict()
+    dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
 
     num_cores = min(midas_db.num_cores, 16)
     flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], midas_db.num_cores) #<---
     assert all(flags)
 
-    # Sort species by ascending chunk counts
+    # Sort species by ascending num_of_genes_chunks
     sorted_tuples_of_species = sorted(((sp.id, sp.num_of_genes_chunks) for sp in dict_of_species.values()), key=itemgetter(1))
 
     arguments_list = []
     for species_id, num_of_genes_chunks in sorted_tuples_of_species:
         sp = dict_of_species[species_id]
+
         for chunk_id in range(0, num_of_genes_chunks):
             arguments_list.append((species_id, chunk_id))
 
         semaphore_for_species[species_id] = multiprocessing.Semaphore(num_of_genes_chunks)
         for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
+
+    tsprint("================= Total number of compute chunks: " + str(len(arguments_list)))
 
     # Submit the merge tasks to the end of the queue.
     for species_id, sp in dict_of_species.items():
@@ -332,6 +326,7 @@ def compute_coverage_per_chunk(species_id, chunk_id):
             for rec in chunk_genes_are_marker.values():
                 vals = rec.values()
                 stream2.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
+
         return chunk_cov_stats
     finally:
         semaphore_for_species[species_id].release()
@@ -356,6 +351,7 @@ def compute_scg_coverage_across_chunks(species_id):
                 if r["marker_id"] not in markers_coverage:
                     markers_coverage[r["marker_id"]] = 0.0
                 markers_coverage[r["marker_id"]] += r["gene_coverage"]
+
     median_marker_coverage = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_coverage.values())))
 
     return median_marker_coverage
@@ -487,13 +483,12 @@ def midas_run_genes(args):
             bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
 
             assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Need to provide list of speices used to build the provided Bowtie2 indexes."
+            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), f"Require list of speices used to build the provided Bowtie2 indexes."
 
             tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
-            bt2_species_list = []
             with InputStream(args.prebuilt_bowtie2_species) as stream:
-                for species_id in select_from_tsv(stream, schema={"species_id": str}):
-                    bt2_species_list.append(species_id[0])
+                bt2_species_list = [spid[0] for spid in select_from_tsv(stream, schema={"species_id": str})]
+
             # Update species_list: either/or
             species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
         else:
@@ -508,14 +503,10 @@ def midas_run_genes(args):
         tsprint(len(species_ids_of_interest))
 
         tsprint(f"CZ::design_chunks::start")
-        global dict_of_species
-        dict_of_species = {species_id: Species(species_id, args.cache) for species_id in species_ids_of_interest}
-
         num_cores_download = min(species_counts, args.num_cores)
-        midasdb_dir = os.path.abspath(args.midasdb_dir) if args.midasdb_dir else sample.get_target_layout("midas_db_dir")
-        midas_db = MIDAS_DB(midasdb_dir, args.midasdb_name, num_cores_download)
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
-        arguments_list = design_chunks(midas_db, args.chunk_size)
+        arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"CZ::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
