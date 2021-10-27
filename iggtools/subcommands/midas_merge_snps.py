@@ -11,12 +11,13 @@ from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
 from iggtools.common.argparser import add_subcommand
 from iggtools.params.inputs import MIDASDB_NAMES
+from iggtools.models.species import load_chunks_cache
 
 
 DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
-DEFAULT_CHUNK_SIZE = 500000
+DEFAULT_CHUNK_SIZE = 1000000
 
 DEFAULT_SITE_DEPTH = 2
 DEFAULT_SITE_RATIO = 5.0
@@ -150,6 +151,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Report majore/minor allele for each genomic sites.")
+    subparser.add_argument('--robust_chunk',
+                           action='store_true',
+                           default=False,
+                           help=f"Adjust chunk_size based on species's prevalence.")
 
     return main_func
 
@@ -167,6 +172,7 @@ def calculate_chunk_size(samples_count, chunk_size):
 def design_chunks(midas_db, chunk_size):
     global pool_of_samples
     global dict_of_species
+    global global_args
 
     global semaphore_for_species
     semaphore_for_species = dict()
@@ -179,7 +185,8 @@ def design_chunks(midas_db, chunk_size):
         sp.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
         sp.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 
-        chunk_size = calculate_chunk_size(samples_count, chunk_size)
+        if global_args.robust_chunk:
+            chunk_size = calculate_chunk_size(samples_count, chunk_size)
         if chunk_size == 0:
             arguments_list.append((species_id, -2))
             continue
@@ -187,7 +194,7 @@ def design_chunks(midas_db, chunk_size):
         sp.get_repgenome(midas_db)
         assert sp.compute_snps_chunks_merge(midas_db, chunk_size)
 
-        num_of_chunks = sp.num_of_sites_chunks
+        num_of_chunks = sp.num_of_snps_chunks
         for chunk_id in range(0, num_of_chunks):
             arguments_list.append((species_id, chunk_id))
 
@@ -214,7 +221,7 @@ def process(packed_args):
         sp = dict_of_species[species_id]
 
         tsprint(f"  CZ::process::{species_id}-{chunk_id}::wait collect_chunks")
-        for _ in range(sp.num_of_sites_chunks):
+        for _ in range(sp.num_of_snps_chunks):
             semaphore_for_species[species_id].acquire()
         tsprint(f"  CZ::process::{species_id}-{chunk_id}::start collect_chunks")
         collect_chunks(species_id)
@@ -238,7 +245,8 @@ def snps_worker(species_id, chunk_id):
         if chunk_id == -2:
             species_worker(species_id)
         else:
-            chunk_worker(sp.chunks_of_sites[chunk_id][0])
+            chunks_of_sites = load_chunks_cache(sp.chunks_of_sites_fp)
+            chunk_worker(chunks_of_sites[chunk_id][0])
     finally:
         if species_id in semaphore_for_species:
             semaphore_for_species[species_id].release() # no deadlock
@@ -509,7 +517,7 @@ def collect_chunks(species_id):
     global pool_of_samples
 
     sp = dict_of_species[species_id]
-    number_of_chunks = sp.num_of_sites_chunks
+    number_of_chunks = sp.num_of_snps_chunks
     samples_names = dict_of_species[species_id].fetch_samples_names()
 
     loc_snps_info = [pool_of_samples.get_target_layout("snps_info_by_chunk", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
@@ -546,6 +554,8 @@ def midas_merge_snps(args):
         global dict_of_species
 
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
+        assert len(pool_of_samples.samples), f"No samples in the provided samples_list"
+
         dict_of_species = pool_of_samples.select_species("snps", args)
 
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
