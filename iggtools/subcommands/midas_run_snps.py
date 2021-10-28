@@ -524,6 +524,7 @@ def compute_pileup_per_chunk(packed_args):
 
         number_of_contigs = len(chunks_of_sites[chunk_id])
         collect_chunk_pileup(sample, number_of_contigs, species_id, chunk_id, "chunk_pileup")
+
         return ret
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -600,10 +601,6 @@ def midas_pileup(packed_args):
             stream.write("\t".join(map(format_data, row)) + "\n")
         assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
 
-    if not global_args.analysis_ready:
-        command(f"rm -rf {repgenome_bamfile}", quiet=True)
-        command(f"rm -rf {repgenome_bamfile}.bai", quiet=True)
-
     return aln_stats
 
 
@@ -627,11 +624,15 @@ def merge_chunks_per_species(species_id):
             stream.write("\t".join(snps_pileup_basic_schema.keys()) + "\n")
     cat_files(list_of_chunks_pileup, species_snps_pileup_file, 20)
 
-    # The chunk_pilup_path will be used in merge_midas_snps.
     if not global_args.debug:
         tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
         for s_file in list_of_chunks_pileup:
             command(f"rm -rf {s_file}", quiet=True)
+
+        repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
+        if not global_args.analysis_ready:
+            command(f"rm -rf {repgenome_bamfile}", quiet=True)
+            command(f"rm -rf {repgenome_bamfile}.bai", quiet=True)
 
     # return a status flag
     # the path should be computable somewhere else
