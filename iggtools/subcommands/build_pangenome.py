@@ -6,8 +6,9 @@ from multiprocessing import Semaphore
 import Bio.SeqIO
 from iggtools.common.argparser import add_subcommand, SUPPRESS
 from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
-from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
-from iggtools.params import outputs
+from iggtools.common.utilities import decode_species_arg
+from iggtools.models.midasdb import MIDAS_DB
+from iggtools.params.inputs import MIDASDB_NAMES
 
 
 CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
@@ -18,8 +19,8 @@ CLUSTERING_PERCENTS = sorted(CLUSTERING_PERCENTS, reverse=True)
 CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 
 
-def pan_destpath(species_id, filename):
-    return destpath(get_uhgg_layout(species_id, filename)["pangenome_file"])
+def pan_destpath(midas_db, species_id, filename):
+    return midas_db.get_target_layout("pangenome_file", True, species_id, "", filename)
 
 
 @retry
@@ -27,37 +28,12 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-def decode_species_arg(args, species):
-    selected_species = set()
-    try:  # pylint: disable=too-many-nested-blocks
-        if args.species.upper() == "ALL":
-            selected_species = set(species)
-        else:
-            for s in args.species.split(","):
-                if ":" not in s:
-                    assert str(int(s)) == s, f"Species id is not an integer: {s}"
-                    selected_species.add(s)
-                else:
-                    i, n = s.split(":")
-                    i = int(i)
-                    n = int(n)
-                    assert 0 <= i < n, f"Species class and modulus make no sense: {i}, {n}"
-                    for sid in species:
-                        if int(sid) % n == i:
-                            selected_species.add(sid)
-    except:
-        tsprint(f"ERROR:  Species argument is not a list of species ids or slices: {s}")
-        raise
-    return sorted(selected_species)
-
-
 # 1. Occasional failures in aws s3 cp require a retry.
 # 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
 # 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
 @retry
 def clean_genes(packed_ids):
-    species_id, genome_id = packed_ids
-    input_annotations = destpath(get_uhgg_layout(species_id, "ffn", genome_id)["annotation_file"])
+    genome_id, input_annotations = packed_ids
 
     output_genes = f"{genome_id}.genes.ffn"
     output_info = f"{genome_id}.genes.len"
@@ -162,8 +138,8 @@ def xref(cluster_files, gene_info_file):
 
 
 def build_pangenome(args):
-    if args.zzz_slave_toc:
-        build_pangenome_slave(args)
+    if args.zzz_worker_mode:
+        build_pangenome_worker(args)
     else:
         build_pangenome_master(args)
 
@@ -172,12 +148,8 @@ def build_pangenome_master(args):
 
     # Fetch table of contents from s3.
     # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = os.path.basename(outputs.genomes)
-    command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
-
-    db = UHGG(local_toc)
-    species = db.species
+    midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
+    species = midas_db.uhgg.species
 
     def species_work(species_id):
         assert species_id in species, f"Species {species_id} is not in the database."
@@ -185,7 +157,7 @@ def build_pangenome_master(args):
 
         # The species build will upload this file last, after everything else is successfully uploaded.
         # Therefore, if this file exists in s3, there is no need to redo the species build.
-        dest_file = pan_destpath(species_id, "gene_info.txt")
+        dest_file = pan_destpath(midas_db, species_id, "gene_info.txt")
         msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -195,26 +167,30 @@ def build_pangenome_master(args):
 
         with CONCURRENT_SPECIES_BUILDS:
             tsprint(msg)
-            logfile = get_uhgg_layout(species_id)["pangenome_log"]
-            slave_log = os.path.basename(logfile)
-            slave_subdir = str(species_id)
+            last_dest = midas_db.get_target_layout("pangenome_log", True, species_id)
+
+            worker_log = midas_db.get_target_layout("pangenome_log", False, species_id)
+            worker_subdir = os.path.dirname(worker_log)
+
             if not args.debug:
-                command(f"rm -rf {slave_subdir}")
-            if not os.path.isdir(slave_subdir):
-                command(f"mkdir {slave_subdir}")
+                command(f"rm -rf {worker_subdir}")
+            if not os.path.isdir(worker_subdir):
+                command(f"mkdir -p {worker_subdir}")
+
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            slave_cmd = f"cd {slave_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --zzz_slave_mode --zzz_slave_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {slave_log}"
-            with open(f"{slave_subdir}/{slave_log}", "w") as slog:
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
-                slog.write(slave_cmd + "\n")
+                slog.write(worker_cmd + "\n")
+
             try:
-                command(slave_cmd)
+                command(worker_cmd)
             finally:
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
-                upload(f"{slave_subdir}/{slave_log}", destpath(logfile), check=False)
                 if not args.debug:
-                    command(f"rm -rf {slave_subdir}", check=False)
+                    upload(f"{worker_log}", last_dest, check=False)
+                    command(f"rm -rf {worker_subdir}", check=False)
 
     # Check for destination presence in s3 with up to 10-way concurrency.
     # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
@@ -222,27 +198,24 @@ def build_pangenome_master(args):
     multithreading_map(species_work, species_id_list, num_threads=10)
 
 
-def build_pangenome_slave(args):
+def build_pangenome_worker(args):
     """
     Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
     Output spec: https://github.com/czbiohub/iggtools/wiki#pan-genomes
     """
 
-    violation = "Please do not call build_pangenome_slave directly.  Violation"
-    assert args.zzz_slave_mode, f"{violation}:  Missing --zzz_slave_mode arg."
-    assert os.path.isfile(args.zzz_slave_toc), f"{violation}: File does not exist: {args.zzz_slave_toc}"
+    violation = "Please do not call build_pangenome_worker directly.  Violation"
+    assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
     assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
-    db = UHGG(args.zzz_slave_toc)
-    species = db.species
     species_id = args.species
-
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name)
+    species = midas_db.uhgg.species
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
-    species_genomes = species[species_id]
-    species_genomes_ids = species_genomes.keys()
+    species_genomes_ids = species[species_id].keys()
 
-    cleaned = multiprocessing_map(clean_genes, ((species_id, genome_id) for genome_id in species_genomes_ids))
+    cleaned = multiprocessing_map(clean_genes, ((genome_id, midas_db.fetch_file("annotation_file", species_id, genome_id, "ffn")) for genome_id in species_genomes_ids))
 
     command("rm -f genes.ffn genes.len")
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
@@ -259,26 +232,28 @@ def build_pangenome_slave(args):
     cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
+    command(f"cp centroids.{max_percent}.ffn centroids.ffn")
 
-    # Create list of (source, dest) pairs for uploading.
-    # Note that centroids.{max_percent}.ffn is uploaded to two different destinations.
-    upload_tasks = [
-        ("genes.ffn", pan_destpath(species_id, "genes.ffn")),
-        ("genes.len", pan_destpath(species_id, "genes.len")),
-        (f"centroids.{max_percent}.ffn", pan_destpath(species_id, "centroids.ffn"))
-    ]
+    if not args.debug:
+        # Create list of (source, dest) pairs for uploading.
+        # Note that centroids.{max_percent}.ffn is uploaded to two different destinations.
+        upload_tasks = [
+            ("genes.ffn", pan_destpath(midas_db, species_id, "genes.ffn")),
+            ("genes.len", pan_destpath(midas_db, species_id, "genes.len")),
+            (f"centroids.{max_percent}.ffn", pan_destpath(midas_db, species_id, "centroids.ffn"))
+        ]
 
-    for src in flatten(cluster_files.values()):
-        upload_tasks.append((src, pan_destpath(species_id, f"temp/{src}")))
+        for src in flatten(cluster_files.values()):
+            upload_tasks.append((src, pan_destpath(midas_db, species_id, f"temp/{src}")))
 
-    # Upload in parallel.
-    last_output = "gene_info.txt"
-    last_dest_file = pan_destpath(species_id, last_output)
-    command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
-    multithreading_map(upload_star, upload_tasks)
+        # Upload in parallel.
+        last_output = "gene_info.txt"
+        last_dest_file = pan_destpath(midas_db, species_id, last_output)
+        command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
+        multithreading_map(upload_star, upload_tasks)
 
-    # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
-    upload(last_output, last_dest_file)
+        # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
+        upload(last_output, last_dest_file)
 
 
 def register_args(main_func):
@@ -288,10 +263,26 @@ def register_args(main_func):
                            dest='species',
                            required=False,
                            help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
-    subparser.add_argument('--zzz_slave_toc',
-                           dest='zzz_slave_toc',
+    subparser.add_argument('--zzz_worker_toc',
+                           dest='zzz_worker_toc',
                            required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to slave"
+                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
+                           type=str,
+                           default="uhgg",
+                           choices=MIDASDB_NAMES,
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default=".",
+                           help=f"Local MIDAS Database path mirroing S3.")
+    subparser.add_argument('--zzz_worker_mode',
+                           dest='zzz_worker_mode',
+                           action='store_true',
+                           default=False,
+                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 

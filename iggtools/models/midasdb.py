@@ -2,104 +2,174 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
 from iggtools.common.utils import download_reference, command, multiprocessing_map
-from iggtools.params import outputs
 from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
-from iggtools.params.schemas import MARKER_FILE_EXTS
+from iggtools.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
+from iggtools.params import outputs
+
+
+# The "output" or built DB layout in S3.
+# See https://github.com/czbiohub/iggtools/wiki#target-layout-in-s3
+def get_midasdb_layout(species_id="", genome_id="", component=""):
+    return {
+        "table_of_contents":             f"genomes.tsv",
+
+        "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+        "imported_genome_log":           f"cleaned_imports/{species_id}/{genome_id}/import_uhgg.log",
+
+        "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+
+        "marker_db":                     [f"markers/{marker_set}/{marker_set}.{ext}" for ext in MARKER_FILE_EXTS],
+        "marker_db_hmm":                 f"markers_models/{marker_set}/marker_genes.hmm",
+        "marker_db_hmm_cutoffs":         f"markers_models/{marker_set}/marker_genes.mapping_cutoffs",
+        "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
+
+        "pangenome_file":                f"pangenomes/{species_id}/{component}",
+        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
+        "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
+        "pangenome_genes_info":          f"pangenomes/{species_id}/gene_info.txt",
+        "pangenome_genes_len":           f"pangenomes/{species_id}/genes.len",
+
+        "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
+        "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
+
+        "chunks_centroids":              f"chunks/genes/chunksize.{component}/{species_id}.json",
+        "chunks_sites_run":              f"chunks/sites/run/chunksize.{component}/{species_id}/{genome_id}.json",
+        "chunks_sites_merge":            f"chunks/sites/merge/chunksize.{component}/{species_id}/{genome_id}.json",
+
+        "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
+        "marker_genes_seq":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.fa",
+        "marker_genes_map":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.map",
+        "marker_genes_hmmsearch":        f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.hmmsearch",
+        "marker_genes_log":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/build_marker_genes.log",
+
+        "annotation_file":               f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
+        "annotation_faa":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.faa",
+        "annotation_ffn":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.ffn",
+        "annotation_fna":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+        "annotation_gff":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.gff",
+        "annotation_tsv":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.tsv",
+        "annotation_log":                f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
+        "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
+
+        "gene_features_log":             f"gene_annotations/{species_id}/{genome_id}/build_gene_features.log",
+    }
 
 
 class MIDAS_DB: # pylint: disable=too-few-public-methods
 
-    def __init__(self, midas_db_dir=".", num_cores=1):
-        self.midas_db_dir = midas_db_dir
+    def __init__(self, db_dir=".", db_name="uhgg", num_cores=1):
+        self.db_dir = os.path.abspath(db_dir) # local dir
+        self.db_name = igg_dict[db_name] # s3 dir
         self.num_cores = num_cores
-        self.local_toc = _fetch_file_from_s3((outputs.genomes, self.get_target_layout("genomes_toc", False)))
+        self.local_toc = self.fetch_files("table_of_contents")
+
         self.uhgg = UHGG(self.local_toc)
 
 
-    def get_target_layout(self, filename, remote, component="", species_id="", genome_id=""):
-        local_path = get_uhgg_layout(species_id, component, genome_id)[filename]
-        target_path = destpath(local_path) if remote else os.path.join(self.midas_db_dir, local_path)
-        return target_path
+    def get_repgenome_id(self, species_id):
+        return self.uhgg.representatives[species_id]
 
 
-    def fetch_files(self, filetype, list_of_species_ids=""):
-        """ Fetch files from {inputs.igg} to local midas _db """
-        args_list = []
-        fetched_files = {}
+    def construct_local_path(self, filename, species_id="", genome_id="", component=""):
+        local_path = _get_local_path(get_midasdb_layout(species_id, genome_id, component)[filename], self.db_dir)
+        return local_path
 
-        if filetype == "marker_db":
-            for ext in MARKER_FILE_EXTS:
-                s3_file = self.get_target_layout("marker_db", remote=True, component=ext)
-                dest_file = self.get_target_layout("marker_db", remote=False, component=ext)
-                fetched_files[ext] = _fetch_file_from_s3((s3_file, dest_file))
-            return fetched_files
 
-        # Download per species files
-        if list_of_species_ids:
-            for species_id in list_of_species_ids:
-                if filetype == "contigs":
-                    s3_file = self.get_target_layout("imported_genome_file", True, "fna", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("imported_genome_file", False, "fna", species_id, self.uhgg.representatives[species_id])
-                if filetype == "centroids":
-                    s3_file = self.get_target_layout("pangenome_file", True, "centroids.ffn", species_id)
-                    dest_file = self.get_target_layout("pangenome_file", False, "centroids.ffn", species_id)
-                if filetype == "genes_info":
-                    s3_file = self.get_target_layout("pangenome_file", True, "gene_info.txt", species_id)
-                    dest_file = self.get_target_layout("pangenome_file", False, "gene_info.txt", species_id)
-                if filetype == "cluster_info":
-                    s3_file = self.get_target_layout("pangenome_file", True, "cluster_info.txt", species_id)
-                    dest_file = self.get_target_layout("pangenome_file", False, "cluster_info.txt", species_id)
+    def construct_dest_path(self, filename, species_id="", genome_id="", component=""):
+        s3_path = _get_dest_path(get_midasdb_layout(species_id, genome_id, component)[filename], self.db_name)
+        return s3_path
 
-                if filetype == "marker_genes_fa":
-                    s3_file = self.get_target_layout("marker_genes", True, "markers.fa", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("marker_genes", False, "markers.fa", species_id, self.uhgg.representatives[species_id])
-                if filetype == "marker_genes_map":
-                    s3_file = self.get_target_layout("marker_genes", True, "markers.map", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("marker_genes", False, "markers.map", species_id, self.uhgg.representatives[species_id])
 
-                if filetype == "marker_centroids":
-                    s3_file = self.get_target_layout("marker_centroids", True, "txt", species_id)
-                    dest_file = self.get_target_layout("marker_centroids", False, "txt", species_id)
+    def construct_file_tuple(self, filename, species_id="", genome_id="", component=""):
+        local_path = self.construct_local_path(filename, species_id, genome_id, component)
+        s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
+        return (s3_path, local_path)
 
-                if filetype == "gene_feature":
-                    s3_file = self.get_target_layout("annotation_file", True, "genes", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("annotation_file", False, "genes", species_id, self.uhgg.representatives[species_id])
-                if filetype == "gene_seq":
-                    s3_file = self.get_target_layout("annotation_file", True, "ffn", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("annotation_file", False, "ffn", species_id, self.uhgg.representatives[species_id])
 
-                if filetype == "prokka_genome":
-                    s3_file = self.get_target_layout("annotation_file", True, "fna", species_id, self.uhgg.representatives[species_id])
-                    dest_file = self.get_target_layout("annotation_file", False, "fna", species_id, self.uhgg.representatives[species_id])
+    def fetch_file(self, filename, species_id="", genome_id="", component=""):
+        (s3_path, local_path) = self.construct_file_tuple(filename, species_id, genome_id, component)
+        return _fetch_file_from_s3((s3_path, local_path))
 
-                args_list.append((s3_file, dest_file))
 
-            if len(list_of_species_ids) > 1:
+    def fetch_files(self, filename, list_of_species=""):
+        """ Fetch files from S3 to local MIDAS_DB """
+        if list_of_species:
+            args_list = []
+            for species_id in list_of_species:
+                genome_id = self.get_repgenome_id(species_id)
+                args_list.append(self.construct_file_tuple(filename, species_id, genome_id))
+
+            if len(list_of_species) > 1:
                 _fetched_files = multiprocessing_map(_fetch_file_from_s3, args_list, self.num_cores) #<-----
             else:
                 _fetched_files = [_fetch_file_from_s3(args_list[0])]
 
-            for species_index, species_id in enumerate(list_of_species_ids):
+            fetched_files = {}
+            for species_index, species_id in enumerate(list_of_species):
                 fetched_files[species_id] = _fetched_files[species_index]
             return fetched_files
 
-        # Fetch single file with filetype as the uhgg layout key
-        if filetype in get_uhgg_layout(species_id=""):
-            s3_file = self.get_target_layout(filetype, True)
-            dest_file = self.get_target_layout(filetype, False)
+        if filename == "marker_db":
+            l1 = self.construct_dest_path(filename)
+            l2 = self.construct_local_path(filename)
+            list_of_file_tuples = list(zip(l1, l2))
+            fetched_files = [_fetch_file_from_s3(_) for _ in list_of_file_tuples]
+            return dict(zip(MARKER_FILE_EXTS, fetched_files))
+
+        # Fetch single file with filename as the uhgg layout key
+        if filename in get_uhgg_layout(species_id=""):
+            s3_path = self.get_target_layout(filename, True)
+            local_path = self.get_target_layout(filename, False)
+            #s3_path = self.construct_dest_path(filename, True)
+            #local_path = self.construct_local_path(filename, False)
         else:
-            s3_file = destpath(filetype)
-            dest_file = os.path.join(self.midas_db_dir, filetype)
-        return _fetch_file_from_s3((s3_file, dest_file))
+            (s3_path, local_path) = self.construct_file_tuple(filename)
+        return _fetch_file_from_s3((s3_path, local_path))
+
+
+    def get_target_layout(self, filename, remote, species_id="", genome_id="", component=""):
+        local_path = self.construct_local_path(filename, species_id, genome_id, component)
+        s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
+        target_path = s3_path if remote else local_path
+        return target_path
+
+
+    def test(self):
+        species_id = "100001" #117086
+        genome_id = "GUT_GENOME000001" #GCA_900552055.1
+        print(destpath(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"]))
+        print(self.get_target_layout("pangenome_file", True, species_id, "", "gene_info.txt"))
+        print(destpath(get_uhgg_layout(species_id, "genes.ffn")["pangenome_file"]))
+        print(self.get_target_layout("pangenome_file", True, species_id, "", "genes.ffn"))
+        print("============")
+        print(get_uhgg_layout(species_id)["pangenome_log"]) # relative path within the infrasturecure
+        print() #<-- abosulte path
+        print("=================")
+        print(os.path.basename(outputs.genomes))
+        print(os.path.basename(self.local_toc))
+        print(self.local_toc)
+
+
+def _get_dest_path(file_name, db_name):
+    """ Append S3 MIDAS_DB path to file(s) """
+    if isinstance(file_name, list):
+        return [os.path.join(db_name, f"{fn}.lz4") for fn in file_name]
+    return os.path.join(db_name, f"{file_name}.lz4")
+
+
+def _get_local_path(file_name, db_dir):
+    """ Append local MIDAS_DB path to file(s) """
+    if isinstance(file_name, list):
+        return [os.path.join(db_dir, f"{fn}") for fn in file_name]
+    return os.path.join(db_dir, f"{file_name}")
 
 
 def _fetch_file_from_s3(packed_args):
-    s3_path, dest_file = packed_args
-    local_dir = os.path.dirname(dest_file)
-
+    """ Fetch local path from AWS S3 dest path """
+    s3_path, local_path = packed_args
+    local_dir = os.path.dirname(local_path)
     if not os.path.isdir(local_dir):
         command(f"mkdir -p {local_dir}")
-    if os.path.exists(dest_file):
-        return dest_file
-
+    if os.path.exists(local_path):
+        return local_path
     return download_reference(s3_path, local_dir)

@@ -6,11 +6,6 @@ DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
 
 
-MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
-hmmsearch_max_evalue = 1e-5
-hmmsearch_min_cov = 0.00
-
-
 MARKER_INFO_SCHEMA = {
     "species_id": str,
     "genome_id": str,
@@ -62,6 +57,7 @@ CLUSTER_INFO_SCHEMA = {
     "centroid_80": str,
     "centroid_75": str,
     "centroid_99_length": int,
+    "marker_id": str,
 }
 
 
@@ -74,14 +70,6 @@ def fetch_default_genome_depth(dbtype):
     if dbtype == "snps":
         DEFAULT_GENOME_DEPTH = 5.0
     return DEFAULT_GENOME_DEPTH
-
-
-old_species_profile_schema = {
-    "species_id": str,
-    "read_counts": int,
-    "coverage": float,
-    "relative_abundance": float
-}
 
 
 species_profile_schema = {
@@ -97,6 +85,7 @@ species_profile_schema = {
     "unique_fraction_covered": float,
     "total_marker_length": int,
 }
+
 
 species_merge_schema = {
     "species_id": str,
@@ -132,23 +121,6 @@ species_prevalence_schema = {
 }
 
 
-## midas_merge_snps
-DEFAULT_SAMPLE_COUNTS = 2
-DEFAULT_GENOME_DEPTH = 5.0
-DEFAULT_GENOME_COVERAGE = 0.4
-DEFAULT_CHUNK_SIZE = 10000
-
-DEFAULT_SITE_DEPTH = 1
-DEFAULT_SITE_RATIO = 2.0
-
-DEFAULT_SITE_PREV = 0.80
-DEFAULT_SITE_TYPE = "common"
-
-DEFAULT_SNP_POOLED_METHOD = "prevalence"
-DEFAULT_SNP_MAF = 0.05
-DEFAULT_SNP_TYPE = "mono, bi"
-
-
 snps_profile_schema = {
     "species_id": str,
     "genome_length": int,
@@ -173,6 +145,18 @@ snps_chunk_summary_schema = {
 }
 
 
+snps_pileup_basic_schema = {
+    "ref_id": str,
+    "ref_pos": int,
+    "ref_allele": str,
+    "depth": int,
+    "count_a": int,
+    "count_c": int,
+    "count_g": int,
+    "count_t": int,
+}
+
+
 snps_pileup_schema = {
     "ref_id": str,
     "ref_pos": int,
@@ -182,6 +166,11 @@ snps_pileup_schema = {
     "count_c": int,
     "count_g": int,
     "count_t": int,
+    "major_allele": str,
+    "minor_allele": str,
+    "major_allele_freq": float,
+    "minor_allele_freq": float,
+    "allele_counts": int,
 }
 
 
@@ -204,15 +193,6 @@ snps_info_schema = {
     "site_type": str,
     "amino_acids": str
 }
-
-
-## merge_midas_genes
-DEFAULT_SAMPLE_DEPTH = 1.0
-DEFAULT_SAMPLE_COUNTS = 1
-DEFAULT_CLUSTER_ID = '95'
-DEFAULT_MIN_COPY = 0.35
-
-DECIMALS = ".3f"
 
 
 genes_summary_schema = {

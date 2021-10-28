@@ -12,6 +12,8 @@ from iggtools.common.utils import tsprint, num_physical_cores, InputStream, Outp
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.sample import Sample
 from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_marker_profile_schema, format_data, DECIMALS6
+from iggtools.params.inputs import MIDASDB_NAMES
+
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
@@ -38,11 +40,17 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
+    subparser.add_argument('--midasdb_name',
+                           dest='midasdb_name',
                            type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
+                           default="uhgg",
+                           choices=MIDASDB_NAMES,
+                           help=f"MIDAS Database name.")
+    subparser.add_argument('--midasdb_dir',
+                           dest='midasdb_dir',
+                           type=str,
+                           default="midasdb",
+                           help=f"Local MIDAS Database path mirroing S3.")
 
     subparser.add_argument('--word_size',
                            dest='word_size',
@@ -431,11 +439,13 @@ def midas_run_species(args):
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        tsprint(f"CZ::fetch_iggdb_files::start")
-        midas_db = MIDAS_DB(args.midas_db if args.midas_db else sample.get_target_layout("midas_db_dir"), 1)
+        tsprint(f"CZ::fetch_midasdb_files::start")
+        midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
+
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
-        tsprint(f"CZ::fetch_iggdb_files::finish")
+
+        tsprint(f"CZ::fetch_midasdb_files::finish")
 
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
