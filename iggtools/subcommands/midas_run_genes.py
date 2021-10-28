@@ -511,6 +511,7 @@ def midas_run_genes(args):
 
         # Build Bowtie indexes for species in the restricted species profile
         centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
+        cluster_info_files = midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
         tsprint(f"CZ::build_bowtie2db::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"CZ::build_bowtie2db::finish")

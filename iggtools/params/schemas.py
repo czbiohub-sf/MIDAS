@@ -72,14 +72,6 @@ def fetch_default_genome_depth(dbtype):
     return DEFAULT_GENOME_DEPTH
 
 
-old_species_profile_schema = {
-    "species_id": str,
-    "read_counts": int,
-    "coverage": float,
-    "relative_abundance": float
-}
-
-
 species_profile_schema = {
     "species_id": str,
     "marker_read_counts": int,
@@ -127,23 +119,6 @@ species_prevalence_schema = {
     "mean_coverage": float,
     "sample_counts": float,
 }
-
-
-## midas_merge_snps
-DEFAULT_SAMPLE_COUNTS = 2
-DEFAULT_GENOME_DEPTH = 5.0
-DEFAULT_GENOME_COVERAGE = 0.4
-DEFAULT_CHUNK_SIZE = 10000
-
-DEFAULT_SITE_DEPTH = 1
-DEFAULT_SITE_RATIO = 2.0
-
-DEFAULT_SITE_PREV = 0.80
-DEFAULT_SITE_TYPE = "common"
-
-DEFAULT_SNP_POOLED_METHOD = "prevalence"
-DEFAULT_SNP_MAF = 0.05
-DEFAULT_SNP_TYPE = "mono, bi"
 
 
 snps_profile_schema = {
@@ -218,15 +193,6 @@ snps_info_schema = {
     "site_type": str,
     "amino_acids": str
 }
-
-
-## merge_midas_genes
-DEFAULT_SAMPLE_DEPTH = 1.0
-DEFAULT_SAMPLE_COUNTS = 1
-DEFAULT_CLUSTER_ID = '95'
-DEFAULT_MIN_COPY = 0.35
-
-DECIMALS = ".3f"
 
 
 genes_summary_schema = {

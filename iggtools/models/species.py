@@ -382,39 +382,3 @@ def design_genes_chunks(species_id, cluster_info_path, chunk_size):
     chunks_of_centroids[-1] = (species_id, -1, number_of_chunks, num_of_centroids)
 
     return chunks_of_centroids
-
-
-def test_chunks():
-    species_id = "117086"
-    chunk_size = 50000
-    chunk_size = 100000
-
-    sp = Species(species_id)
-    midas_db = MIDAS_DB("design_chunks", "gtdb")
-
-    tsprint("1")
-    sp.get_repgenome(midas_db)
-    tsprint("1")
-    sp.compute_snps_chunks_run(midas_db, chunk_size)
-    chunks_of_sites = load_chunks_cache(sp.chunks_of_sites_fp)
-    tsprint("2")
-    print(sp.num_of_snps_chunks)
-    tsprint("2")
-    print(chunks_of_sites[-1])
-
-    tsprint("3")
-    sp.get_repgenome(midas_db)
-    tsprint("3")
-    sp.compute_snps_chunks_merge(midas_db, chunk_size)
-    tsprint("4")
-    chunks_of_sites = load_chunks_cache(sp.chunks_of_sites_fp)
-    tsprint("4")
-    print(sp.num_of_snps_chunks)
-    print(chunks_of_sites[-1])
-
-    tsprint("5")
-    sp.compute_gene_chunks(midas_db, chunk_size)
-    tsprint("5")
-    chunks_of_centroids = load_chunks_cache(sp.chunks_of_centroids_fp)
-    tsprint("6")
-    print(chunks_of_centroids[-1])
