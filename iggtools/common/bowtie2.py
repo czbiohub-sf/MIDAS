@@ -52,7 +52,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     bt2_db_prefix = f"{bt2_db_dir}/{bt2_db_name}"
 
     if os.path.exists(bamfile_path):
-        tsprint(f"Use existing per-sample bowtie2 db {bamfile_path}")
+        tsprint(f"Use existing bamfile {bamfile_path}")
         return
 
     # Construct bowtie2 align input arguments

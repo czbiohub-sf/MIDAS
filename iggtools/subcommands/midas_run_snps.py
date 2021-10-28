@@ -167,6 +167,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Report majore/minor allele for each genomic sites.")
+    subparser.add_argument('--analysis_ready',
+                           action='store_true',
+                           default=False,
+                           help=f"Report majore/minor allele for each genomic sites.")
 
     # File related
     subparser.add_argument('--chunk_size',
@@ -283,20 +287,23 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
             mapped_reads = 0
             for aln in infile.fetch(contig_id):
                 aligned_reads += 1
-                if keep_read(aln):
+
+                if global_args.analysis_ready or keep_read(aln):
                     mapped_reads += 1
-                    read = "1" if aln.is_read1 else "2"
-                    filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
+                    if not global_args.analysis_ready:
+                        read = "1" if aln.is_read1 else "2"
+                        filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
 
             reads_stats["aligned_reads"][contig_id] = aligned_reads
             reads_stats["mapped_reads"][contig_id] = mapped_reads
 
     # Write filtered alignments to file
-    template_bam = AlignmentFile(repbamfile, "rb")
-    filtered_bam = AlignmentFile(filtered_bamfile, "wb", template=template_bam)
-    for aln in filtered_alns_dict.values():
-        filtered_bam.write(aln)
-    filtered_bam.close()
+    if not global_args.analysis_ready:
+        template_bam = AlignmentFile(repbamfile, "rb")
+        filtered_bam = AlignmentFile(filtered_bamfile, "wb", template=template_bam)
+        for aln in filtered_alns_dict.values():
+            filtered_bam.write(aln)
+        filtered_bam.close()
 
     tsprint(f"  CZ::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
     return reads_stats
@@ -344,6 +351,7 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                 if len(alns) != 2:
                     continue
 
+                # Apply filters to paired-reads
                 # Common features
                 readq = np.mean(alns["fwd"].query_qualities + alns["rev"].query_qualities)
                 mapq = max(alns["fwd"].mapping_quality, alns["rev"].mapping_quality)
@@ -463,10 +471,11 @@ def filter_bam(pargs):
     else:
         reads_stats = filter_bam_by_single_read(species_id, repgenome_bamfile, filtered_bamfile)
 
-    sorted_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
-    samtools_sort(filtered_bamfile, sorted_bamfile, global_args.debug, numcores)
-    samtools_index(sorted_bamfile, global_args.debug, numcores)
-    command(f"rm -rf {filtered_bamfile}", quiet=True)
+    if not global_args.analysis_ready:
+        sorted_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
+        samtools_sort(filtered_bamfile, sorted_bamfile, global_args.debug, numcores)
+        samtools_index(sorted_bamfile, global_args.debug, numcores)
+        command(f"rm -rf {filtered_bamfile}", quiet=True)
 
     return reads_stats
 
@@ -530,7 +539,11 @@ def midas_pileup(packed_args):
     # [contig_start, contig_end)
     species_id, chunk_id, contig_id, contig_start, contig_end, _, within_chunk_cid = packed_args
 
-    repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
+    if global_args.analysis_ready:
+        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+    else:
+        repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
+
     headerless_sliced_path = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, within_chunk_cid)
 
     current_chunk_size = contig_end - contig_start
@@ -587,9 +600,8 @@ def midas_pileup(packed_args):
             stream.write("\t".join(map(format_data, row)) + "\n")
         assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
 
-    # Delete temporary bam file <== TODO
-    if global_args.paired_only and False:
-        command(f"rm -rf {repgenome_bamfile}", quiet=False)
+    if not global_args.analysis_ready:
+        command(f"rm -rf {repgenome_bamfile}", quiet=True)
         command(f"rm -rf {repgenome_bamfile}.bai", quiet=True)
 
     return aln_stats
@@ -719,6 +731,8 @@ def midas_run_snps(args):
     try:
         global global_args
         global_args = args
+
+        assert not (args.analysis_ready and args.paired_only), f"For analysis-ready BAM file, set --paired_only to False"
 
         global sample
         sample = Sample(args.sample_name, args.midas_outdir, "snps")
