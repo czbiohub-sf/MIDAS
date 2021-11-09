@@ -98,7 +98,7 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing {summary_path} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
-        profile = {}
+        profile = dict()
         with InputStream(summary_path) as stream:
             for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 profile[info["species_id"]] = info

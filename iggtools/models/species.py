@@ -32,6 +32,7 @@ class Species:
         self.chunks_of_centroids_fp = None
         self.num_of_genes_chunks = None
         self.num_of_centroids = None
+        self.chunks_contigs_fp = None
 
         # MERGE Flow: select species
         self.list_of_samples = [] # samples associate with current species
@@ -90,7 +91,6 @@ class Species:
         elif find_files_with_retry(s3_file):
             midas_db.fetch_file("chunks_sites_run", species_id, genome_id, chunk_size)
         else:
-            # Compute gene chunks and write to local file
             chunks_of_sites = design_run_snps_chunks(species_id, contigs_fp, chunk_size)
             command(f"mkdir -p {os.path.dirname(local_file)}")
             with OutputStream(local_file) as stream:
@@ -120,7 +120,6 @@ class Species:
         elif find_files_with_retry(s3_file):
             midas_db.fetch_file("chunks_sites_merge", species_id, genome_id, chunk_size)
         else:
-            # Compute gene chunks and write to local file
             contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
             chunks_of_sites = design_merge_snps_chunks(species_id, contigs_fp, chunk_size)
             command(f"mkdir -p {os.path.dirname(local_file)}")
@@ -130,14 +129,25 @@ class Species:
         chunks_of_sites = load_chunks_cache(local_file)
         _, _, number_of_chunks, max_contig_length = chunks_of_sites[-1]
 
+        chunks_contigs_fp = dict()
+        for chunk_list in chunks_of_sites.values():
+            _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
+            loc_fp = midas_db.get_target_layout("chunks_merge_list_of_contigs", False, species_id, chunk_id, chunk_size)
+            if contig_id == -1 and os.path.exists(loc_fp):
+                command(f"mkdir -p {os.path.dirname(loc_fp)}")
+                with OutputStream(loc_fp) as stream:
+                    stream.write("\n".join(list_of_contigs) + "\n")
+                chunks_contigs_fp[chunk_id] = loc_fp
+
         self.chunks_of_sites_fp = local_file
         self.num_of_snps_chunks = number_of_chunks
         self.max_contig_length = max_contig_length
+        self.chunks_contigs_fp = chunks_contigs_fp
 
-        sp.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
-        sp.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+        self.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
+        self.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 
-        return True
+        return chunks_of_sites
 
 
     def get_repgenome(self, midas_db):
@@ -357,7 +367,6 @@ def design_merge_snps_chunks(species_id, contigs_file, chunk_size):
     if unassigned_contigs:
         # Partition unassigned short contigs into subsets
         dict_of_chunks, chunk_id = partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id)
-
         # Add the partitioned subsets to chunks
         for chunk_dict in dict_of_chunks.values():
             _chunk_id = chunk_dict["chunk_id"]

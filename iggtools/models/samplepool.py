@@ -136,15 +136,14 @@ class SamplePool: # pylint: disable=too-few-public-methods
 
     def write_summary_files(self, dict_of_species, dbtype):
         """ Write snps/genes summary files for current samples pool """
-
         summary_file = self.get_target_layout(f"{dbtype}_summary")
-        summary_header = list(fetch_schema_by_dbtype(dbtype).keys())[1:]
+        summary_header = list(fetch_schema_by_dbtype(dbtype).keys())
         with OutputStream(summary_file) as stream:
-            stream.write("\t".join(["species_id", "sample_name"] + summary_header) + "\n")
+            stream.write("\t".join(["sample_name"] + summary_header) + "\n")
             for sp in dict_of_species.values():
                 for sample in sp.list_of_samples:
-                    row = list(sample.profile[sp.id].values())
-                    stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t" + "\t".join(map(format_data, row[1:])) + "\n")
+                    row = [sample.sample_name] + list(sample.profile[sp.id].values())
+                    stream.write("\t".join(map(format_data, row)) + "\n")
 
 
     def remove_dirs(self, list_of_dirnames):
