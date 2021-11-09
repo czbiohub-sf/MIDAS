@@ -21,6 +21,7 @@ class Species:
         self.id = species_id
 
         # SNPs chunk
+        self.contigs_fp = None
         self.contigs = defaultdict(dict)
         self.chunks_of_sites_fp = None
         self.num_of_snps_chunks = None
@@ -37,7 +38,7 @@ class Species:
         self.samples_count = 0
         self.list_of_samples_depth = [] # mean_coverage
 
-        # Merge Genes
+        # Merge SNPs
         self.gene_feature_file = None
         self.gene_seq_file = None
 
@@ -82,6 +83,7 @@ class Species:
 
         s3_file = midas_db.get_target_layout("chunks_sites_run", True, species_id, genome_id, chunk_size)
         local_file = midas_db.get_target_layout("chunks_sites_run", False, species_id, genome_id, chunk_size)
+        contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
 
         if os.path.exists(local_file):
             pass
@@ -89,7 +91,6 @@ class Species:
             midas_db.fetch_file("chunks_sites_run", species_id, genome_id, chunk_size)
         else:
             # Compute gene chunks and write to local file
-            contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
             chunks_of_sites = design_run_snps_chunks(species_id, contigs_fp, chunk_size)
             command(f"mkdir -p {os.path.dirname(local_file)}")
             with OutputStream(local_file) as stream:
@@ -101,8 +102,9 @@ class Species:
         self.chunks_of_sites_fp = local_file
         self.num_of_snps_chunks = number_of_chunks
         self.max_contig_length = max_contig_length
+        self.contigs_fp = contigs_fp
 
-        return True
+        return chunks_of_sites
 
 
     def compute_snps_chunks_merge(self, midas_db, chunk_size):
@@ -132,6 +134,9 @@ class Species:
         self.num_of_snps_chunks = number_of_chunks
         self.max_contig_length = max_contig_length
 
+        sp.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
+        sp.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+
         return True
 
 
@@ -144,6 +149,15 @@ class Species:
     def get_cluster_info_fp(self, midas_db):
         species_id = self.id
         self.cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
+
+
+    def fetch_contigs_ids(self):
+        list_of_contig_ids = []
+        with InputStream(self.contigs_fp, "grep \'>\'") as stream:
+            for line in stream:
+                list_of_contig_ids.append(line.strip("\n")[1:])
+        stream.ignore_errors()
+        return list_of_contig_ids
 
 
     def fetch_samples_names(self):

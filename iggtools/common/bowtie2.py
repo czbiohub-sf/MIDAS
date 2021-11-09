@@ -86,7 +86,7 @@ def samtools_sort(bamfile_path, sorted_bamfile, debug, num_cores):
         return
 
     try:
-        command(f"samtools sort -@ {num_cores} -o {sorted_bamfile} {bamfile_path}", quiet=True)
+        command(f"samtools sort -m 2G -@ {num_cores} -o {sorted_bamfile} {bamfile_path}", quiet=True)
     except:
         tsprint(f"Samtools sort {bamfile_path} run into error")
         command(f"rm -f {sorted_bamfile}")
