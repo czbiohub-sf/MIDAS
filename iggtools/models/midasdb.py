@@ -36,6 +36,8 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "chunks_sites_run":              f"chunks/sites/run/chunksize.{component}/{species_id}/{genome_id}.json",
         "chunks_sites_merge":            f"chunks/sites/merge/chunksize.{component}/{species_id}/{genome_id}.json",
 
+        "chunks_merge_list_of_contigs":  f"temp/chunks_merge_sites/chunksize.{component}/{species_id}/cid.{genome_id}_list_of_contigs",
+
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
         "marker_genes_seq":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.fa",
         "marker_genes_map":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.map",
@@ -120,8 +122,6 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         if filename in get_uhgg_layout(species_id=""):
             s3_path = self.get_target_layout(filename, True)
             local_path = self.get_target_layout(filename, False)
-            #s3_path = self.construct_dest_path(filename, True)
-            #local_path = self.construct_local_path(filename, False)
         else:
             (s3_path, local_path) = self.construct_file_tuple(filename)
         return _fetch_file_from_s3((s3_path, local_path))
@@ -132,22 +132,6 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
         target_path = s3_path if remote else local_path
         return target_path
-
-
-    def test(self):
-        species_id = "100001" #117086
-        genome_id = "GUT_GENOME000001" #GCA_900552055.1
-        print(destpath(get_uhgg_layout(species_id, "gene_info.txt")["pangenome_file"]))
-        print(self.get_target_layout("pangenome_file", True, species_id, "", "gene_info.txt"))
-        print(destpath(get_uhgg_layout(species_id, "genes.ffn")["pangenome_file"]))
-        print(self.get_target_layout("pangenome_file", True, species_id, "", "genes.ffn"))
-        print("============")
-        print(get_uhgg_layout(species_id)["pangenome_log"]) # relative path within the infrasturecure
-        print() #<-- abosulte path
-        print("=================")
-        print(os.path.basename(outputs.genomes))
-        print(os.path.basename(self.local_toc))
-        print(self.local_toc)
 
 
 def _get_dest_path(file_name, db_name):
