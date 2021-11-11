@@ -220,7 +220,7 @@ def strip_eol(lines_iterable):
         yield line.rstrip('\n')
 
 
-def command(cmd, quiet=False, popen=False, **kwargs):
+def command(cmd, quiet=True, popen=False, **kwargs):
     """Echo and execute specified cmd.  If string, execute through BASH.  In that case, cmd could be a pipeline.  Raise an exception if exit code non-zero.  Set check=False if you don't want that exception.  Set quiet=True if you don't want to echo the command.  The result is https://docs.python.org/3/library/subprocess.html#subprocess.CompletedProcess."""
     # This requires version >= 3.6
     assert "shell" not in kwargs, "Please do not override shell.  It is automatically True if command is a string, False if list."

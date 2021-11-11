@@ -149,7 +149,7 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            default=DEFAULT_SITE_DEPTH,
-                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
+                           help=f"Minimum number of reads mapped to one gene ({DEFAULT_SITE_DEPTH})")
 
     # File related
     subparser.add_argument('--chunk_size',
@@ -219,7 +219,7 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     return arguments_list
 
 
-def _process_one_chunk_of_genes(packed_args):
+def process_chunk_of_genes(packed_args):
     """ Control flow of compute coverage of pangenome per species and write results """
 
     species_id, chunk_id = packed_args[:2]
@@ -228,18 +228,18 @@ def _process_one_chunk_of_genes(packed_args):
         global semaphore_for_species
         num_of_genes_chunks = packed_args[2]
 
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::wait merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_genes::{species_id}-{chunk_id}::wait merge_chunks_per_species")
         for _ in range(num_of_genes_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::start merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_genes::{species_id}-{chunk_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::finish merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_genes::{species_id}-{chunk_id}::finish merge_chunks_per_species")
 
         return ret
 
-    tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
+    tsprint(f"  MIDAS::process_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
     ret = compute_coverage_per_chunk(species_id, chunk_id)
-    tsprint(f"  CZ::_process_one_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
+    tsprint(f"  MIDAS::process_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
     return ret
 
 
@@ -287,6 +287,7 @@ def compute_coverage_per_chunk(species_id, chunk_id):
                 chunk_cov_stats["chunk_aligned_reads"] += aligned_reads
 
                 mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
+
                 if mapped_reads < global_args.site_depth:
                     continue
 
@@ -444,7 +445,6 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
         species_coverage_summary[species_id]["mapped_reads"] += rec["chunk_mapped_reads"]
         species_coverage_summary[species_id]["total_coverage"] += rec["chunk_coverage"]
 
-
     # Second pass: need to loop over all the chunks to calculate the average read coverage
     with OutputStream(genes_stats_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
@@ -502,39 +502,39 @@ def midas_run_genes(args):
         assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(len(species_ids_of_interest))
 
-        tsprint(f"CZ::design_chunks::start")
+        tsprint(f"MIDAS::design_chunks::start")
         num_cores_download = min(species_counts, args.num_cores)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
-        tsprint(f"CZ::design_chunks::finish")
+        tsprint(f"MIDAS::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
         centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
         cluster_info_files = midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
-        tsprint(f"CZ::build_bowtie2db::start")
+        tsprint(f"MIDAS::build_bowtie2db::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
-        tsprint(f"CZ::build_bowtie2db::finish")
+        tsprint(f"MIDAS::build_bowtie2db::finish")
 
         # Align reads to pangenome database
-        tsprint(f"CZ::bowtie2_align::start")
+        tsprint(f"MIDAS::bowtie2_align::start")
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug)
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug, args.num_cores)
-        tsprint(f"CZ::bowtie2_align::finish")
+        tsprint(f"MIDAS::bowtie2_align::finish")
 
-        tsprint(f"CZ::multiprocessing_map::start")
+        tsprint(f"MIDAS::multiprocessing_map::start")
         total_chunk_counts = sum((sp.num_of_genes_chunks for sp in dict_of_species.values()))
         num_cores = min(args.num_cores, total_chunk_counts)
         tsprint(f"The number of cores will be used to compute coverage is {num_cores}")
-        chunks_gene_coverage = multiprocessing_map(_process_one_chunk_of_genes, arguments_list, num_cores)
-        tsprint(f"CZ::multiprocessing_map::finish")
+        chunks_gene_coverage = multiprocessing_map(process_chunk_of_genes, arguments_list, num_cores)
+        tsprint(f"MIDAS::multiprocessing_map::finish")
 
-        tsprint(f"CZ::write_species_coverage_summary::start")
+        tsprint(f"MIDAS::write_species_coverage_summary::start")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
         write_chunk_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_chunk_summary"))
-        tsprint(f"CZ::write_species_coverage_summary::finish")
+        tsprint(f"MIDAS::write_species_coverage_summary::finish")
 
     except Exception as error:
         if not args.debug:

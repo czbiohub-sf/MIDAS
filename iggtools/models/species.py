@@ -26,6 +26,7 @@ class Species:
         self.chunks_of_sites_fp = None
         self.num_of_snps_chunks = None
         self.max_contig_length = None
+        self.chunk_size = None
 
         # Genes chunk
         self.cluster_info_fp = None
@@ -51,50 +52,53 @@ class Species:
 
         s3_file = midas_db.get_target_layout("chunks_centroids", True, species_id, "", chunk_size)
         local_file = midas_db.get_target_layout("chunks_centroids", False, species_id, "", chunk_size)
+        cluster_info_fp = midas_db.fetch_file("pangenome_cluster_info", species_id)
 
         if os.path.exists(local_file):
             pass
         elif find_files_with_retry(s3_file):
             midas_db.fetch_file("chunks_centroids", species_id, "", chunk_size)
         else:
-            # Compute gene chunks and write to local file
-            cluster_info_fp = midas_db.fetch_file("pangenome_cluster_info", species_id)
             chunks_of_centroids = design_genes_chunks(species_id, cluster_info_fp, chunk_size)
-            command(f"mkdir -p {os.path.dirname(local_file)}")
-            with OutputStream(local_file) as stream:
-                json.dump(chunks_of_centroids, stream)
+            write_chunks_cache(chunks_of_centroids, local_file)
 
-        self.chunks_of_centroids_fp = local_file
-        self.get_cluster_info_fp(midas_db)
-
-        # We load in the chunk cache only to get the num_of_gene_chunks ....
+        # Load chunk cache to get the num_of_gene_chunks
         chunks_of_centroids = load_chunks_cache(local_file)
         _, _, num_of_genes_chunks, num_of_centroids = chunks_of_centroids[-1]
+
         self.num_of_genes_chunks = num_of_genes_chunks
         self.num_of_centroids = num_of_centroids
+        self.chunks_of_centroids_fp = local_file
+        self.cluster_info_fp = cluster_info_fp
 
         return True
 
 
-    def compute_snps_chunks_run(self, midas_db, chunk_size):
-        # The structure of the chunks depends on the representative genome sequences
-
+    def compute_snps_chunks(self, midas_db, chunk_size, workflow):
+        """ The structure of the chunks depends on the repgenome and chunk size """
         species_id = self.id
         genome_id = midas_db.uhgg.representatives[species_id]
 
-        s3_file = midas_db.get_target_layout("chunks_sites_run", True, species_id, genome_id, chunk_size)
-        local_file = midas_db.get_target_layout("chunks_sites_run", False, species_id, genome_id, chunk_size)
+        if workflow == "run":
+            chunk_filename = "chunks_sites_run"
+        if workflow == "merge":
+            chunk_filename = "chunks_sites_merge"
+
+
+        s3_file = midas_db.get_target_layout(chunk_filename, True, species_id, genome_id, chunk_size)
+        local_file = midas_db.get_target_layout(chunk_filename, False, species_id, genome_id, chunk_size)
         contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
 
         if os.path.exists(local_file):
             pass
         elif find_files_with_retry(s3_file):
-            midas_db.fetch_file("chunks_sites_run", species_id, genome_id, chunk_size)
+            midas_db.fetch_file(chunk_filename, species_id, genome_id, chunk_size)
         else:
-            chunks_of_sites = design_run_snps_chunks(species_id, contigs_fp, chunk_size)
-            command(f"mkdir -p {os.path.dirname(local_file)}")
-            with OutputStream(local_file) as stream:
-                json.dump(chunks_of_sites, stream)
+            if workflow == "run":
+                chunks_of_sites = design_run_snps_chunks(species_id, contigs_fp, chunk_size)
+            if workflow == "merge":
+                chunks_of_sites = design_merge_snps_chunks(species_id, contigs_fp, chunk_size)
+            write_chunks_cache(chunks_of_sites, local_file)
 
         chunks_of_sites = load_chunks_cache(local_file)
         _, _, number_of_chunks, max_contig_length = chunks_of_sites[-1]
@@ -102,50 +106,26 @@ class Species:
         self.chunks_of_sites_fp = local_file
         self.num_of_snps_chunks = number_of_chunks
         self.max_contig_length = max_contig_length
-        self.contigs_fp = contigs_fp
 
-        return chunks_of_sites
+        if workflow == "run":
+            self.contigs_fp = contigs_fp
 
+        if workflow == "merge":
+            chunks_contigs_fp = dict()
+            for chunk_list in chunks_of_sites.values():
+                _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
+                loc_fp = midas_db.get_target_layout("chunks_merge_list_of_contigs", False, species_id, chunk_id, chunk_size)
 
-    def compute_snps_chunks_merge(self, midas_db, chunk_size):
+                if contig_id == -1:
+                    chunks_contigs_fp[chunk_id] = loc_fp
+                    if not os.path.exists(loc_fp):
+                        command(f"mkdir -p {os.path.dirname(loc_fp)}")
+                        with OutputStream(loc_fp) as stream:
+                            stream.write("\n".join(list_of_contigs) + "\n")
 
-        species_id = self.id
-        genome_id = midas_db.uhgg.representatives[species_id]
-
-        s3_file = midas_db.get_target_layout("chunks_sites_merge", True, species_id, genome_id, chunk_size)
-        local_file = midas_db.get_target_layout("chunks_sites_merge", False, species_id, genome_id, chunk_size)
-
-        if os.path.exists(local_file):
-            pass
-        elif find_files_with_retry(s3_file):
-            midas_db.fetch_file("chunks_sites_merge", species_id, genome_id, chunk_size)
-        else:
-            contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
-            chunks_of_sites = design_merge_snps_chunks(species_id, contigs_fp, chunk_size)
-            command(f"mkdir -p {os.path.dirname(local_file)}")
-            with OutputStream(local_file) as stream:
-                json.dump(chunks_of_sites, stream)
-
-        chunks_of_sites = load_chunks_cache(local_file)
-        _, _, number_of_chunks, max_contig_length = chunks_of_sites[-1]
-
-        chunks_contigs_fp = dict()
-        for chunk_list in chunks_of_sites.values():
-            _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
-            loc_fp = midas_db.get_target_layout("chunks_merge_list_of_contigs", False, species_id, chunk_id, chunk_size)
-            if contig_id == -1 and os.path.exists(loc_fp):
-                command(f"mkdir -p {os.path.dirname(loc_fp)}")
-                with OutputStream(loc_fp) as stream:
-                    stream.write("\n".join(list_of_contigs) + "\n")
-                chunks_contigs_fp[chunk_id] = loc_fp
-
-        self.chunks_of_sites_fp = local_file
-        self.num_of_snps_chunks = number_of_chunks
-        self.max_contig_length = max_contig_length
-        self.chunks_contigs_fp = chunks_contigs_fp
-
-        self.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
-        self.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+            self.chunks_contigs_fp = chunks_contigs_fp
+            self.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
+            self.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 
         return chunks_of_sites
 
@@ -178,14 +158,6 @@ class Species:
         self.list_of_samples_depth = [sample.profile[self.id]["mean_coverage"] for sample in self.list_of_samples]
 
 
-def load_chunks_cache(chunk_cache_fp):
-    assert os.path.exists(chunk_cache_fp), f"{chunk_cache_fp} doesn't exit"
-    with InputStream(chunk_cache_fp) as stream:
-        chunks_dict = json.load(stream)
-        chunks_dict = {int(k):v for k, v in chunks_dict.items()} # conver back to int key
-    return chunks_dict
-
-
 def parse_species(args):
     species_list = []
     if args.species_list:
@@ -209,24 +181,18 @@ def filter_species(profile_fp, select_by, select_threhold, species_list=None):
     return species_ids
 
 
-def sort_list_of_species(list_of_species, rev=True):
-    """ Sort list_of_species by samples_count in descending order """
-    species_sorted = sorted(((sp, len(sp.list_of_samples)) for sp in list_of_species), key=lambda x: x[1], reverse=rev)
-    return [sp[0] for sp in species_sorted]
+def load_chunks_cache(chunk_cache_fp):
+    assert os.path.exists(chunk_cache_fp), f"{chunk_cache_fp} doesn't exit"
+    with InputStream(chunk_cache_fp) as stream:
+        chunks_dict = json.load(stream)
+        chunks_dict = {int(k):v for k, v in chunks_dict.items()} # conver back to int key
+    return chunks_dict
 
 
-def collect_chunk_pileup(sample, number_of_contigs, species_id, chunk_id, filename):
-    ## Clean up sliced chunk temporary files
-    headerless_sliced_path = sample.get_target_layout(filename, species_id, chunk_id)
-
-    if number_of_contigs > 1:
-        list_of_sliced_files = [sample.get_target_layout(f"{filename}_perc", species_id, chunk_id, cidx) for cidx in range(0, number_of_contigs)]
-        cat_files(list_of_sliced_files, headerless_sliced_path, 20)
-        for s_file in list_of_sliced_files:
-            command(f"rm -rf {s_file}", quiet=True)
-    else:
-        sliced_file = sample.get_target_layout(f"{filename}_perc", species_id, chunk_id, 0)
-        command(f"mv {sliced_file} {headerless_sliced_path}", quiet=True)
+def write_chunks_cache(chunks_of_sites, local_file):
+    command(f"mkdir -p {os.path.dirname(local_file)}")
+    with OutputStream(local_file) as stream:
+        json.dump(chunks_of_sites, stream)
 
 
 def partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id):

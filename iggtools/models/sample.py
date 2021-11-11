@@ -8,7 +8,7 @@ from iggtools.models.species import filter_species
 # Executable Documentation
 # Low level functions: the Target Files
 def get_single_layout(sample_name, dbtype=""):
-    def per_species(species_id="", chunk_id="", contig_idx=""):
+    def per_species(species_id="", chunk_id=""):
         return {
             "sample_dir":              f"{sample_name}",
             "outdir":                  f"{sample_name}/{dbtype}",
@@ -35,7 +35,6 @@ def get_single_layout(sample_name, dbtype=""):
             "species_bam":             f"{sample_name}/temp/snps/{species_id}/{species_id}.bam",
             "species_sorted_bam":      f"{sample_name}/temp/snps/{species_id}/{species_id}.sorted.bam",
             "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
-            "chunk_pileup_perc":       f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
@@ -56,11 +55,11 @@ class Sample: # pylint: disable=too-few-public-methods
         self.profile = None
 
 
-    def get_target_layout(self, filename, species_id="", chunk_id="", contig_idx=""):
+    def get_target_layout(self, filename, species_id="", chunk_id=""):
         if isinstance(self.layout(species_id, chunk_id)[filename], list):
-            local_file_lists = self.layout(species_id, chunk_id, contig_idx)[filename]
+            local_file_lists = self.layout(species_id, chunk_id)[filename]
             return [os.path.join(self.midas_outdir, fn) for fn in local_file_lists]
-        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id, contig_idx)[filename])
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
 
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
