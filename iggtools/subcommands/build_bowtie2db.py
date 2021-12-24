@@ -79,7 +79,7 @@ def build_bowtie2db(args):
             species_ids_of_interest = filter_species(args.species_profile, args.select_by, args.select_threshold)
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
-        tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
+        tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {len(species_ids_of_interest)}")
 
         # Fetch UHGG related files
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
