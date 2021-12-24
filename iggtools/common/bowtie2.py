@@ -37,7 +37,7 @@ def build_bowtie2_db(bt2_db_dir, bt2_db_name, downloaded_files, num_cores):
             command("cat " + " ".join(files) + f" >> {bt2_db_dir}/{bt2_db_name}.fa")
 
         try:
-            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build-{bt2_db_name}.log")
+            command(f"bowtie2-build --threads {num_cores} {bt2_db_prefix}.fa {bt2_db_prefix} > {bt2_db_dir}/bt2-db-build-{bt2_db_name}.log", quiet=False)
         except:
             tsprint(f"Bowtie2 index {bt2_db_prefix} run into error")
             command(f"rm -f {bt2_db_prefix}.1.bt2")
@@ -73,7 +73,7 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
         bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_fraglen} {max_reads} --{aln_mode} --{aln_speed} --threads {args.num_cores} -q {r1} {r2}"
         command(f"set -o pipefail; {bt2_command} | \
                 samtools view --threads {args.num_cores} -b - | \
-                samtools sort --threads {args.num_cores} -o {bamfile_path}")
+                samtools sort --threads {args.num_cores} -o {bamfile_path}", quiet=False)
     except:
         tsprint(f"Bowtie2 align to {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}")
@@ -86,7 +86,7 @@ def samtools_sort(bamfile_path, sorted_bamfile, debug, num_cores):
         return
 
     try:
-        command(f"samtools sort -m 2G -@ {num_cores} -o {sorted_bamfile} {bamfile_path}", quiet=True)
+        command(f"samtools sort -@ {num_cores} -o {sorted_bamfile} {bamfile_path}", quiet=False) #-m 2G
     except:
         tsprint(f"Samtools sort {bamfile_path} run into error")
         command(f"rm -f {sorted_bamfile}")
@@ -100,7 +100,7 @@ def samtools_index(bamfile_path, debug, num_cores):
         return
 
     try:
-        command(f"samtools index -@ {num_cores} {bamfile_path}")
+        command(f"samtools index -@ {num_cores} {bamfile_path}", quiet=False)
     except:
         tsprint(f"Samtools index {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}.bai")
