@@ -170,14 +170,19 @@ def parse_species(args):
     return species_list
 
 
-def filter_species(profile_fp, select_by, select_threhold, species_list=None):
+def filter_species(profile_fp, select_by, select_threshold, species_list=None):
     species_ids = list()
+    select_by = select_by.split(",")
+    select_threshold = select_threshold.split(",")
+    nargs = len(select_by)
+    assert len(select_by) == len(select_threshold)
     with InputStream(profile_fp) as stream:
-        for record in select_from_tsv(stream, selected_columns=["species_id", select_by], result_structure=dict):
+        for record in select_from_tsv(stream, selected_columns=["species_id"] + select_by, result_structure=dict):
             if species_list and record["species_id"] not in species_list:
                 continue
-            if float(record[select_by]) >= select_threhold: #<--
+            if sum([1 if float(record[select_by[i]]) > float(select_threshold[i]) else 0 for i in range(nargs)]) == nargs:
                 species_ids.append(record["species_id"])
+            #if float(record[select_by]) >= select_threshold: #<--
     return species_ids
 
 

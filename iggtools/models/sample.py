@@ -85,7 +85,7 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(species_profile_fp), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype("species")
-        assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
+        assert not any([False for _ in args.select_by.split(',') if _ in schema]), f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
 
         species_ids = filter_species(species_profile_fp, args.select_by, args.select_threshold, species_list)
         return species_ids

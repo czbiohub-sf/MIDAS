@@ -69,7 +69,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
 
     def get_repgenome_id(self, species_id):
-        return self.uhgg.representatives[species_id]
+        return self.uhgg.fetch_repgenome_id(species_id)
+        #return self.uhgg.representatives[species_id]
 
 
     def construct_local_path(self, filename, species_id="", genome_id="", component=""):
