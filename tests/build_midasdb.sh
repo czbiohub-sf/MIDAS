@@ -1,6 +1,5 @@
 #! /usr/bin/bash
 set -e
-set -x
 
 basedir=`pwd`
 testdir="${basedir}/tests"

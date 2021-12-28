@@ -84,14 +84,13 @@ def register_args(main_func):
                            dest='select_by',
                            type=str,
                            default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
-                           help=f"Column from species_profile based on which to select species.")
+                           help=f"Comma separated columns from species_profile to filter species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_MARKER_MEDIAN_DEPTH,
-                           help=f"Include species with > X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
+                           type=str,
+                           metavar="CHAR",
+                           default=str(DEFAULT_MARKER_MEDIAN_DEPTH),
+                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
 
     #  Alignment flags (Bowtie2, or postprocessing)
     subparser.add_argument('--aln_speed',

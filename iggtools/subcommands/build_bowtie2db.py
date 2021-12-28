@@ -42,7 +42,6 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            help=f"Comma separated list of species ids")
-
     subparser.add_argument('--species_profile',
                            dest='species_profile',
                            type=str,
@@ -57,8 +56,8 @@ def register_args(main_func):
                            help=f"Column from species_profile based on which to select species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
-                           type=float,
-                           metavar="FLOAT",
+                           type=str,
+                           metavar="CHAR",
                            help=f"Minimum threshold values of for selected columns.")
 
     subparser.add_argument('--num_cores',
@@ -79,10 +78,11 @@ def build_bowtie2db(args):
             species_ids_of_interest = filter_species(args.species_profile, args.select_by, args.select_threshold)
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
-        tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {len(species_ids_of_interest)}")
+        tsprint(f"CZ::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
 
         # Fetch UHGG related files
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
+        print(midas_db.uhgg)
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::start")
