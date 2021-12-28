@@ -107,7 +107,6 @@ def build_gene_matrices(species_id):
     global dict_of_species
 
     min_copy = global_args.min_copy
-
     sp = dict_of_species[species_id]
 
     # First pass: accumulate the gene matrix sample by sample

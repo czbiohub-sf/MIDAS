@@ -1,12 +1,11 @@
 #! /usr/bin/bash
 set -e
-set -x
 
 basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-db_dir="$testdir/local_testdb"
+db_dir="$testdir/$db_dir/local_testdb"
 
 echo "Build MIDAS-DB locally $db_dir"
 

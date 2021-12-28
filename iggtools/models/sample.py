@@ -8,7 +8,7 @@ from iggtools.models.species import filter_species
 # Executable Documentation
 # Low level functions: the Target Files
 def get_single_layout(sample_name, dbtype=""):
-    def per_species(species_id="", chunk_id="", contig_idx=""):
+    def per_species(species_id="", chunk_id=""):
         return {
             "sample_dir":              f"{sample_name}",
             "outdir":                  f"{sample_name}/{dbtype}",
@@ -35,7 +35,6 @@ def get_single_layout(sample_name, dbtype=""):
             "species_bam":             f"{sample_name}/temp/snps/{species_id}/{species_id}.bam",
             "species_sorted_bam":      f"{sample_name}/temp/snps/{species_id}/{species_id}.sorted.bam",
             "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
-            "chunk_pileup_perc":       f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}_{contig_idx}.tsv.lz4",
 
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
@@ -56,11 +55,11 @@ class Sample: # pylint: disable=too-few-public-methods
         self.profile = None
 
 
-    def get_target_layout(self, filename, species_id="", chunk_id="", contig_idx=""):
+    def get_target_layout(self, filename, species_id="", chunk_id=""):
         if isinstance(self.layout(species_id, chunk_id)[filename], list):
-            local_file_lists = self.layout(species_id, chunk_id, contig_idx)[filename]
+            local_file_lists = self.layout(species_id, chunk_id)[filename]
             return [os.path.join(self.midas_outdir, fn) for fn in local_file_lists]
-        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id, contig_idx)[filename])
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
 
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):
@@ -86,7 +85,7 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(species_profile_fp), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype("species")
-        assert args.select_by in schema, f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
+        assert not any([False for _ in args.select_by.split(',') if _ in schema]), f"Provided {args.select_by} is not in the species profile output for {self.sample_name}"
 
         species_ids = filter_species(species_profile_fp, args.select_by, args.select_threshold, species_list)
         return species_ids
@@ -98,7 +97,7 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing {summary_path} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
-        profile = {}
+        profile = dict()
         with InputStream(summary_path) as stream:
             for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 profile[info["species_id"]] = info

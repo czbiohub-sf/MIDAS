@@ -10,13 +10,14 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
-from iggtools.models.midasdb import MIDAS_DB
+from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
-from iggtools.models.sample import Sample
-from iggtools.models.species import Species, parse_species, collect_chunk_pileup, load_chunks_cache
 from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
+from iggtools.common.utilities import scan_fasta
+from iggtools.models.midasdb import MIDAS_DB
+from iggtools.models.sample import Sample
+from iggtools.models.species import Species, parse_species, load_chunks_cache
 from iggtools.params.inputs import MIDASDB_NAMES
 
 
@@ -30,7 +31,7 @@ DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
 
-DEFAULT_CHUNK_SIZE = 500000
+DEFAULT_CHUNK_SIZE = 1000000
 DEFAULT_MAX_FRAGLEN = 5000
 
 DEFAULT_SITE_DEPTH = 2
@@ -88,14 +89,14 @@ def register_args(main_func):
                            dest='select_by',
                            type=str,
                            default="median_marker_coverage",
-                           choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
-                           help=f"Column from species_profile based on which to select species.")
+                           #choices=['median_marker_coverage', 'marker_coverage', 'unique_fraction_covered', "marker_relative_abundance"],
+                           help=f"Comma separated columns from species_profile to filter species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_MARKER_MEDIAN_DEPTH,
-                           help=f"Include species with >= X median SGC (median) marker coverage ({DEFAULT_MARKER_MEDIAN_DEPTH})")
+                           type=str,
+                           metavar="CHAR",
+                           default=str(DEFAULT_MARKER_MEDIAN_DEPTH),
+                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
 
     # Alignment flags (Bowtie2 or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -210,16 +211,21 @@ def register_args(main_func):
 def keep_read(aln):
     global global_args
     args = global_args
-
     if not args.paired_only:
         return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
     return True
 
 
+def in_place(species_counts):
+    # Carry contigs in global variable
+    return species_counts < 50
+
+
 def design_chunks_per_species(args):
-    sp, midas_db, chunk_size = args
-    sp.get_repgenome(midas_db)
-    return sp.compute_snps_chunks_run(midas_db, chunk_size)
+    sp, midas_db, chunk_size, carry = args
+    if carry:
+        sp.get_repgenome(midas_db)
+    return sp.compute_snps_chunks(midas_db, chunk_size, "run")
 
 
 def design_chunks(species_ids_of_interest, midas_db, chunk_size):
@@ -227,6 +233,7 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
 
     global semaphore_for_species
     global dict_of_species
+    global dict_of_site_chunks
 
     # Read-only global variables
     semaphore_for_species = dict()
@@ -234,8 +241,12 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
 
     # Design chunks structure per species
     num_cores = min(midas_db.num_cores, 16)
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
-    assert all(flags)
+    carry = in_place(len(dict_of_species))
+    all_site_chunks = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size, carry) for sp in dict_of_species.values()], num_cores) #<---
+
+    dict_of_site_chunks = defaultdict(dict)
+    for spidx, species_id in enumerate(species_ids_of_interest):
+        dict_of_site_chunks[species_id] = all_site_chunks[spidx]
 
     # Sort species by the max_contig_length or num_of_snps_chunks
     sorted_tuples_of_species = sorted(((sp.id, sp.num_of_snps_chunks) for sp in dict_of_species.values()), key=itemgetter(1), reverse=True)
@@ -268,10 +279,15 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
     global dict_of_species
     global sample
 
-    tsprint(f"  CZ::filter_bam_by_single_read::{species_id}-0::start filter_bam_by_single_read")
+    tsprint(f"  MIDAS::filter_bam_by_single_read::{species_id}-0::start filter_bam_by_single_read")
 
     # List of contigs for given species
-    list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+    sp = dict_of_species[species_id]
+
+    if in_place(len(dict_of_species)):
+        list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+    else:
+        list_of_contig_ids = sp.fetch_contigs_ids()
 
     # Cache *properly* aligned reads-pair
     filtered_alns_dict = defaultdict(dict)
@@ -287,25 +303,22 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
             mapped_reads = 0
             for aln in infile.fetch(contig_id):
                 aligned_reads += 1
-
                 if global_args.analysis_ready or keep_read(aln):
                     mapped_reads += 1
-                    if not global_args.analysis_ready:
-                        read = "1" if aln.is_read1 else "2"
-                        filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
-
+                    #if not global_args.analysis_ready:
+                    read = "1" if aln.is_read1 else "2"
+                    filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
             reads_stats["aligned_reads"][contig_id] = aligned_reads
             reads_stats["mapped_reads"][contig_id] = mapped_reads
 
     # Write filtered alignments to file
-    if not global_args.analysis_ready:
-        template_bam = AlignmentFile(repbamfile, "rb")
-        filtered_bam = AlignmentFile(filtered_bamfile, "wb", template=template_bam)
-        for aln in filtered_alns_dict.values():
-            filtered_bam.write(aln)
-        filtered_bam.close()
+    template_bam = AlignmentFile(repbamfile, "rb")
+    filtered_bam = AlignmentFile(filtered_bamfile, "wb", template=template_bam)
+    for aln in filtered_alns_dict.values():
+        filtered_bam.write(aln)
+    filtered_bam.close()
 
-    tsprint(f"  CZ::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
+    tsprint(f"  MIDAS::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
     return reads_stats
 
 
@@ -316,10 +329,15 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
     global dict_of_species
     global sample
 
-    tsprint(f"  CZ::filter_bam_by_proper_pair::{species_id}-0::start filter_bam_by_proper_pair")
+    tsprint(f"  MIDAS::filter_bam_by_proper_pair::{species_id}-0::start filter_bam_by_proper_pair")
 
     # List of contigs for given species
-    list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+    sp = dict_of_species[species_id]
+
+    if in_place(len(dict_of_species)):
+        list_of_contig_ids = list(dict_of_species[species_id].contigs.keys())
+    else:
+        list_of_contig_ids = sp.fetch_contigs_ids()
 
     # Cache *properly* aligned reads-pair
     filtered_alns_dict = defaultdict(dict)
@@ -383,11 +401,11 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                 if reads_overlap:
                     # Keep the FWD read, split the REV reads
                     (nm_out_rev, nm_in_rev, ngaps_ri_rev, ngaps_ro_rev) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
-                    #assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM']
+                    assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM'], f"REV {query_name}"
 
                     # Keep the REV read, split the FWD reads
                     (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
-                    #assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM']
+                    assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM'], f"FWD {query_name}"
 
                     # Update the overlap by substracting the number of gaps in the fwd overlap region
                     reads_overlap = reads_overlap - ngaps_ri_fwd
@@ -409,15 +427,13 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                     b1 = alns["fwd"].query_alignment_end - reads_overlap
                     b2 = alns["rev"].query_alignment_start + reads_overlap - 1
 
+
                     # TODO: loose end => this gives me error using ibd data
                     debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
-                    #assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), debug_string
-                    #assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), debug_string
-                    #assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
-                    # also here
-                    #if False and reads_overlap != len(alns["rev"].query_alignment_sequence[:b2+1]) and overlap_pass:
-                    #    debug_overlap(alns)
-                    #    print(debug_string)
+                    assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), f"FWD: \n {debug_string}"
+                    assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), f"REV: \n {debug_string}"
+                    assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
+
 
                     # Only use the higher quality base in the overlap region for downstream pileup
                     f = alns["fwd"].query_qualities[b1:]
@@ -453,31 +469,36 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
         filtered_bam.write(alns["rev"])
     filtered_bam.close()
 
-    tsprint(f"  CZ::filter_bam_by_proper_pair::{species_id}-0::finish filter_bam_by_proper_pair")
+    tsprint(f"  MIDAS::filter_bam_by_proper_pair::{species_id}-0::finish filter_bam_by_proper_pair")
     return reads_stats
 
 
 def filter_bam(pargs):
     global global_args
-    global sample
-
-    species_id, numcores = pargs
-
-    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam") # input
-    filtered_bamfile = sample.get_target_layout("species_bam", species_id) # <species_id> output
+    species_id, repgenome_bamfile, filtered_bamfile = pargs
 
     if global_args.paired_only:
         reads_stats = filter_bam_by_proper_pair(species_id, repgenome_bamfile, filtered_bamfile)
     else:
         reads_stats = filter_bam_by_single_read(species_id, repgenome_bamfile, filtered_bamfile)
 
-    if not global_args.analysis_ready:
-        sorted_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
-        samtools_sort(filtered_bamfile, sorted_bamfile, global_args.debug, numcores)
-        samtools_index(sorted_bamfile, global_args.debug, numcores)
-        command(f"rm -rf {filtered_bamfile}", quiet=True)
-
     return reads_stats
+
+
+def sort_bam(pargs):
+    global global_args
+    global sample
+
+    species_id, numcores = pargs
+
+    filtered_bamfile = sample.get_target_layout("species_bam", species_id) # <species_id> output
+    sorted_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
+
+    samtools_sort(filtered_bamfile, sorted_bamfile, global_args.debug, numcores)
+    samtools_index(sorted_bamfile, global_args.debug, numcores)
+    command(f"rm -rf {filtered_bamfile}", quiet=True)
+
+    return True
 
 
 def process_chunk_of_sites(packed_args):
@@ -490,17 +511,17 @@ def process_chunk_of_sites(packed_args):
         global dict_of_species
         sp = dict_of_species[species_id]
 
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::wait merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::wait merge_chunks_per_species")
         for _ in range(sp.num_of_snps_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish merge_chunks_per_species")
+        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::finish merge_chunks_per_species")
         return ret
 
-    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
+    tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
     ret = compute_pileup_per_chunk(packed_args)
-    tsprint(f"  CZ::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
 
     return ret
 
@@ -512,19 +533,33 @@ def compute_pileup_per_chunk(packed_args):
     global dict_of_species
     global sample
     global global_args
+    global dict_of_site_chunks
 
     try:
         species_id, chunk_id = packed_args
         sp = dict_of_species[species_id]
-        chunks_of_sites = load_chunks_cache(sp.chunks_of_sites_fp)
 
+        chunks_of_sites = dict_of_site_chunks[species_id] #load_chunks_cache(sp.chunks_of_sites_fp)
+        if in_place(len(dict_of_species)):
+            contigs = dict_of_species[species_id].contigs
+        else:
+            contigs = scan_fasta(sp.contigs_fp)
+
+        dict_of_chunk_pileup = defaultdict(dict)
         ret = []
-        for pargs in chunks_of_sites[chunk_id]:
-            ret.append(midas_pileup(pargs))
+        for pidx, pargs in enumerate(chunks_of_sites[chunk_id]):
+            species_id, chunk_id, contig_id, contig_start, contig_end, count_flag = pargs[:6]
 
-        number_of_contigs = len(chunks_of_sites[chunk_id])
-        collect_chunk_pileup(sample, number_of_contigs, species_id, chunk_id, "chunk_pileup")
+            curr_contig = contigs[contig_id]
+            aln_stats, sliced_pileup = midas_pileup((species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, curr_contig))
+            ret.append(aln_stats)
+            dict_of_chunk_pileup[pidx] = sliced_pileup
 
+        headerless_sliced_path = sample.get_target_layout("chunk_pileup", species_id, chunk_id)
+        with OutputStream(headerless_sliced_path) as stream:
+            for sliced_pileup in dict_of_chunk_pileup.values():
+                for row in sliced_pileup:
+                    stream.write("\t".join(map(format_data, row)) + "\n")
         return ret
     finally:
         semaphore_for_species[species_id].release() # no deadlock
@@ -538,21 +573,30 @@ def midas_pileup(packed_args):
     global sample
 
     # [contig_start, contig_end)
-    species_id, chunk_id, contig_id, contig_start, contig_end, _, within_chunk_cid = packed_args
+    species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, curr_contig = packed_args
 
-    if global_args.analysis_ready:
-        repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
-    else:
-        repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
-
-    headerless_sliced_path = sample.get_target_layout("chunk_pileup_perc", species_id, chunk_id, within_chunk_cid)
+    #if not global_args.paired_only:
+    #    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
+    #else:
+    repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
 
     current_chunk_size = contig_end - contig_start
-    contig_seq = dict_of_species[species_id].contigs[contig_id]["seq"]
+    contig_seq = curr_contig["seq"]
 
     with AlignmentFile(repgenome_bamfile) as bamfile:
-        # min_quality_threshold a base has to reach to be counted.
+        #if global_args.paired_only:
         counts = bamfile.count_coverage(contig_id, contig_start, contig_end, quality_threshold=global_args.aln_baseq)
+        #else:
+        #    counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
+        #                                    quality_threshold=global_args.aln_baseq, # min bq a base has to reach to be counted.
+        #                                    read_callback=keep_read) # select a call-back to ignore reads when counting
+
+        aligned_reads = 0
+        mapped_reads = 0
+        #if count_flag and not global_args.paired_only:
+        #    # To avoid overcount boudary reads, we compute reads stats per contig.
+        #    aligned_reads = bamfile.count(contig_id)
+        #    mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
 
     # aln_stats need to be passed from child process back to parents
     aln_stats = {
@@ -560,48 +604,50 @@ def midas_pileup(packed_args):
         "chunk_id": chunk_id,
         "contig_id": contig_id,
         "chunk_length": current_chunk_size,
-        "aligned_reads": 0, #aligned_reads if count_flag and not global_args.paired_only else 0,
-        "mapped_reads": 0, #mapped_reads if count_flag and not global_args.paired_only else 0,
+        "aligned_reads": aligned_reads,
+        "mapped_reads": mapped_reads,
         "contig_total_depth": 0,
         "contig_covered_bases": 0,
     }
 
-    with OutputStream(headerless_sliced_path) as stream:
-        for within_chunk_index in range(0, current_chunk_size):
-            depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
-            count_a = counts[0][within_chunk_index]
-            count_c = counts[1][within_chunk_index]
-            count_g = counts[2][within_chunk_index]
-            count_t = counts[3][within_chunk_index]
+    sliced_pileup = list()
+    for within_chunk_index in range(0, current_chunk_size):
+        depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
+        count_a = counts[0][within_chunk_index]
+        count_c = counts[1][within_chunk_index]
+        count_g = counts[2][within_chunk_index]
+        count_t = counts[3][within_chunk_index]
 
-            ref_pos = within_chunk_index + contig_start
-            ref_allele = contig_seq[ref_pos]
-            row = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
+        ref_pos = within_chunk_index + contig_start
+        ref_allele = contig_seq[ref_pos]
+        row = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
 
-            aln_stats["contig_total_depth"] += depth
-            if depth < global_args.site_depth:
+        aln_stats["contig_total_depth"] += depth
+        if depth < global_args.site_depth:
+            continue
+        aln_stats["contig_covered_bases"] += 1
+
+        if global_args.advanced:
+            # Compuate single sample major/minor allele
+            rc_ACGT = [count_a, count_c, count_g, count_t]
+            tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
+            major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
+
+            if allele_counts == 0:
                 continue
-            aln_stats["contig_covered_bases"] += 1
 
-            if global_args.advanced:
-                rc_ACGT = [count_a, count_c, count_g, count_t]
-                tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
-                major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
+            major_index = 'ACGT'.index(major_allele)
+            minor_index = 'ACGT'.index(minor_allele)
+            major_allelefreq = rc_ACGT[major_index] / depth
+            minor_allelefreq = 0.0 if major_index == minor_index else rc_ACGT[minor_index] / depth
 
-                if allele_counts == 0:
-                    continue
+            row.extend([major_allele, minor_allele, major_allelefreq, minor_allelefreq, allele_counts])
 
-                major_index = 'ACGT'.index(major_allele)
-                minor_index = 'ACGT'.index(minor_allele)
-                major_allelefreq = rc_ACGT[major_index] / depth
-                minor_allelefreq = 0.0 if major_index == minor_index else rc_ACGT[minor_index] / depth
+        sliced_pileup.append(tuple(row)) # list of tuples_of_row_record
 
-                row.extend([major_allele, minor_allele, major_allelefreq, minor_allelefreq, allele_counts])
+    assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
 
-            stream.write("\t".join(map(format_data, row)) + "\n")
-        assert within_chunk_index+contig_start == contig_end-1, f"compute_pileup_per_chunk::index mismatch error for {contig_id}."
-
-    return aln_stats
+    return aln_stats, sliced_pileup
 
 
 def merge_chunks_per_species(species_id):
@@ -624,7 +670,7 @@ def merge_chunks_per_species(species_id):
             stream.write("\t".join(snps_pileup_basic_schema.keys()) + "\n")
     cat_files(list_of_chunks_pileup, species_snps_pileup_file, 20)
 
-    if not global_args.debug:
+    if global_args.analysis_ready or not global_args.debug:
         tsprint(f"Deleting temporary sliced pileup files for {species_id}.")
         for s_file in list_of_chunks_pileup:
             command(f"rm -rf {s_file}", quiet=True)
@@ -639,16 +685,21 @@ def merge_chunks_per_species(species_id):
     return True
 
 
-def compute_chunk_aln_summary(list_of_contig_aln_summary, species_ids_of_interest):
-    """ Compute chunk-level alignment stats from contigs' mapping summary"""
+def compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest):
+    """ Collect Compute chunk-level alignment stats from contigs' mapping summary"""
+    global global_args
     global dict_of_species
+    global dict_of_site_chunks
+
     dict_of_chunk_aln_stats = dict()
 
     for spidx, species_id in enumerate(species_ids_of_interest):
         sp = dict_of_species[species_id]
 
         cc_to_ch = defaultdict(lambda: defaultdict(dict))
-        chunks_of_sites = load_chunks_cache(sp.chunks_of_sites_fp)
+
+        chunks_of_sites = dict_of_site_chunks[species_id]
+
         for chunk_id, tchunks_list in chunks_of_sites.items():
             if chunk_id == -1:
                 continue
@@ -657,8 +708,8 @@ def compute_chunk_aln_summary(list_of_contig_aln_summary, species_ids_of_interes
                 contig_id = loc[2]
                 count_flag = loc[5]
 
-                aligned_reads = list_of_contig_aln_summary[spidx]["aligned_reads"][contig_id]
-                mapped_reads = list_of_contig_aln_summary[spidx]["mapped_reads"][contig_id]
+                aligned_reads = list_of_contig_aln_stats[spidx]["aligned_reads"][contig_id]
+                mapped_reads = list_of_contig_aln_stats[spidx]["mapped_reads"][contig_id]
 
                 if contig_id not in cc_to_ch[chunk_id]:
                     cc_to_ch[chunk_id][contig_id] = {"aligned_reads": 0, "mapped_reads": 0}
@@ -687,6 +738,7 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, ch
                 chunk_id = record["chunk_id"]
                 contig_id = record["contig_id"]
 
+                #if global_args.paired_only:
                 record["aligned_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["aligned_reads"]
                 record["mapped_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["mapped_reads"]
 
@@ -761,7 +813,10 @@ def midas_run_snps(args):
             bt2db_name = "repgenomes"
 
         # Pileup species: abundant and/or listed species. We don't recommend pileup on too many empty species.
-        species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
+        select_thresholds = args.select_threshold.split(',')
+        no_filter = len(select_thresholds) == 1 and float(select_thresholds[0]) == -1
+
+        species_ids_of_interest = species_list if no_filter else sample.select_species(args, species_list)
         species_counts = len(species_ids_of_interest)
 
         sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
@@ -769,40 +824,48 @@ def midas_run_snps(args):
         tsprint(len(species_ids_of_interest))
 
         # Fetch representative genome fastas for each species (multiprocessing)
-        tsprint(f"CZ::design_chunks::start")
+        tsprint(f"MIDAS::design_chunks::start")
         num_cores_download = min(args.num_cores, species_counts)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
-        tsprint(f"CZ::design_chunks::finish")
+        tsprint(f"MIDAS::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
         contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
-        tsprint(f"CZ::build_bowtie2db::start")
+        tsprint(f"MIDAS::build_bowtie2db::start")
         build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
-        tsprint(f"CZ::build_bowtie2db::finish")
+        tsprint(f"MIDAS::build_bowtie2db::finish")
 
-        tsprint(f"CZ::bowtie2_align::start")
+        tsprint(f"MIDAS::bowtie2_align::start")
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2db_dir, bt2db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug, args.num_cores)
-        tsprint(f"CZ::bowtie2_align::finish")
+        tsprint(f"MIDAS::bowtie2_align::finish")
 
-        tsprint(f"CZ::filter_bam::start")
-        cores_per_species = max(1, floor(args.num_cores/species_counts))
-        list_of_contig_aln_summary = multiprocessing_map(filter_bam, [(species_id, cores_per_species) for species_id in species_ids_of_interest], args.num_cores)
-        tsprint(f"CZ::filter_bam::finish")
+        tsprint(f"MIDAS::filter_bam::start")
+        args_list = []
+        for species_id in species_ids_of_interest:
+            repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam") # input
+            filtered_bamfile = sample.get_target_layout("species_bam", species_id) # <species_id> output
+            args_list.append((species_id, repgenome_bamfile, filtered_bamfile))
+        list_of_contig_aln_stats = multiprocessing_map(filter_bam, args_list, args.num_cores)
 
-        tsprint(f"CZ::multiprocessing_map::start")
+        cores_per_species = max(4, floor(args.num_cores/species_counts))
+        multiprocessing_map(sort_bam, [(species_id, cores_per_species) for species_id in species_ids_of_interest], floor(args.num_cores/cores_per_species))
+        tsprint(f"MIDAS::filter_bam::finish")
+
+        tsprint(f"MIDAS::multiprocessing_map::start")
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, args.num_cores)
-        tsprint(f"CZ::multiprocessing_map::finish")
+        tsprint(f"MIDAS::multiprocessing_map::finish")
 
-        tsprint(f"CZ::write_species_pileup_summary::start")
+        tsprint(f"MIDAS::write_species_pileup_summary::start")
         snps_summary_fp = sample.get_target_layout("snps_summary")
         snps_chunk_summary_fp = sample.get_target_layout("snps_chunk_summary")
-        dict_of_chunk_aln_stats = compute_chunk_aln_summary(list_of_contig_aln_summary, species_ids_of_interest)
+        #if global_args.paired_only: #<----
+        dict_of_chunk_aln_stats = compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
         write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, snps_chunk_summary_fp, dict_of_chunk_aln_stats)
-        tsprint(f"CZ::write_species_pileup_summary::finish")
+        tsprint(f"MIDAS::write_species_pileup_summary::finish")
 
     except Exception as error:
         if not args.debug:

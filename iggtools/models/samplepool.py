@@ -2,7 +2,7 @@
 import os
 from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, format_data
 from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.species import Species, sort_list_of_species, parse_species
+from iggtools.models.species import Species, parse_species
 from iggtools.models.sample import Sample, create_local_dir
 
 
@@ -124,30 +124,35 @@ class SamplePool: # pylint: disable=too-few-public-methods
                 continue
             sp.fetch_samples_depth() # initialize list_of_samples_depth
             species_keep.append(sp)
-        # Sort the species by descending prevalence (samples_count)
-        list_of_species = sort_list_of_species(species_keep)
+
+        # Sort the species by descending prevalence
+        list_of_species = sort_species(species_keep)
         return {sp.id:sp for sp in list_of_species}
 
 
     def fetch_samples_names(self):
-        # TODO: should be able to delete this
         return [sample.sample_name for sample in self.samples]
 
 
     def write_summary_files(self, dict_of_species, dbtype):
         """ Write snps/genes summary files for current samples pool """
-
         summary_file = self.get_target_layout(f"{dbtype}_summary")
-        summary_header = list(fetch_schema_by_dbtype(dbtype).keys())[1:]
+        summary_header = list(fetch_schema_by_dbtype(dbtype).keys())
         with OutputStream(summary_file) as stream:
-            stream.write("\t".join(["species_id", "sample_name"] + summary_header) + "\n")
+            stream.write("\t".join(["sample_name"] + summary_header) + "\n")
             for sp in dict_of_species.values():
                 for sample in sp.list_of_samples:
-                    row = list(sample.profile[sp.id].values())
-                    stream.write("\t".join([str(row[0]), sample.sample_name]) + "\t" + "\t".join(map(format_data, row[1:])) + "\n")
+                    row = [sample.sample_name] + list(sample.profile[sp.id].values())
+                    stream.write("\t".join(map(format_data, row)) + "\n")
 
 
     def remove_dirs(self, list_of_dirnames):
         for dirname in list_of_dirnames:
             dirpath = self.get_target_layout(dirname)
             command(f"rm -rf {dirpath}", check=False)
+
+
+def sort_species(list_of_species, rev=True):
+    """ Sort list_of_species by samples_count in descending order """
+    species_sorted = sorted(((sp, sp.samples_count) for sp in list_of_species), key=lambda x: x[1], reverse=rev)
+    return [sp[0] for sp in species_sorted]

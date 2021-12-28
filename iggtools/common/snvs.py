@@ -39,7 +39,7 @@ def hamming_distance(str1, str2):
     assert len(str1) == len(str2), f"Two input strings for hamming_distance are different length."
     hd = 0
     for i in range(len(str1)):
-        if str1[i] != str2[i]:
+        if str1[i] != str2[i] or str1[i] not in 'ACGT':
             hd += 1
     return hd
 

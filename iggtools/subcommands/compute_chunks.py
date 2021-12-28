@@ -15,7 +15,6 @@ from iggtools.models.species import design_genes_chunks, design_run_snps_chunks,
 CONCURRENT_BUILDS = Semaphore(num_physical_cores)
 
 DEFAULT_CHUNK_SIZE = 100000
-#DEFAULT_CHUNK_SIZE = 500000
 
 
 @retry
