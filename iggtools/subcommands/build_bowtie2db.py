@@ -82,7 +82,6 @@ def build_bowtie2db(args):
 
         # Fetch UHGG related files
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
-        print(midas_db.uhgg)
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"CZ::build_bowtie2_repgenomes_indexes::start")
