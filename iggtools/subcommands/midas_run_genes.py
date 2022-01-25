@@ -496,9 +496,13 @@ def midas_run_genes(args):
             bt2_db_name = "pangenomes"
 
         # Select abundant species present in the sample for SNPs calling
-        species_ids_of_interest = species_list if args.select_threshold == -1 else sample.select_species(args, species_list)
+        select_thresholds = args.select_threshold.split(',')
+        no_filter = len(select_thresholds) == 1 and float(select_thresholds[0]) == -1
+
+        species_ids_of_interest = species_list if no_filter else sample.select_species(args, species_list)
         species_counts = len(species_ids_of_interest)
-        assert species_ids_of_interest, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
+
+        assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(len(species_ids_of_interest))
 
         tsprint(f"MIDAS::design_chunks::start")
