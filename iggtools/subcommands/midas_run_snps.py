@@ -298,14 +298,13 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
 
     with AlignmentFile(repbamfile) as infile:
         for contig_id in list_of_contig_ids:
-            # To avoid boundary cliff, we need to read in the whole contig
+            # To avoid overcount boudary reads, we compute reads stats per contig.
             aligned_reads = 0
             mapped_reads = 0
             for aln in infile.fetch(contig_id):
                 aligned_reads += 1
                 if global_args.analysis_ready or keep_read(aln):
                     mapped_reads += 1
-                    #if not global_args.analysis_ready:
                     read = "1" if aln.is_read1 else "2"
                     filtered_alns_dict[f"{aln.query_name}_{read}"] = aln
             reads_stats["aligned_reads"][contig_id] = aligned_reads
@@ -575,28 +574,16 @@ def midas_pileup(packed_args):
     # [contig_start, contig_end)
     species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, curr_contig = packed_args
 
-    #if not global_args.paired_only:
-    #    repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
-    #else:
     repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
 
     current_chunk_size = contig_end - contig_start
     contig_seq = curr_contig["seq"]
 
     with AlignmentFile(repgenome_bamfile) as bamfile:
-        #if global_args.paired_only:
         counts = bamfile.count_coverage(contig_id, contig_start, contig_end, quality_threshold=global_args.aln_baseq)
-        #else:
-        #    counts = bamfile.count_coverage(contig_id, contig_start, contig_end,
-        #                                    quality_threshold=global_args.aln_baseq, # min bq a base has to reach to be counted.
-        #                                    read_callback=keep_read) # select a call-back to ignore reads when counting
 
-        aligned_reads = 0
-        mapped_reads = 0
-        #if count_flag and not global_args.paired_only:
-        #    # To avoid overcount boudary reads, we compute reads stats per contig.
-        #    aligned_reads = bamfile.count(contig_id)
-        #    mapped_reads = bamfile.count(contig_id, read_callback=keep_read)
+    aligned_reads = 0
+    mapped_reads = 0
 
     # aln_stats need to be passed from child process back to parents
     aln_stats = {
@@ -622,9 +609,10 @@ def midas_pileup(packed_args):
         ref_allele = contig_seq[ref_pos]
         row = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
 
-        aln_stats["contig_total_depth"] += depth
         if depth < global_args.site_depth:
             continue
+
+        aln_stats["contig_total_depth"] += depth
         aln_stats["contig_covered_bases"] += 1
 
         if global_args.advanced:
@@ -862,7 +850,7 @@ def midas_run_snps(args):
         tsprint(f"MIDAS::write_species_pileup_summary::start")
         snps_summary_fp = sample.get_target_layout("snps_summary")
         snps_chunk_summary_fp = sample.get_target_layout("snps_chunk_summary")
-        #if global_args.paired_only: #<----
+
         dict_of_chunk_aln_stats = compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
         write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, snps_chunk_summary_fp, dict_of_chunk_aln_stats)
         tsprint(f"MIDAS::write_species_pileup_summary::finish")
