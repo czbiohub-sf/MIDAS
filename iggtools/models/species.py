@@ -178,16 +178,20 @@ def filter_species(profile_fp, select_by, select_threshold, species_list=None):
     assert len(select_by) == len(select_threshold)
 
     dict_of_species = dict()
-    column_names = list(set(["species_id", "median_marker_coverage"] + select_by))
+    if "median_marker_coverage" in select_by:
+        column_names = list(set(["species_id", "median_marker_coverage"] + select_by))
+    else:
+        column_names = ["species_id"] + select_by
+
     with InputStream(profile_fp) as stream:
         for record in select_from_tsv(stream, selected_columns=column_names, result_structure=dict):
             if species_list and record["species_id"] not in species_list:
                 continue
-            #if float(record[select_by]) >= select_threshold: #<--
-            if sum([1 if float(record[select_by[i]]) > float(select_threshold[i]) else 0 for i in range(nargs)]) == nargs:
-                dict_of_species[record["species_id"]] = float(record["median_marker_coverage"])
 
-    # Sort species in descending order of median_marker_coverage
+            if sum([1 if float(record[select_by[i]]) > float(select_threshold[i]) else 0 for i in range(nargs)]) == nargs:
+                dict_of_species[record["species_id"]] = float(record[column_names[1]])
+
+    # Sort species in descending order of first column name (median_marker_coverage)
     species_ids = [k for k, v in sorted(dict_of_species.items(), key=itemgetter(1), reverse=True)]
     return species_ids
 

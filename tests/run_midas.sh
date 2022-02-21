@@ -64,6 +64,4 @@ echo "test midas_merge_genes default"
 python3 -m iggtools midas_merge_genes --samples_list ${pool_fp} --midasdb_name uhgg --midasdb_dir ${midas_db} --num_cores ${num_cores} --sample_counts 2 ${merge_midas_outdir} &> ${logs_dir}/merge_genes_${num_cores}.log
 
 
-
-
-echo "DONE"
+echo "DONE Testing MIDAS"

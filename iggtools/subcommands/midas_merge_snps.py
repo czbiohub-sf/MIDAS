@@ -19,6 +19,7 @@ DEFAULT_SAMPLE_COUNTS = 2
 DEFAULT_GENOME_DEPTH = 5.0
 DEFAULT_GENOME_COVERAGE = 0.4
 DEFAULT_CHUNK_SIZE = 1000000
+DEFAULT_NUM_CORES = 16
 
 DEFAULT_SITE_DEPTH = 2
 DEFAULT_SITE_RATIO = 5.0
@@ -64,8 +65,8 @@ def register_args(main_func):
                            dest='num_cores',
                            type=int,
                            metavar="INT",
-                           default=num_physical_cores,
-                           help=f"Number of physical cores to use ({num_physical_cores})")
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
 
     # Species and sample filters
     subparser.add_argument('--species_list',

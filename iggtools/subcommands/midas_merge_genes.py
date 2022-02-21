@@ -7,7 +7,7 @@ from math import ceil
 
 from iggtools.models.samplepool import SamplePool
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, num_physical_cores
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
 from iggtools.models.species import scan_cluster_info
@@ -18,6 +18,7 @@ DEFAULT_GENOME_DEPTH = 1.0
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_ID = '95'
 DEFAULT_MIN_COPY = 0.35
+DEFAULT_NUM_CORES = 4
 
 
 def register_args(main_func):
@@ -71,8 +72,8 @@ def register_args(main_func):
                            dest='num_cores',
                            type=int,
                            metavar="INT",
-                           default=num_physical_cores,
-                           help=f"Number of physical cores to use ({num_physical_cores})")
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
 
     # Presence/Absence
     subparser.add_argument('--min_copy',

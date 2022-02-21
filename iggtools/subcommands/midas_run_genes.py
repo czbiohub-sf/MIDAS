@@ -10,7 +10,7 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, num_physical_cores, cat_files
+from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files
 from iggtools.common.utilities import fetch_genes_are_markers
 from iggtools.models.midasdb import MIDAS_DB
 from iggtools.models.sample import Sample
@@ -32,6 +32,7 @@ DEFAULT_SITE_DEPTH = 2
 
 DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
+DEFAULT_NUM_CORES = 8
 
 
 def register_args(main_func):
@@ -166,8 +167,8 @@ def register_args(main_func):
                            dest='num_cores',
                            type=int,
                            metavar="INT",
-                           default=num_physical_cores,
-                           help=f"Number of physical cores to use ({num_physical_cores})")
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
     return main_func
 
 
