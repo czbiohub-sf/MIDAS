@@ -8,6 +8,9 @@ from iggtools.models.species import parse_species, filter_species
 from iggtools.params.inputs import MIDASDB_NAMES
 
 
+DEFAULT_SAMPLE_COUNTS = 2
+
+
 def register_args(main_func):
     subparser = add_subcommand('build_bowtie2db', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
 
@@ -52,13 +55,13 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default="sample_counts",
-                           choices=['sample_counts', 'median_marker_coverage'],
-                           help=f"Column from species_profile based on which to select species.")
+                           help=f"Column from species_prevalence based on which to select species (sample_counts).")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
                            type=str,
                            metavar="CHAR",
-                           help=f"Minimum threshold values of for selected columns.")
+                           default=str(DEFAULT_SAMPLE_COUNTS),
+                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_SAMPLE_COUNTS}, )")
 
     subparser.add_argument('--num_cores',
                            dest='num_cores',

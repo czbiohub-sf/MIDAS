@@ -10,7 +10,7 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
+from iggtools.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
 from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
 from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
 from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
@@ -22,7 +22,7 @@ from iggtools.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_MARKER_DEPTH = 5.0
-DEFAULT_MARKER_MEDIAN_DEPTH = 0
+DEFAULT_MARKER_MEDIAN_DEPTH = 2
 
 DEFAULT_ALN_MAPID = 94.0
 DEFAULT_ALN_MAPQ = 10
@@ -33,6 +33,7 @@ DEFAULT_ALN_TRIM = 0
 
 DEFAULT_CHUNK_SIZE = 1000000
 DEFAULT_MAX_FRAGLEN = 5000
+DEFAULT_NUM_CORES = 8
 
 DEFAULT_SITE_DEPTH = 2
 DEFAULT_SNP_MAF = 0.1
@@ -189,8 +190,8 @@ def register_args(main_func):
                            dest='num_cores',
                            type=int,
                            metavar="INT",
-                           default=num_physical_cores,
-                           help=f"Number of physical cores to use ({num_physical_cores})")
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
 
     subparser.add_argument('--site_depth',
                            dest='site_depth',
@@ -427,7 +428,6 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                     b2 = alns["rev"].query_alignment_start + reads_overlap - 1
 
 
-                    # TODO: loose end => this gives me error using ibd data
                     debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
                     #assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), f"FWD: \n {debug_string}"
                     #assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), f"REV: \n {debug_string}"
@@ -538,7 +538,7 @@ def compute_pileup_per_chunk(packed_args):
         species_id, chunk_id = packed_args
         sp = dict_of_species[species_id]
 
-        chunks_of_sites = dict_of_site_chunks[species_id] #load_chunks_cache(sp.chunks_of_sites_fp)
+        chunks_of_sites = dict_of_site_chunks[species_id]
         if in_place(len(dict_of_species)):
             contigs = dict_of_species[species_id].contigs
         else:
@@ -726,7 +726,6 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, ch
                 chunk_id = record["chunk_id"]
                 contig_id = record["contig_id"]
 
-                #if global_args.paired_only:
                 record["aligned_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["aligned_reads"]
                 record["mapped_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["mapped_reads"]
 
