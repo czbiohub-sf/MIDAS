@@ -43,8 +43,8 @@ python3 -m iggtools midas_merge_species --samples_list ${pool_fp} --marker_depth
 
 
 echo "test build_bowtie2: select species by prevalence"
-python3 -m iggtools build_bowtie2db --midasdb_name uhgg --midasdb_dir ${midas_db} --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 2 --num_cores ${num_cores} --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes &> ${logs_dir}/build_bowtie2_rep_${num_cores}.log
-python3 -m iggtools build_bowtie2db --midasdb_name uhgg --midasdb_dir ${midas_db} --bt2_indexes_name pangenomes --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 2 --num_cores ${num_cores} --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes &> ${logs_dir}/build_bowtie2_pan_${num_cores}.log
+python3 -m iggtools build_bowtie2db --midasdb_name uhgg --midasdb_dir ${midas_db} --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 1 --num_cores ${num_cores} --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes &> ${logs_dir}/build_bowtie2_rep_${num_cores}.log
+python3 -m iggtools build_bowtie2db --midasdb_name uhgg --midasdb_dir ${midas_db} --bt2_indexes_name pangenomes --species_profile ${merge_midas_outdir}/species/species_prevalence.tsv --select_by sample_counts --select_threshold 1 --num_cores ${num_cores} --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes &> ${logs_dir}/build_bowtie2_pan_${num_cores}.log
 
 
 echo "test midas_run_snps with prebuilt bowtie indexes (no need to run species flow)"
