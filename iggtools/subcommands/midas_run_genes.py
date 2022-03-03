@@ -389,19 +389,19 @@ def merge_chunks_per_species(species_id):
     number_of_chunks = sp.num_of_genes_chunks
 
     # Compute the median read coverage for all mapped marker genes for given species
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start compute_scg_coverage_across_chunks")
+    tsprint(f"      MIDAS::merge_chunks_per_species::{species_id}::start compute_scg_coverage_across_chunks")
     median_marker_coverage = compute_scg_coverage_across_chunks(species_id)
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish compute_scg_coverage_across_chunks")
+    tsprint(f"      MIDAS::merge_chunks_per_species::{species_id}::finish compute_scg_coverage_across_chunks")
 
     # Overwrite the chunk_gene_coverage file with updated copy_number
     list_of_chunks_coverage = [sample.get_target_layout("chunk_coverage", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
     species_gene_coverage_path = sample.get_target_layout("genes_coverage", species_id)
 
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::start update_chunk_coverage")
+    tsprint(f"      MIDAS::merge_chunks_per_species::{species_id}::start update_chunk_coverage")
     if median_marker_coverage > 0:
         args = [(chunk_file, median_marker_coverage) for chunk_file in list_of_chunks_coverage]
         multithreading_map(update_chunk_coverage, args, 4)
-    tsprint(f"      CZ2::merge_chunks_per_species::{species_id}::finish update_chunk_coverage")
+    tsprint(f"      MIDAS::merge_chunks_per_species::{species_id}::finish update_chunk_coverage")
 
     # Merge chunks results into per species genes coverage file
     with OutputStream(species_gene_coverage_path) as stream:
