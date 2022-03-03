@@ -12,7 +12,7 @@ ARG PATH="/root/miniconda3/bin:${PATH}"
 
 RUN apt-get update && apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
 RUN apt-get install -y apt-utils
-RUN apt-get install -y pkg-config build-essential wget cpanminus
+RUN apt-get install -y pkg-config build-essential cpanminus git make perl cmake autoconf wget
 
 
 RUN rm -rf /var/lib/apt/lists/*
