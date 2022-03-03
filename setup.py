@@ -4,11 +4,10 @@ from iggtools import version
 
 setup(name='iggtools',
       version=version,
-      summary='Integrated Gut Genome Tools',
       description='https://github.com/czbiohub/iggtools/wiki',
       url='http://github.com/czbiohub/iggtools',
-      author='Microbiome Team At Pollard Lab and CZ Biohub',
-      author_email='bdimitrov@chanzuckerberg.com',
+      author='Chunyu Zhao, Boris Dimitrov',
+      author_email='chunyu.zhao@czbiohub.org',
       license='MIT',
       packages=['iggtools', 'iggtools/subcommands', 'iggtools/common', 'iggtools/params', 'iggtools/models'],
       install_requires=[],
