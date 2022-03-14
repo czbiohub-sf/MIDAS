@@ -7,16 +7,16 @@
 #
 # Each subcommand module has its own main() function.  They are totally independent,
 # with their own set of command line arguments and subcommand help text -- aside from
-# the shared arguments and shared help text defined in iggtools.common.argparser.
+# the shared arguments and shared help text defined in midas2.common.argparser.
 #
-from iggtools.subcommands import aws_batch_init, aws_batch_submit, init, \
+from midas2.subcommands import aws_batch_init, aws_batch_submit, init, \
     import_uhgg, annotate_genome, build_pangenome, \
     infer_markers, build_midasdb, download_midasdb, \
     midas_run_species, midas_run_genes, midas_run_snps, \
     midas_merge_species, midas_merge_snps, midas_merge_genes, \
     build_bowtie2db, compute_chunks # pylint: disable=unused-import
 
-from iggtools.common.argparser import parse_args
+from midas2.common.argparser import parse_args
 
 
 def main():
