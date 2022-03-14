@@ -1,7 +1,7 @@
 from argparse import ArgumentParser, SUPPRESS, RawDescriptionHelpFormatter
-from iggtools import version
-from iggtools.params import batch
-from iggtools.params.outputs import opsdir
+from midas2 import version
+from midas2.params import batch
+from midas2.params.outputs import opsdir
 
 
 # TODO:  Implement '--batch' in subcommands.  # pylint: disable=fixme
@@ -9,11 +9,11 @@ BATCH_FLAGS_IN_SUBCOMMANDS = False
 
 
 def _new(_):
-    """Create a single command line parser for all iggtools subcommands."""
-    wiki = "https://github.com/czbiohub/iggtools/wiki"
-    summary = f"Integrated Gut Genome Tools, Version {version}"
+    """Create a single command line parser for all MIDAS subcommands."""
+    wiki = "https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-2.0"
+    summary = f"Metagenomic Intra-Species Diversity Analysis System 2.0 (MIDAS 2.0), Version {version}"
     parser = ArgumentParser(
-        prog="iggtools",
+        prog="midas2",
         description=summary,
         epilog=f"For more information, see {wiki}",
         formatter_class=RawDescriptionHelpFormatter
@@ -38,12 +38,12 @@ def _add_shared_subcommand_args(subparser, suppress_batch_args=False):
     # Adding the same flag separately to each subcommand parser makes it possible for
     # the end user to specify the flag after the subcommand name, like so
     #
-    #     iggtools subcommand --flag      ----- THIS FEELS RIGHT
+    #     midas2 subcommand --flag      ----- THIS FEELS RIGHT
     #
     #  If we were to put the flag in the main argument parser above, the flag would be
     #  required to precede the subcommand, like so
     #
-    #     iggtools --flag subcommand      ----- THIS FEELS UNNATURAL, DON'T DO IT
+    #     midas2 --flag subcommand      ----- THIS FEELS UNNATURAL, DON'T DO IT
     #
     #  In our experience, having flags before the subcommand feels like an inconsistency.
     #  We make sure ALL flags follow the subcommand.  This requires redefining every flag
@@ -72,7 +72,7 @@ def _add_shared_subcommand_args(subparser, suppress_batch_args=False):
     subparser.add_argument('--batch_branch',
                            dest='batch_branch',
                            required=False,
-                           help=f"iggtools git branch for AWS batch, default '{batch.default_branch}'" if not suppress_batch_args else SUPPRESS)
+                           help=f"midas2 git branch for AWS batch, default '{batch.default_branch}'" if not suppress_batch_args else SUPPRESS)
     subparser.set_defaults(batch_branch=batch.default_branch)
     subparser.add_argument('--batch_memory',
                            dest='batch_memory',
