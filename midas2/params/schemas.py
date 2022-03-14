@@ -1,6 +1,6 @@
 # These are the schames for the outputs of MIDAS
 
-## midas_merge_species
+## merge_species
 DECIMALS = ".3f"
 DECIMALS3 = ".3f"
 DECIMALS6 = ".6f"
