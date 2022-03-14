@@ -4,11 +4,11 @@ import sys
 import json
 from multiprocessing import Semaphore
 
-from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, num_physical_cores, retry, find_files, pythonpath, upload, OutputStream, command, multithreading_map
-from iggtools.common.utilities import decode_species_arg
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
+from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.utils import tsprint, num_physical_cores, retry, find_files, pythonpath, upload, OutputStream, command, multithreading_map
+from midas2.common.utilities import decode_species_arg
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
 
 
 # Up to this many concurrent species builds.
@@ -76,7 +76,7 @@ def compute_chunks_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_subdir}/{worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_subdir}/{worker_log}"
             with open(f"{worker_subdir}/{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -163,5 +163,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     compute_chunks(args)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import os
-from iggtools.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, format_data
-from iggtools.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
-from iggtools.models.species import Species, parse_species
-from iggtools.models.sample import Sample, create_local_dir
+from midas2.params.schemas import fetch_schema_by_dbtype, samples_pool_schema, format_data
+from midas2.common.utils import InputStream, OutputStream, select_from_tsv, command, tsprint
+from midas2.models.species import Species, parse_species
+from midas2.models.sample import Sample, create_local_dir
 
 
 def get_pool_layout(dbtype=""):

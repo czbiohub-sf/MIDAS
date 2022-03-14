@@ -1,11 +1,11 @@
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, find_files, InputStream, OutputStream, select_from_tsv
-from iggtools.params import inputs, outputs
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, find_files, InputStream, OutputStream, select_from_tsv
+from midas2.params import inputs, outputs
 
 def init(args):
     """
-    Input spec: https://github.com/czbiohub/iggtools/wiki#inputs
-    Output spec: https://github.com/czbiohub/iggtools/wiki#target-layout-in-s3
+    Input spec: https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#inputs
+    Output spec: https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#target-layout-in-s3
     """
 
     msg = f"Building {outputs.genomes}."
@@ -48,5 +48,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     init(args)

@@ -1,18 +1,18 @@
 # This example subcommand module is hidden by default.
 #
-# To expose it, just add the following line at the top of iggtools/__main__.py:
+# To expose it, just add the following line at the top of midas2/__main__.py:
 #
-#     from iggtools.subcommands import example_subcommand # pylint: disable=unused-import
+#     from midas2.subcommands import example_subcommand # pylint: disable=unused-import
 #
 # Doing so will immediately expose "example_subcommand" as a subcommand with optional argument "-1".
-# You can confirm this by running "python3 -m iggtools -h".
-# Running "python3 -m iggtools example_subcommand" will execute the main() function below.
+# You can confirm this by running "python3 -m midas2 -h".
+# Running "python3 -m midas2 example_subcommand" will execute the main() function below.
 # Adding "-1" to that will set args.test_value to 1.
 #
 # To create your own new subcommand, simply clone this file, and import it.
 
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint
 
 
 def register_args(main_func):

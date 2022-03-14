@@ -9,16 +9,16 @@ from collections import defaultdict
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
-from iggtools.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
-from iggtools.common.utilities import scan_fasta
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.sample import Sample
-from iggtools.models.species import Species, parse_species, load_chunks_cache
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
+from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
+from midas2.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
+from midas2.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
+from midas2.common.utilities import scan_fasta
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.sample import Sample
+from midas2.models.species import Species, parse_species, load_chunks_cache
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_MARKER_DEPTH = 5.0

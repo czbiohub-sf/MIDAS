@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 import numpy as np
-from iggtools.common.utils import tsprint, command, split, OutputStream
+from midas2.common.utils import tsprint, command, split, OutputStream
 
 
 def bowtie2_index_exists(bt2_db_dir, bt2_db_name):

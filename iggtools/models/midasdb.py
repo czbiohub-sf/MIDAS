@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from iggtools.common.utils import download_reference, command, multiprocessing_map
-from iggtools.models.uhgg import UHGG, get_uhgg_layout, destpath
-from iggtools.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
-from iggtools.params import outputs
+from midas2.common.utils import download_reference, command, multiprocessing_map
+from midas2.models.uhgg import UHGG, get_uhgg_layout, destpath
+from midas2.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
+from midas2.params import outputs
 
 
-# The "output" or built DB layout in S3.
-# See https://github.com/czbiohub/iggtools/wiki#target-layout-in-s3
+# The "output" or built MIDAS DB layout in S3.
+# See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#target-layout-in-s3
 def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
         "table_of_contents":             f"genomes.tsv",

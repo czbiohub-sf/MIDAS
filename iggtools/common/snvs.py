@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from operator import itemgetter
 import numpy as np # pylint: disable=no-name-in-module
-from iggtools.params.schemas import format_data
+from midas2.params.schemas import format_data
 
 
 def is_allele(readcount, site_depth, snp_maf_cutoff, allele_depth_cutoff=2):

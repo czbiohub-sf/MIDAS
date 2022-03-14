@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import os
 import sys
-from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores
-from iggtools.common.utilities import scan_genes, decode_genomes_arg
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov, MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, upload_star, num_physical_cores
+from midas2.common.utilities import scan_genes, decode_genomes_arg
+from midas2.models.midasdb import MIDAS_DB
+from midas2.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov, MIDASDB_NAMES
 
 
 CONCURRENT_INFER_MARKERS = num_physical_cores
@@ -121,7 +121,7 @@ def infer_markers_master(args):
             command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {worker_log}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
@@ -141,7 +141,7 @@ def infer_markers_master(args):
 
 def infer_markers_worker(args):
     """
-    https://github.com/czbiohub/iggtools/wiki
+    https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB
     """
 
     violation = "Please do not call infer_markers_worker directly.  Violation"
@@ -204,5 +204,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     infer_markers(args)

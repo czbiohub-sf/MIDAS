@@ -5,13 +5,13 @@ from collections import defaultdict
 from itertools import repeat
 from math import ceil
 
-from iggtools.models.samplepool import SamplePool
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
-from iggtools.models.species import scan_cluster_info
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.models.samplepool import SamplePool
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map
+from midas2.models.midasdb import MIDAS_DB
+from midas2.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
+from midas2.models.species import scan_cluster_info
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_GENOME_DEPTH = 1.0

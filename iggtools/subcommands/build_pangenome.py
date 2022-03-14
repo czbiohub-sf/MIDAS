@@ -4,11 +4,11 @@ import sys
 from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
-from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
-from iggtools.common.utilities import decode_species_arg
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
+from midas2.common.utilities import decode_species_arg
+from midas2.models.midasdb import MIDAS_DB
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 CLUSTERING_PERCENTS = [99, 95, 90, 85, 80, 75]
@@ -47,7 +47,7 @@ def clean_genes(packed_ids):
             gene_len = len(gene_seq)
             if gene_len == 0 or gene_id == '' or gene_id == '|':
                 # Documentation for why we ignore these gene_ids should be added to
-                # https://github.com/czbiohub/iggtools/wiki#pan-genomes
+                # https://github.com/czbiohub/midas2/wiki#pan-genomes
                 # Also, we should probably count these and report stats.
                 pass
             else:
@@ -84,7 +84,7 @@ def parse_uclust(uclust_file, select_columns):
 
 def xref(cluster_files, gene_info_file):
     """
-    Produce the gene_info.txt file as documented in https://github.com/czbiohub/iggtools/wiki#pan-genomes
+    Produce the gene_info.txt file as documented in https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#pan-genomes
     """
     # Let centroid_info[gene][percent_id] be the centroid of the percent_id cluster contianing gene.
     # The max_percent_id centroids are computed directly for all genes.  Only these centroids are
@@ -111,7 +111,7 @@ def xref(cluster_files, gene_info_file):
     for g in centroid_info:
         cg = centroid_info[g][max_percent_id]
         ccg = centroid_info[cg][max_percent_id]
-        assert cg == ccg, f"The {max_percent_id}-centroid relation should be idempotent, however, {cg} != {ccg}.  See https://github.com/czbiohub/iggtools/issues/16"
+        assert cg == ccg, f"The {max_percent_id}-centroid relation should be idempotent, however, {cg} != {ccg}.  See https://github.com/czbiohub/MIDAS2.0/issues/16"
 
     # At this point we have the max_percent_id centroid for any gene gc, but we lack
     # coarser clustering assignments for many genes -- we only have those for genes
@@ -178,7 +178,7 @@ def build_pangenome_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -200,8 +200,8 @@ def build_pangenome_master(args):
 
 def build_pangenome_worker(args):
     """
-    Input spec:  https://github.com/czbiohub/iggtools/wiki#gene-annotations
-    Output spec: https://github.com/czbiohub/iggtools/wiki#pan-genomes
+    Input spec:  https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#gene-annotations
+    Output spec: https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#pan-genomes
     """
 
     violation = "Please do not call build_pangenome_worker directly.  Violation"
@@ -288,5 +288,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     build_pangenome(args)

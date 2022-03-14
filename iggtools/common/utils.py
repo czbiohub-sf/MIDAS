@@ -586,7 +586,7 @@ def upload_star(srcdst):
 
 
 def pythonpath():
-    # Path from which this program can be called with "python3 -m iggtools"
+    # Path from which this program can be called with "python3 -m midas2"
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 

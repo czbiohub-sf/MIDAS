@@ -5,10 +5,10 @@ from math import floor
 from collections import defaultdict
 from operator import itemgetter
 
-from iggtools.common.utils import InputStream, OutputStream, retry, command, select_from_tsv, cat_files, find_files, tsprint
-from iggtools.common.utilities import scan_fasta, scan_cluster_info
+from midas2.common.utils import InputStream, OutputStream, retry, command, select_from_tsv, cat_files, find_files, tsprint
+from midas2.common.utilities import scan_fasta, scan_cluster_info
 
-from iggtools.models.midasdb import MIDAS_DB
+from midas2.models.midasdb import MIDAS_DB
 
 
 @retry

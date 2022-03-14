@@ -3,11 +3,11 @@ import os
 import sys
 from hashlib import md5
 import Bio.SeqIO
-from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
-from iggtools.common.utilities import decode_genomes_arg
-from iggtools.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id, destpath
-from iggtools.params import outputs
+from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
+from midas2.common.utilities import decode_genomes_arg
+from midas2.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id, destpath
+from midas2.params import outputs
 
 
 CONCURRENT_GENOME_IMPORTS = 20
@@ -79,7 +79,7 @@ def import_uhgg_master(args):
         if not os.path.isdir(worker_subdir):
             command(f"mkdir {worker_subdir}")
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools import_uhgg --genome {genome_id} --zzz_worker_mode --zzz_worker_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {worker_log}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 import_uhgg --genome {genome_id} --zzz_worker_mode --zzz_worker_toc {os.path.abspath(local_toc)} {'--debug' if args.debug else ''} &>> {worker_log}"
         with open(f"{worker_subdir}/{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
@@ -98,7 +98,7 @@ def import_uhgg_master(args):
 
 def import_uhgg_worker(args):
     """
-    https://github.com/czbiohub/iggtools/wiki
+    https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB
     """
 
     violation = "Please do not call import_uhgg_worker directly.  Violation"
@@ -134,5 +134,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     import_uhgg(args)

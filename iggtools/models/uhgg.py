@@ -2,9 +2,9 @@
 # A model for the UHGG collection of genomes (aka UHGG database).
 import os
 from collections import defaultdict
-from iggtools.params.outputs import genomes as TABLE_OF_CONTENTS
-from iggtools.common.utils import select_from_tsv, sorted_dict, InputStream
-from iggtools.params import inputs
+from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
+from midas2.common.utils import select_from_tsv, sorted_dict, InputStream
+from midas2.params import inputs
 
 
 def get_uhgg_layout(species_id="", component="", genome_id=""):

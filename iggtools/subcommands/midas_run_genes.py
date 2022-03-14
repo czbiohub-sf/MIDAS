@@ -9,15 +9,15 @@ from itertools import repeat
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files
-from iggtools.common.utilities import fetch_genes_are_markers
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.sample import Sample
-from iggtools.models.species import Species, parse_species, load_chunks_cache
-from iggtools.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
-from iggtools.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files
+from midas2.common.utilities import fetch_genes_are_markers
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.sample import Sample
+from midas2.models.species import Species, parse_species, load_chunks_cache
+from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
+from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_MARKER_DEPTH = 5.0

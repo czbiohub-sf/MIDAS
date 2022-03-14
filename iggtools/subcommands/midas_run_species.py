@@ -7,12 +7,12 @@ from itertools import chain, repeat
 import numpy as np
 import Bio.SeqIO
 
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.sample import Sample
-from iggtools.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_marker_profile_schema, format_data, DECIMALS6
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.sample import Sample
+from midas2.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_marker_profile_schema, format_data, DECIMALS6
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_WORD_SIZE = 28

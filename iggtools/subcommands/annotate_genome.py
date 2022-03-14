@@ -3,12 +3,12 @@ import os
 import sys
 from multiprocessing import Semaphore
 from itertools import chain
-from iggtools.common.argparser import add_subcommand, SUPPRESS
-from iggtools.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
-from iggtools.common.utilities import decode_species_arg, decode_genomes_arg
-from iggtools.models.uhgg import unified_genome_id
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
+from midas2.common.utilities import decode_species_arg, decode_genomes_arg
+from midas2.models.uhgg import unified_genome_id
+from midas2.models.midasdb import MIDAS_DB
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 CONCURRENT_PROKKA_RUNS = Semaphore(6)
@@ -91,7 +91,7 @@ def annotate_genome_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m iggtools annotate_genome --genome {genome_id} --zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 annotate_genome --genome {genome_id} --zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -118,7 +118,7 @@ def annotate_genome_master(args):
 
 def annotate_genome_worker(args):
     """
-    https://github.com/czbiohub/iggtools/wiki
+    https://github.com/czbiohub/midas2/wiki
     """
 
     violation = "Please do not call annotate_genome_worker directly.  Violation"
@@ -181,5 +181,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     annotate_genome(args)

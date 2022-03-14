@@ -3,10 +3,10 @@ import json
 from collections import defaultdict
 import numpy as np
 
-from iggtools.models.samplepool import SamplePool
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, OutputStream
-from iggtools.params.schemas import species_merge_schema, species_prevalence_schema, format_data
+from midas2.models.samplepool import SamplePool
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, OutputStream
+from midas2.params.schemas import species_merge_schema, species_prevalence_schema, format_data
 
 
 DEFAULT_MARKER_DEPTH = 0.0

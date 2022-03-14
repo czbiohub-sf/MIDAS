@@ -4,15 +4,15 @@ import json
 import multiprocessing
 from collections import defaultdict
 
-from iggtools.models.samplepool import SamplePool
-from iggtools.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files, multithreading_map
-from iggtools.common.utilities import annotate_site, acgt_string, scan_gene_feature, scan_fasta, compute_gene_boundary
-from iggtools.common.snvs import call_alleles
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
-from iggtools.common.argparser import add_subcommand
-from iggtools.params.inputs import MIDASDB_NAMES
-from iggtools.models.species import load_chunks_cache
+from midas2.models.samplepool import SamplePool
+from midas2.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files, multithreading_map
+from midas2.common.utilities import annotate_site, acgt_string, scan_gene_feature, scan_fasta, compute_gene_boundary
+from midas2.common.snvs import call_alleles
+from midas2.models.midasdb import MIDAS_DB
+from midas2.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
+from midas2.common.argparser import add_subcommand
+from midas2.params.inputs import MIDASDB_NAMES
+from midas2.models.species import load_chunks_cache
 
 
 DEFAULT_SAMPLE_COUNTS = 2

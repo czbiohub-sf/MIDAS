@@ -1,11 +1,11 @@
 import json
 import os
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, num_physical_cores, command
-from iggtools.common.bowtie2 import build_bowtie2_db
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.species import parse_species, filter_species
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, num_physical_cores, command
+from midas2.common.bowtie2 import build_bowtie2_db
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.species import parse_species, filter_species
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_SAMPLE_COUNTS = 2

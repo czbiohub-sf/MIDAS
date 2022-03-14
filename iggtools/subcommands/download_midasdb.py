@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from iggtools.common.argparser import add_subcommand
-from iggtools.common.utils import tsprint, command
-from iggtools.models.midasdb import MIDAS_DB
-from iggtools.models.species import parse_species
-from iggtools.params.inputs import MIDASDB_NAMES
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, command
+from midas2.models.midasdb import MIDAS_DB
+from midas2.models.species import parse_species
+from midas2.params.inputs import MIDASDB_NAMES
 
 CONCURRENT_DOWNLOAD = 20
 
@@ -72,5 +72,5 @@ def download_midasdb(args):
 
 @register_args
 def main(args):
-    tsprint(f"Executing iggtools subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     download_midasdb(args)

@@ -4,8 +4,8 @@ from bisect import bisect
 from collections import defaultdict
 import Bio.SeqIO
 
-from iggtools.common.utils import InputStream, retry, select_from_tsv, tsprint
-from iggtools.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
+from midas2.common.utils import InputStream, retry, select_from_tsv, tsprint
+from midas2.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
 
 
 def decode_species_arg(args, species):
