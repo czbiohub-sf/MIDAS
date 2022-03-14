@@ -8,7 +8,7 @@ from midas2.params.inputs import MIDASDB_NAMES
 CONCURRENT_DOWNLOAD = 20
 
 def register_args(main_func):
-    subparser = add_subcommand('download_midasdb', main_func, help='download midas database from S3 to local')
+    subparser = add_subcommand('download_midasdb', main_func, help='Download MIDAS DB from S3 to local')
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,

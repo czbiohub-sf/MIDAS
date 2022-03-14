@@ -12,7 +12,7 @@ DEFAULT_SAMPLE_COUNTS = 2
 
 
 def register_args(main_func):
-    subparser = add_subcommand('build_bowtie2db', main_func, help='build repgenome and pangenome bowtie2 indexes given list of species')
+    subparser = add_subcommand('build_bowtie2db', main_func, help='Build rep-genome and pan-genome Bowtie2 indexes for list of species')
 
     subparser.add_argument('--bt2_indexes_dir',
                            dest='bt2_indexes_dir',
@@ -109,5 +109,5 @@ def build_bowtie2db(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Build Bowtie2 genome database in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     build_bowtie2db(args)

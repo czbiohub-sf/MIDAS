@@ -36,7 +36,7 @@ DEFAULT_NUM_CORES = 8
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_genes', main_func, help='Metagenomic pan-genome profiling')
+    subparser = add_subcommand('run_genes', main_func, help='Metagenomic pan-genome profiling')
 
     subparser.add_argument('midas_outdir',
                            type=str,
@@ -466,7 +466,7 @@ def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
             stream.write("\t".join(map(format_data, rec.values())) + "\n")
 
 
-def midas_run_genes(args):
+def run_genes(args):
 
     try:
         global global_args
@@ -551,5 +551,5 @@ def midas_run_genes(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_run_genes(args)
+    tsprint(f"Pangenome copy number profiling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    run_genes(args)

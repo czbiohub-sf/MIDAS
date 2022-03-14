@@ -174,7 +174,7 @@ def infer_markers_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('infer_markers', main_func, help='HMM search marker genes for given genomes')
+    subparser = add_subcommand('infer_markers', main_func, help='HMM search marker genes for specified genomes')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,

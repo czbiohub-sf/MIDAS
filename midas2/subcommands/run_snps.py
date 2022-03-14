@@ -40,7 +40,7 @@ DEFAULT_SNP_MAF = 0.1
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_snps', main_func, help='Predict single-nucleotide-polymorphism')
+    subparser = add_subcommand('run_snps', main_func, help='Predict single-nucleotide-polymorphism')
 
     subparser.add_argument('midas_outdir',
                            type=str,
@@ -766,7 +766,7 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, ch
             stream.write("\t".join(map(format_data, record.values())) + "\n")
 
 
-def midas_run_snps(args):
+def run_snps(args):
 
     try:
         global global_args
@@ -865,5 +865,5 @@ def midas_run_snps(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_run_snps(args)
+    tsprint(f"Single nucleotide polymorphisms calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    run_snps(args)

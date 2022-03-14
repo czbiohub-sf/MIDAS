@@ -13,7 +13,7 @@ DEFAULT_MARKER_DEPTH = 0.0
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_merge_species', main_func, help='merge MIDAS species abundance results across metagenomic samples')
+    subparser = add_subcommand('merge_species', main_func, help='merge MIDAS species abundance results across metagenomic samples')
     subparser.add_argument('midas_outdir',
                            type=str,
                            help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
@@ -21,7 +21,7 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+                           help=f"TSV file mapping sample name to run_species.py output directories")
     subparser.add_argument('--marker_depth',
                            dest='marker_depth',
                            type=float,
@@ -98,7 +98,7 @@ def write_species_results(pool_of_samples, transposed):
                 outfile.write("\t".join(map(format_data, values)) + "\n")
 
 
-def midas_merge_species(args):
+def merge_species(args):
 
     try:
         global global_args
@@ -131,5 +131,5 @@ def midas_merge_species(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_merge_species(args)
+    tsprint(f"Merge species coverage profile in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    merge_species(args)

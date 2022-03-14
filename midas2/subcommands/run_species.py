@@ -23,7 +23,7 @@ DEFAULT_MARKER_COVERED = 2
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_run_species', main_func, help='Estimate species abundance profile for given sample')
+    subparser = add_subcommand('run_species', main_func, help='Estimate species abundance profile for given sample')
 
     subparser.add_argument('midas_outdir',
                            type=str,
@@ -433,7 +433,7 @@ def write_abundance(species_path, markers_path, species_abundance, markers_abund
                 outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
-def midas_run_species(args):
+def run_species(args):
 
     try:
         sample = Sample(args.sample_name, args.midas_outdir, "species")
@@ -494,5 +494,5 @@ def midas_run_species(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_run_species(args)
+    tsprint(f"Species abundance estimation in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    run_species(args)

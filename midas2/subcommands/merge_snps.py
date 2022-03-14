@@ -33,7 +33,7 @@ DEFAULT_SNP_TYPE = "bi, tri, quad"
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_merge_snps', main_func, help='pooled-samples SNPs calling')
+    subparser = add_subcommand('merge_snps', main_func, help='pooled-samples SNPs calling')
 
     subparser.add_argument('midas_outdir',
                            type=str,
@@ -42,7 +42,7 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+                           help=f"TSV file mapping sample name to run_species.py output directories")
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
@@ -581,7 +581,7 @@ def collect_chunks(species_id):
     return True
 
 
-def midas_merge_snps(args):
+def merge_snps(args):
 
     try:
         global global_args
@@ -634,5 +634,5 @@ def midas_merge_snps(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_merge_snps(args)
+    tsprint(f"Population SNPs calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    merge_snps(args)

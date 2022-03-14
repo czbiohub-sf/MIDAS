@@ -272,7 +272,7 @@ def build_markerdb(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('build_midasdb', main_func, help='Generate variety of db related files desired by MIDAS')
+    subparser = add_subcommand('build_midasdb', main_func, help='Generate variety of MIDAS DB related files desired by MIDAS')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
@@ -299,11 +299,11 @@ def register_args(main_func):
     subparser.add_argument('--generate_cluster_info',
                            action='store_true',
                            default=False,
-                           help=f"Generate cluster_info.txt used in chunk design and midas_merge_genes.")
+                           help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
     subparser.add_argument('--build_markerdb',
                            action='store_true',
                            default=False,
-                           help=f"Generate cluster_info.txt used in chunk design and midas_merge_genes.")
+                           help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
     subparser.add_argument('--zzz_worker_mode',
                            dest='zzz_worker_mode',
                            action='store_true',

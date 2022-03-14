@@ -22,7 +22,7 @@ DEFAULT_NUM_CORES = 4
 
 
 def register_args(main_func):
-    subparser = add_subcommand('midas_merge_genes', main_func, help='metagenomic pan-genome profiling')
+    subparser = add_subcommand('merge_genes', main_func, help='metagenomic pan-genome profiling')
 
     subparser.add_argument('midas_outdir',
                            type=str,
@@ -31,7 +31,7 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"TSV file mapping sample name to midas_run_species.py output directories")
+                           help=f"TSV file mapping sample name to run_species.py output directories")
 
     # Species and sample filters
     subparser.add_argument('--species_list',
@@ -178,7 +178,7 @@ def write_gene_matrices(accumulator, species_id):
     return True
 
 
-def midas_merge_genes(args):
+def merge_genes(args):
 
     try:
         global global_args
@@ -225,5 +225,5 @@ def midas_merge_genes(args):
 
 @register_args
 def main(args):
-    tsprint(f"Doing important work in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
-    midas_merge_genes(args)
+    tsprint(f"Merge pangenome coverage in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    merge_genes(args)

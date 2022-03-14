@@ -151,7 +151,7 @@ def annotate_genome_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('annotate_genome', main_func, help='annotate selected genomes with prokka')
+    subparser = add_subcommand('annotate_genome', main_func, help='Genome annotation for specified genomes using Prokka')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,

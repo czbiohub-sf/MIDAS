@@ -257,7 +257,7 @@ def build_pangenome_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('build_pangenome', main_func, help='build pangenome for specified species')
+    subparser = add_subcommand('build_pangenome', main_func, help='Build pangenome for specified species')
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
@@ -288,5 +288,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Build species-specific pangenome in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     build_pangenome(args)

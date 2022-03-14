@@ -120,7 +120,7 @@ def import_uhgg_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('import_uhgg', main_func, help='import selected genomes from UHGG')
+    subparser = add_subcommand('import_uhgg', main_func, help='Import selected genomes from UHGG')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
