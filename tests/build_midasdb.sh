@@ -5,7 +5,7 @@ basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-db_dir="$testdir/$db_dir/local_testdb"
+db_dir="$testdir/$db_dir/midasdb_test"
 
 echo "Build MIDAS-DB locally $db_dir"
 
@@ -31,3 +31,5 @@ python3 -m midas2 compute_chunks --chunk_type merge_snps --chunk_size 500000 --s
 
 python3 -m midas2 build_bowtie2db --midasdb_name testdb --midasdb_dir $db_dir --species_list 117086,117088 --bt2_indexes_dir $db_dir/bt2_indexes --bt2_indexes_name repgenomes
 python3 -m midas2 build_bowtie2db --midasdb_name testdb --midasdb_dir $db_dir --species_list 117086,117088 --bt2_indexes_dir $db_dir/bt2_indexes --bt2_indexes_name pangenomes
+
+echo "Successfully Build MIDAS-DB locally $db_dir"

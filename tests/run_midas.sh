@@ -12,11 +12,11 @@ basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-outdir="${testdir}/midas_output"
+outdir="${testdir}/midas2_output"
 mkdir -p ${outdir}
-midas_outdir="${outdir}/midas_run_${num_cores}"
-merge_midas_outdir="${outdir}/midas_merge_${num_cores}"
-midas_db="${outdir}/my_midasdb"
+midas_outdir="${outdir}/midas2_run_${num_cores}"
+merge_midas_outdir="${outdir}/midas2_merge_${num_cores}"
+midas_db="${outdir}/midasdb_local"
 
 
 logs_dir="${outdir}/logs"
