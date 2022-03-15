@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import json
 from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
