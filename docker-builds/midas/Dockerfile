@@ -22,7 +22,7 @@ RUN wget \
     https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
     && mkdir /root/.conda \
     && bash Miniconda3-latest-Linux-x86_64.sh -b \
-    && rm -f Miniconda3-latest-Linux-x86_64.sh 
+    && rm -f Miniconda3-latest-Linux-x86_64.sh
 RUN conda --version
 
 
@@ -40,8 +40,8 @@ RUN conda clean --all -y
 RUN cpanm Bio::SearchIO::hmmer --force
 
 
-RUN pip3 install 'git+https://github.com/czbiohub/iggtools.git' --upgrade
-RUN iggtools --version
+RUN pip3 install 'git+https://github.com/czbiohub/MIDAS2.0.git' --upgrade
+RUN midas2 --version
 
 
 WORKDIR /
