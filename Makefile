@@ -1,2 +1,2 @@
 all:
-	pylint iggtools
+	pylint midas2
