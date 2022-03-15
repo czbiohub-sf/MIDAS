@@ -21,7 +21,8 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.7 2
 
 
 RUN apt-get install -y bowtie2 vsearch samtools
-RUN pip3 install pysam biopython numpy gffutils
+RUN pip3 install Cython
+RUN pip3 install pysam numpy biopython gffutils
 
 
 # Prokka
