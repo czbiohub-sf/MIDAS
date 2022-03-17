@@ -260,7 +260,7 @@ def fetch_genes_are_markers(cluster_info_fp):
             dict_of_genes_are_markers[r["centroid_99"]] = r
             if r["marker_id"] not in dict_of_genes_are_markers:
                 list_of_markers.append(r["marker_id"])
-    return dict_of_genes_are_markers, dict_of_genes_are_markers
+    return dict_of_genes_are_markers, list_of_markers
 
 
 def compute_gene_boundary(features):
