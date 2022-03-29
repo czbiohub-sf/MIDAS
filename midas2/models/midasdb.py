@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-# A model for the UHGG collection of genomes (aka UHGG database).
 import os
-from midas2.common.utils import download_reference, command, multiprocessing_map
-from midas2.models.uhgg import UHGG, get_uhgg_layout, destpath
-from midas2.params.inputs import MARKER_FILE_EXTS, igg_dict, marker_set
-from midas2.params import outputs
+from midas2.common.utils import download_reference, command, multithreading_map
+from midas2.models.uhgg import UHGG
+from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, marker_set
+from midas2.params import inputs, outputs
 
 
 # The "output" or built MIDAS DB layout in S3.
 # See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#target-layout-in-s3
 def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
+        # Input: table of content and collections of genomes
         "table_of_contents":             f"genomes.tsv",
-
         "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
-        "imported_genome_log":           f"cleaned_imports/{species_id}/{genome_id}/import_uhgg.log",
 
         "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+        "annotation_file":               f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
+        "annotation_fna":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
+        "annotation_ffn":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.ffn",
+        "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
+        "annotation_faa":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.faa",
+        "annotation_gff":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.gff",
+        "annotation_tsv":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.tsv",
+        "annotation_log":                f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
+        "gene_features_log":             f"gene_annotations/{species_id}/{genome_id}/build_gene_features.log",
 
         "marker_db":                     [f"markers/{marker_set}/{marker_set}.{ext}" for ext in MARKER_FILE_EXTS],
         "marker_db_hmm":                 f"markers_models/{marker_set}/marker_genes.hmm",
@@ -24,12 +31,11 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
-        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
+        "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
+        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "pangenome_genes_info":          f"pangenomes/{species_id}/gene_info.txt",
         "pangenome_genes_len":           f"pangenomes/{species_id}/genes.len",
-
-        "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
         "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
 
         "chunks_centroids":              f"chunks/genes/chunksize.{component}/{species_id}.json",
@@ -43,17 +49,6 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "marker_genes_map":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.map",
         "marker_genes_hmmsearch":        f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.hmmsearch",
         "marker_genes_log":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/build_marker_genes.log",
-
-        "annotation_file":               f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
-        "annotation_faa":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.faa",
-        "annotation_ffn":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.ffn",
-        "annotation_fna":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
-        "annotation_gff":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.gff",
-        "annotation_tsv":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.tsv",
-        "annotation_log":                f"gene_annotations/{species_id}/{genome_id}/annotate_genome.log",
-        "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
-
-        "gene_features_log":             f"gene_annotations/{species_id}/{genome_id}/build_gene_features.log",
     }
 
 
@@ -61,7 +56,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
     def __init__(self, db_dir=".", db_name="uhgg", num_cores=1):
         self.db_dir = os.path.abspath(db_dir) # local dir
-        self.db_name = igg_dict[db_name] # s3 dir
+        self.db_name = MIDASDB_DICT[db_name] # s3 dir
         self.num_cores = num_cores
         self.local_toc = self.fetch_files("table_of_contents")
 
@@ -103,7 +98,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
                 args_list.append(self.construct_file_tuple(filename, species_id, genome_id))
 
             if len(list_of_species) > 1:
-                _fetched_files = multiprocessing_map(_fetch_file_from_s3, args_list, self.num_cores) #<-----
+                _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, self.num_cores)
             else:
                 _fetched_files = [_fetch_file_from_s3(args_list[0])]
 
@@ -119,13 +114,24 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
             fetched_files = [_fetch_file_from_s3(_) for _ in list_of_file_tuples]
             return dict(zip(MARKER_FILE_EXTS, fetched_files))
 
-        # Fetch single file with filename as the uhgg layout key
-        if filename in get_uhgg_layout(species_id=""):
-            s3_path = self.get_target_layout(filename, True)
-            local_path = self.get_target_layout(filename, False)
-        else:
-            (s3_path, local_path) = self.construct_file_tuple(filename)
+        # Fetch single file with filename as the MIDAS DB layout key
+        (s3_path, local_path) = self.construct_file_tuple(filename)
         return _fetch_file_from_s3((s3_path, local_path))
+
+
+    def fetch_chunks(self, filename, list_of_species="", chunk_size=1000000):
+        assert len(list_of_species) != 0, f"Empty list of species to download"
+        args_list = []
+        for species_id in list_of_species:
+            genome_id = self.get_repgenome_id(species_id)
+            args_list.append(self.construct_file_tuple(filename, species_id, genome_id, chunk_size))
+        _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, self.num_cores)
+
+        fetched_files = {}
+        for species_index, species_id in enumerate(list_of_species):
+            fetched_files[species_id] = _fetched_files[species_index]
+        return fetched_files
+
 
 
     def get_target_layout(self, filename, remote, species_id="", genome_id="", component=""):
