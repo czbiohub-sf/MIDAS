@@ -425,8 +425,8 @@ def call_population_snps(accumulator, species_id):
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
 
-    genes_feature = scan_gene_feature(sp.gene_feature_file)
-    genes_sequence = scan_fasta(sp.genes_seq_file)
+    genes_feature = scan_gene_feature(sp.gene_feature_fp)
+    genes_sequence = scan_fasta(sp.gene_seq_fp)
     genes_boundary = compute_gene_boundary(genes_feature)
 
     pooled_snps_dict = {

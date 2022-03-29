@@ -63,12 +63,12 @@ def _add_shared_subcommand_args(subparser, suppress_batch_args=False):
                            dest='debug',
                            help="debug mode: skip cleanup on error, extra prints")
     subparser.set_defaults(debug=False)
-    subparser.add_argument('--zzz_slave_mode',
+    subparser.add_argument('--zzz_worker_mode',
                            action='store_const',
                            const=True,
-                           dest='zzz_slave_mode',
-                           help=SUPPRESS) # "slave mode is reserved for master-slave decomposition (do not use directly)"
-    subparser.set_defaults(zzz_slave_mode=False)
+                           dest='zzz_worker_mode',
+                           help=SUPPRESS) # "worker mode is reserved for master-worker decomposition (do not use directly)"
+    subparser.set_defaults(zzz_worker_mode=False)
     subparser.add_argument('--batch_branch',
                            dest='batch_branch',
                            required=False,

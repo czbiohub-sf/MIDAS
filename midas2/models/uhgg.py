@@ -3,8 +3,8 @@
 import os
 from collections import defaultdict
 from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
-from midas2.common.utils import select_from_tsv, sorted_dict, InputStream
-from midas2.params import inputs
+from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, find_files
+from midas2.params import inputs, outputs
 
 
 def get_uhgg_layout(species_id="", component="", genome_id=""):
@@ -16,15 +16,11 @@ def get_uhgg_layout(species_id="", component="", genome_id=""):
 
 
 def unified_genome_id(genome_id):
+    # TODO: this is an obsolete tag. should be removed for the next generation of database
     return "UHGG" + genome_id.replace("GUT_GENOME", "")
 
 
-def destpath(local_path):
-    return os.path.join(inputs.igg, f"{local_path}.lz4")
-
-
 class UHGG:  # pylint: disable=too-few-public-methods
-
     def __init__(self, table_of_contents_tsv=""):
         if table_of_contents_tsv:
             self.toc_tsv = table_of_contents_tsv # Read in local genomes.tsv
@@ -52,3 +48,40 @@ def _UHGG_load(toc_tsv, deep_sort=False):
             species[sid] = sorted_dict(species[sid])
         species = sorted_dict(species)
     return species, representatives, genomes
+
+
+def build_uhgg_toc(args):
+    # Moved from init.init
+    toc_genome = outputs.genomes("uhgg")
+
+    msg = f"Building {toc_genome}."
+    if find_files(toc_genome):
+        if not args.force:
+            tsprint(f"Destination {toc_genome} already exists.  Specify --force to overwrite.")
+            return
+        msg = f"Rebuilding {toc_genome}."
+    tsprint(msg)
+
+    id_remap = {}
+    with InputStream(inputs.alt_species_ids) as ids:
+        for row in select_from_tsv(ids, selected_columns=["alt_species_id", "species_id"]):
+            new_id, old_id = row
+            id_remap[old_id] = new_id
+
+    seen_genomes, seen_species = set(), set()
+    with OutputStream(toc_genome) as out:
+
+        target_columns = ["genome", "species", "representative", "genome_is_representative"]
+        out.write("\t".join(target_columns) + "\n")
+
+        with InputStream(inputs.genomes2species) as g2s:
+            for row in select_from_tsv(g2s, selected_columns=["MAG_code", "Species_id"]):
+                genome, representative = row
+                species = id_remap[representative]
+                genome_is_representative = str(int(genome == representative))
+                target_row = [genome, species, representative, genome_is_representative]
+                out.write("\t".join(target_row) + "\n")
+                seen_genomes.add(genome)
+                seen_species.add(species)
+
+    tsprint(f"Emitted {len(seen_genomes)} genomes and {len(seen_species)} species to {outputs.genomes}.")

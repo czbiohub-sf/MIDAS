@@ -6,8 +6,9 @@ import Bio.SeqIO
 from midas2.common.argparser import add_subcommand, SUPPRESS
 from midas2.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath
 from midas2.common.utilities import decode_genomes_arg
-from midas2.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id, destpath
+from midas2.models.uhgg import UHGG, get_uhgg_layout, unified_genome_id
 from midas2.params import outputs
+from midas2.params.inputs import MIDASDB_DICT
 
 
 CONCURRENT_GENOME_IMPORTS = 20
@@ -16,6 +17,11 @@ CONCURRENT_GENOME_IMPORTS = 20
 @retry
 def find_files_with_retry(f):
     return find_files(f)
+
+
+def destpath(local_path):
+    igg = MIDASDB_DICT["uhgg"]
+    return os.path.join(igg, f"{local_path}.lz4")
 
 
 # 1. Occasional failures in aws s3 cp require a retry.
@@ -50,9 +56,10 @@ def import_uhgg_master(args):
 
     # Fetch table of contents from s3.
     # This will be read separately by each species build subcommand, so we make a local copy.
-    local_toc = os.path.basename(outputs.genomes)
+    output_genomes = outputs.genomes()
+    local_toc = os.path.basename(output_genomes)
     command(f"rm -f {local_toc}")
-    command(f"aws s3 cp --only-show-errors {outputs.genomes} {local_toc}")
+    command(f"aws s3 cp --only-show-errors {output_genomes} {local_toc}")
 
     db = UHGG(local_toc)
     species_for_genome = db.genomes

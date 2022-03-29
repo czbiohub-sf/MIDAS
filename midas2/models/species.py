@@ -42,8 +42,8 @@ class Species:
         self.list_of_samples_depth = [] # mean_coverage
 
         # Merge SNPs
-        self.gene_feature_file = None
-        self.gene_seq_file = None
+        self.gene_feature_fp = None
+        self.gene_seq_fp = None
 
 
     def compute_gene_chunks(self, midas_db, chunk_size):
@@ -125,8 +125,8 @@ class Species:
                             stream.write("\n".join(list_of_contigs) + "\n")
 
             self.chunks_contigs_fp = chunks_contigs_fp
-            self.gene_feature_file = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
-            self.genes_seq_file = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+            self.gene_feature_fp = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
+            self.gene_seq_fp = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 
         return chunks_of_sites
 
@@ -187,7 +187,6 @@ def filter_species(profile_fp, select_by, select_threshold, species_list=None):
         for record in select_from_tsv(stream, selected_columns=column_names, result_structure=dict):
             if species_list and record["species_id"] not in species_list:
                 continue
-
             if sum([1 if float(record[select_by[i]]) > float(select_threshold[i]) else 0 for i in range(nargs)]) == nargs:
                 dict_of_species[record["species_id"]] = float(record[column_names[1]])
 

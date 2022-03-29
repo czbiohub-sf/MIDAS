@@ -29,7 +29,7 @@ def rename_genome(genome_id, cleaned_genome):
 def run_prokka(genome_id, cleaned_genome):
     # Prokka will crash if installed <6 months ago.  It's a feature.  See tbl2asn.
 
-    ugid = unified_genome_id(genome_id)
+    ugid = unified_genome_id(genome_id) #<---- this should be obsolete for the next generation of database
     rename_genome(genome_id, cleaned_genome)
 
     subdir = "prokka_dir"
@@ -171,11 +171,6 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--zzz_worker_mode',
-                           dest='zzz_worker_mode',
-                           action='store_true',
-                           default=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 

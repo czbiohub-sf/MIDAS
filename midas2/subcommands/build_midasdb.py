@@ -304,11 +304,6 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
-    subparser.add_argument('--zzz_worker_mode',
-                           dest='zzz_worker_mode',
-                           action='store_true',
-                           default=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 

@@ -153,11 +153,6 @@ def register_args(main_func):
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-    subparser.add_argument('--zzz_worker_mode',
-                           dest='zzz_worker_mode',
-                           action='store_true',
-                           default=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 

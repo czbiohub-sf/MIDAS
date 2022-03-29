@@ -179,11 +179,6 @@ def register_args(main_func):
                            dest='genomes',
                            required=False,
                            help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
-    subparser.add_argument('--zzz_worker_mode',
-                           dest='zzz_worker_mode',
-                           action='store_true',
-                           default=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     subparser.add_argument('--zzz_worker_marker_genes_hmm',
                            dest='zzz_worker_marker_genes_hmm',
                            required=False,

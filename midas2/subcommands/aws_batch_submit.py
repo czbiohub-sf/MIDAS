@@ -3,7 +3,7 @@ import time
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, backtick, datecode, OutputStream
-from midas2.params.outputs import opsdir
+from midas2.params.outputs import get_opsdir
 
 
 def assert_have_aegea(min_version="3.2.1"):
@@ -49,6 +49,7 @@ def aws_batch_submit(args):
         "job_target": args.batch_command,
         "aegea_command": cmd,
     }
+    opsdir = get_opsdir()
     eventpath = f"{opsdir}/events/{datestamp}/{timestamp}__aws_batch_submit__{job_id}.json"
     with OutputStream(eventpath) as e:
         e.write(json.dumps(event))
@@ -56,7 +57,7 @@ def aws_batch_submit(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('aws_batch_submit', main_func, help=f"submit command to run under AWS Batch, keeping records under {opsdir}")
+    subparser = add_subcommand('aws_batch_submit', main_func, help=f"submit command to run under AWS Batch, keeping records under opsdir")
     subparser.add_argument('--batch_command',
                            dest='batch_command',
                            required=False,

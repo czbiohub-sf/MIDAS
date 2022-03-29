@@ -20,7 +20,7 @@ CLUSTERING_PERCENTS = sorted(CLUSTERING_PERCENTS, reverse=True)
 CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 
 
-def pan_destpath(midas_db, species_id, filename):
+def destpath(midas_db, species_id, filename):
     return midas_db.get_target_layout("pangenome_file", True, species_id, "", filename)
 
 
@@ -158,7 +158,7 @@ def build_pangenome_master(args):
 
         # The species build will upload this file last, after everything else is successfully uploaded.
         # Therefore, if this file exists in s3, there is no need to redo the species build.
-        dest_file = pan_destpath(midas_db, species_id, "gene_info.txt")
+        dest_file = destpath(midas_db, species_id, "gene_info.txt")
         msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -239,17 +239,17 @@ def build_pangenome_worker(args):
         # Create list of (source, dest) pairs for uploading.
         # Note that centroids.{max_percent}.ffn is uploaded to two different destinations.
         upload_tasks = [
-            ("genes.ffn", pan_destpath(midas_db, species_id, "genes.ffn")),
-            ("genes.len", pan_destpath(midas_db, species_id, "genes.len")),
-            (f"centroids.{max_percent}.ffn", pan_destpath(midas_db, species_id, "centroids.ffn"))
+            ("genes.ffn", destpath(midas_db, species_id, "genes.ffn")),
+            ("genes.len", destpath(midas_db, species_id, "genes.len")),
+            (f"centroids.{max_percent}.ffn", destpath(midas_db, species_id, "centroids.ffn"))
         ]
 
         for src in flatten(cluster_files.values()):
-            upload_tasks.append((src, pan_destpath(midas_db, species_id, f"temp/{src}")))
+            upload_tasks.append((src, destpath(midas_db, species_id, f"temp/{src}")))
 
         # Upload in parallel.
         last_output = "gene_info.txt"
-        last_dest_file = pan_destpath(midas_db, species_id, last_output)
+        last_dest_file = destpath(midas_db, species_id, last_output)
         command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
         multithreading_map(upload_star, upload_tasks)
 
@@ -279,11 +279,6 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--zzz_worker_mode',
-                           dest='zzz_worker_mode',
-                           action='store_true',
-                           default=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     return main_func
 
 

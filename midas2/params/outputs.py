@@ -1,11 +1,12 @@
 # The "output" or built MIDAS DB layout in S3.
 # See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#target-layout-in-s3
 
-from midas2.params import inputs
+from midas2.params.inputs import MIDASDB_DICT
 
-## we need to replace the igg here as well.
-igg = inputs.igg
+def genomes(midasdb_name = "uhgg"):
+    igg = MIDASDB_DICT[midasdb_name]
+    return f"{igg}/genomes.tsv.lz4"
 
-genomes = f"{igg}/genomes.tsv.lz4"
-
-opsdir = f"{igg}/operations"
+def get_opsdir(midasdb_name = "uhgg"):
+    igg = MIDASDB_DICT[midasdb_name]
+    return f"{igg}/operations"
