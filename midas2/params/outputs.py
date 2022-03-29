@@ -7,6 +7,6 @@ def genomes(midasdb_name = "uhgg"):
     igg = MIDASDB_DICT[midasdb_name]
     return f"{igg}/genomes.tsv.lz4"
 
-def opsdir(midasdb_name = "uhgg"):
+def get_opsdir(midasdb_name = "uhgg"):
     igg = MIDASDB_DICT[midasdb_name]
     return f"{igg}/operations"
