@@ -249,17 +249,17 @@ def process(packed_args):
         global dict_of_species
         sp = dict_of_species[species_id]
 
-        tsprint(f"  MIDAS::process::{species_id}-{chunk_id}::wait collect_chunks")
+        tsprint(f"  MIDAS2::process::{species_id}-{chunk_id}::wait collect_chunks")
         for _ in range(sp.num_of_snps_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  MIDAS::process::{species_id}-{chunk_id}::start collect_chunks")
+        tsprint(f"  MIDAS2::process::{species_id}-{chunk_id}::start collect_chunks")
         collect_chunks(species_id)
-        tsprint(f"  MIDAS::process::{species_id}-{chunk_id}::finish collect_chunks")
+        tsprint(f"  MIDAS2::process::{species_id}-{chunk_id}::finish collect_chunks")
         return "worked"
 
-    tsprint(f"  MIDAS::process::{species_id}-{chunk_id}::start snps_worker")
+    tsprint(f"  MIDAS2::process::{species_id}-{chunk_id}::start snps_worker")
     snps_worker(species_id, chunk_id)
-    tsprint(f"  MIDAS::process::{species_id}-{chunk_id}::finish snps_worker")
+    tsprint(f"  MIDAS2::process::{species_id}-{chunk_id}::finish snps_worker")
     return "worked"
 
 
@@ -296,18 +296,18 @@ def species_worker(species_id):
     list_of_samples_depth = sp.list_of_samples_depth
     list_of_samples = sp.list_of_samples
 
-    tsprint(f"    MIDAS::species_worker::{species_id}--2::start accumulate_samples")
+    tsprint(f"    MIDAS2::species_worker::{species_id}--2::start accumulate_samples")
     accumulator = dict()
     for sample_index, sample in enumerate(list_of_samples):
         snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
         proc_args = ("species", sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index])
         accumulate(accumulator, proc_args)
-    tsprint(f"    MIDAS::species_worker::{species_id}--2::finish accumulate_samples")
+    tsprint(f"    MIDAS2::species_worker::{species_id}--2::finish accumulate_samples")
 
-    tsprint(f"    MIDAS::species_worker::{species_id}--2::start call_and_write_population_snps")
+    tsprint(f"    MIDAS2::species_worker::{species_id}--2::start call_and_write_population_snps")
     pooled_snps_dict = call_population_snps(accumulator, species_id)
     write_population_snps(pooled_snps_dict, species_id, -2)
-    tsprint(f"    MIDAS::species_worker::{species_id}--2::finish call_and_write_population_snps")
+    tsprint(f"    MIDAS2::species_worker::{species_id}--2::finish call_and_write_population_snps")
 
 
 def chunk_worker(packed_args):
@@ -321,26 +321,26 @@ def chunk_worker(packed_args):
     total_samples_count = sp.samples_count
     list_of_samples_depth = sp.list_of_samples_depth
 
-    tsprint(f"    MIDAS::chunk_worker::{species_id}-{chunk_id}::start accumulate_samples")
+    tsprint(f"    MIDAS2::chunk_worker::{species_id}-{chunk_id}::start accumulate_samples")
     accumulator = dict()
     for sample_index, sample in enumerate(sp.list_of_samples):
         snps_pileup_path = sample.get_target_layout("snps_pileup", species_id)
 
         if contig_id == -1:
-            loc_fp = sp.chunks_contigs_fp[chunk_id]
+            loc_fp = sp.chunks_contigs[chunk_id]
             proc_args = ("file", sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index], loc_fp)
         else:
             # Pileup is 1-based index, close left close right
             contig_start, contig_end = packed_args[3:5]
             proc_args = ("range", sample_index, snps_pileup_path, total_samples_count, list_of_samples_depth[sample_index], contig_id, contig_start+1, contig_end)
         accumulate(accumulator, proc_args)
-    tsprint(f"    MIDAS::chunk_worker::{species_id}-{chunk_id}::finish accumulate_samples")
+    tsprint(f"    MIDAS2::chunk_worker::{species_id}-{chunk_id}::finish accumulate_samples")
 
     # Compute across-samples SNPs and write to chunk file
-    tsprint(f"    MIDAS::chunk_worker::{species_id}-{chunk_id}::start call_and_write_population_snps")
+    tsprint(f"    MIDAS2::chunk_worker::{species_id}-{chunk_id}::start call_and_write_population_snps")
     pooled_snps_dict = call_population_snps(accumulator, species_id)
     write_population_snps(pooled_snps_dict, species_id, chunk_id)
-    tsprint(f"    MIDAS::chunk_worker::{species_id}-{chunk_id}::finish call_and_write_population_snps")
+    tsprint(f"    MIDAS2::chunk_worker::{species_id}-{chunk_id}::finish call_and_write_population_snps")
 
 
 def accumulate(accumulator, proc_args):
@@ -603,23 +603,23 @@ def merge_snps(args):
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug, quiet=True)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug, quiet=True)
 
-        tsprint(f"MIDAS::write_species_summary::start")
+        tsprint(f"MIDAS2::write_species_summary::start")
         pool_of_samples.write_summary_files(dict_of_species, "snps")
-        tsprint(f"MIDAS::write_species_summary::finish")
+        tsprint(f"MIDAS2::write_species_summary::finish")
 
         # Download representative genomes for every species into midas_db
         num_cores_download = min(args.num_cores, len(species_ids_of_interest))
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
 
         # The unit of compute across-samples pop SNPs is: chunk_of_sites.
-        tsprint(f"MIDAS::design_chunks::start")
+        tsprint(f"MIDAS2::design_chunks::start")
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
-        tsprint(f"MIDAS::design_chunks::finish")
+        tsprint(f"MIDAS2::design_chunks::finish")
 
-        tsprint(f"MIDAS::multiprocessing_map::start")
+        tsprint(f"MIDAS2::multiprocessing_map::start")
         proc_flags = multiprocessing_map(process, arguments_list, args.num_cores)
         assert all(s == "worked" for s in proc_flags), f"Error: some chunks failed"
-        tsprint(f"MIDAS::multiprocessing_map::finish")
+        tsprint(f"MIDAS2::multiprocessing_map::finish")
 
     except AssertionError as error:
         tsprint(f"Bugs in the codes, keep the outputs for debugging purpose.")
