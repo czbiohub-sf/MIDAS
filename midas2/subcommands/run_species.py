@@ -439,49 +439,49 @@ def run_species(args):
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        tsprint(f"MIDAS::fetch_midasdb_files::start")
+        tsprint(f"MIDAS2::fetch_midasdb_files::start")
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
 
         marker_db_files = midas_db.fetch_files("marker_db")
         marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
 
-        tsprint(f"MIDAS::fetch_midasdb_files::finish")
+        tsprint(f"MIDAS2::fetch_midasdb_files::finish")
 
         with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
-        tsprint(f"MIDAS::map_reads_hsblastn::start")
+        tsprint(f"MIDAS2::map_reads_hsblastn::start")
         m8_file = sample.get_target_layout("species_alignments_m8")
         if args.debug and os.path.exists(m8_file):
             tsprint(f"Use existing {m8_file} according to --debug flag.")
         else:
             map_reads_hsblastn(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
-        tsprint(f"MIDAS::map_reads_hsblastn::finish")
+        tsprint(f"MIDAS2::map_reads_hsblastn::finish")
 
-        tsprint(f"MIDAS::read in marker information::start")
+        tsprint(f"MIDAS2::read in marker information::start")
         genes_that_are_marker_fp = sample.get_target_layout("species_marker_genes")
         markers_info, markers_length, markers_gene_list = read_markers_info(marker_db_files["fa"], marker_db_files["map"], genes_that_are_marker_fp)
-        tsprint(f"MIDAS::read in marker information::finish")
+        tsprint(f"MIDAS2::read in marker information::finish")
 
         # Classify reads
-        tsprint(f"MIDAS::find_best_hits::start")
+        tsprint(f"MIDAS2::find_best_hits::start")
         best_hits = find_best_hits(m8_file, markers_info, marker_cutoffs, args)
-        tsprint(f"MIDAS::find_best_hits::finish")
+        tsprint(f"MIDAS2::find_best_hits::finish")
 
-        tsprint(f"MIDAS::assign_unique::start")
+        tsprint(f"MIDAS2::assign_unique::start")
         unique_alns, unique_covered_markers = assign_unique(best_hits, markers_info, args)
-        tsprint(f"MIDAS::assign_unique::finish")
+        tsprint(f"MIDAS2::assign_unique::finish")
 
-        tsprint(f"MIDAS::assign_non_unique::start")
+        tsprint(f"MIDAS2::assign_non_unique::start")
         ambiguous_alns, ambiguous_covered_markers = assign_non_unique(best_hits, unique_alns, markers_info, args)
-        tsprint(f"MIDAS::assign_non_unique::finish")
+        tsprint(f"MIDAS2::assign_non_unique::finish")
 
         # Estimate species abundance
-        tsprint(f"MIDAS::normalize_counts::start")
+        tsprint(f"MIDAS2::normalize_counts::start")
         species_alns, species_covered_markers = merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length)
         species_abundance, markers_abundance = normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list)
-        tsprint(f"MIDAS::normalize_counts::finish")
+        tsprint(f"MIDAS2::normalize_counts::finish")
 
         write_abundance(sample.get_target_layout("species_summary"), sample.get_target_layout("markers_summary"), species_abundance, markers_abundance)
 

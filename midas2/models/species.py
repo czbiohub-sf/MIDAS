@@ -34,7 +34,7 @@ class Species:
         self.chunks_of_centroids_fp = None
         self.num_of_genes_chunks = None
         self.num_of_centroids = None
-        self.chunks_contigs_fp = None
+        self.chunks_contigs = None
 
         # MERGE Flow: select species
         self.list_of_samples = [] # samples associate with current species
@@ -112,19 +112,19 @@ class Species:
             self.contigs_fp = contigs_fp
 
         if workflow == "merge":
-            chunks_contigs_fp = dict()
+            chunks_contigs = dict()
             for chunk_list in chunks_of_sites.values():
                 _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
                 loc_fp = midas_db.get_target_layout("chunks_merge_list_of_contigs", False, species_id, chunk_id, chunk_size)
 
                 if contig_id == -1:
-                    chunks_contigs_fp[chunk_id] = loc_fp
+                    chunks_contigs[chunk_id] = loc_fp
                     if not os.path.exists(loc_fp):
                         command(f"mkdir -p {os.path.dirname(loc_fp)}")
                         with OutputStream(loc_fp) as stream:
                             stream.write("\n".join(list_of_contigs) + "\n")
 
-            self.chunks_contigs_fp = chunks_contigs_fp
+            self.chunks_contigs = chunks_contigs
             self.gene_feature_fp = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
             self.gene_seq_fp = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
 

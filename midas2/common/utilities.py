@@ -188,6 +188,12 @@ def scan_fasta(fasta_file):
     return seqs
 
 
+def update_id(cid):
+    cid = cid.replace("gnl|Prokka|", "") #<-------
+    cid = cid.replace("UHGGGC", "GC")
+    return cid
+
+
 @retry
 def scan_mapfile(mapfile):
     """ Extract <marker_id, gene_id> pairs from the marker mapfile """
