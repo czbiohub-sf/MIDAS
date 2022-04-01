@@ -7,44 +7,46 @@ from midas2.models.sample import Sample, create_local_dir
 
 
 def get_pool_layout(dbtype=""):
-    def per_species(species_id="", chunk_id="", contig_idx=""):
+    def per_species(species_id="", chunk_id=""):
         return {
-            "outdir":                     f"{dbtype}",
-            "outdir_by_species":          f"{dbtype}/{species_id}",
+            "outdir":                            f"{dbtype}",
+            "outdir_by_species":                 f"{dbtype}/{species_id}",
 
-            "tempdir":                    f"temp/{dbtype}",
-            "tempdir_by_species":         f"temp/{dbtype}/{species_id}",
+            "tempdir":                           f"temp/{dbtype}",
+            "tempdir_by_species":                f"temp/{dbtype}/{species_id}",
 
-            "midas_iggdb_dir":            f"midas_iggdb",
-            "bt2_indexes_dir":            f"bt2_indexes",
+            "midasdb_dir":                       f"midas2_database",
+            "bt2_indexes_dir":                   f"bt2_indexes",
 
-            # species
+            # Species
             "species_prevalence":                f"species/species_prevalence.tsv",
             "species_marker_read_counts":        f"species/species_marker_read_counts.tsv",
             "species_marker_coverage":           f"species/species_marker_coverage.tsv",
             "species_median_marker_coverage":    f"species/species_marker_median_coverage.tsv",
             "species_marker_relative_abundance": f"species/species_relative_abundance.tsv",
 
-            # snps
-            "snps_summary":               f"snps/snps_summary.tsv",
-            "snps_info":                  f"snps/{species_id}/{species_id}.snps_info.tsv.lz4",
-            "snps_freq":                  f"snps/{species_id}/{species_id}.snps_freqs.tsv.lz4",
-            "snps_depth":                 f"snps/{species_id}/{species_id}.snps_depth.tsv.lz4",
-            "snps_info_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
-            "snps_freq_by_chunk":         f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv.lz4",
-            "snps_depth_by_chunk":        f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv.lz4",
-            "snps_list_of_contigs":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
+            # SNPs
+            "snps_summary":                     f"snps/snps_summary.tsv",
+            "snps_info":                        f"snps/{species_id}/{species_id}.snps_info.tsv.lz4",
+            "snps_freq":                        f"snps/{species_id}/{species_id}.snps_freqs.tsv.lz4",
+            "snps_depth":                       f"snps/{species_id}/{species_id}.snps_depth.tsv.lz4",
 
-            # genes
-            "genes_summary":              f"genes/genes_summary.tsv",
-            "genes_reads":                f"genes/{species_id}/{species_id}.genes_reads.tsv.lz4",
-            "genes_depth":                f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
-            "genes_copynum":              f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
-            "genes_presabs":              f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
-            "genes_reads_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv.lz4",
-            "genes_depth_by_chunk":       f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv.lz4",
-            "genes_copynum_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv.lz4",
-            "genes_presabs_by_chunk":     f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv.lz4",
+            "snps_list_of_contigs":             f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
+            "snps_info_by_chunk":               f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
+            "snps_freq_by_chunk":               f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_freqs.tsv.lz4",
+            "snps_depth_by_chunk":              f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_depth.tsv.lz4",
+
+            # Gnes
+            "genes_summary":                   f"genes/genes_summary.tsv",
+            "genes_reads":                     f"genes/{species_id}/{species_id}.genes_reads.tsv.lz4",
+            "genes_depth":                     f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
+            "genes_copynum":                   f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
+            "genes_presabs":                   f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
+
+            "genes_reads_by_chunk":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv.lz4",
+            "genes_depth_by_chunk":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv.lz4",
+            "genes_copynum_by_chunk":          f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_copynum.tsv.lz4",
+            "genes_presabs_by_chunk":          f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_presabs.tsv.lz4",
         }
     return per_species
 
@@ -58,8 +60,8 @@ class SamplePool: # pylint: disable=too-few-public-methods
         self.samples = self.init_samples(dbtype)
 
 
-    def get_target_layout(self, filename, species_id="", chunk_id="", contig_idx=""):
-        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id, contig_idx)[filename])
+    def get_target_layout(self, filename, species_id="", chunk_id=""):
+        return os.path.join(self.midas_outdir, self.layout(species_id, chunk_id)[filename])
 
 
     def create_dirs(self, list_of_dirnames, debug=False, quiet=False):

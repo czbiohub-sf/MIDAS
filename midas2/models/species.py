@@ -5,10 +5,8 @@ from math import floor
 from collections import defaultdict
 from operator import itemgetter
 
-from midas2.common.utils import InputStream, OutputStream, retry, command, select_from_tsv, cat_files, find_files, tsprint
+from midas2.common.utils import InputStream, OutputStream, retry, command, select_from_tsv, find_files
 from midas2.common.utilities import scan_fasta, scan_cluster_info
-
-from midas2.models.midasdb import MIDAS_DB
 
 
 @retry

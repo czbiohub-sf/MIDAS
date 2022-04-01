@@ -3,7 +3,6 @@ import os
 from midas2.common.utils import download_reference, command, multithreading_map
 from midas2.models.uhgg import UHGG
 from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, marker_set
-from midas2.params import inputs, outputs
 
 
 # The "output" or built MIDAS DB layout in S3.
@@ -120,7 +119,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
 
     def fetch_chunks(self, filename, list_of_species="", chunk_size=1000000):
-        assert len(list_of_species) != 0, f"Empty list of species to download"
+        assert len(list_of_species) > 0, f"Empty list of species to download"
         args_list = []
         for species_id in list_of_species:
             genome_id = self.get_repgenome_id(species_id)

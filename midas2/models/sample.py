@@ -79,8 +79,11 @@ class Sample: # pylint: disable=too-few-public-methods
             create_local_dir(species_subdir, debug, quiet)
 
 
-    def select_species(self, args, species_list=[]):
+    def select_species(self, args, species_list=None):
         """ Parse species profile summary and return list of species for SNPs/Genes analysis """
+        if species_list is None:
+            species_list = []
+
         species_profile_fp = self.get_target_layout("species_summary")
         assert os.path.exists(species_profile_fp), f"Need run SPECIES flow before SNPS or GENES for {self.sample_name}"
 
