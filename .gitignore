@@ -19,6 +19,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 build/
+dist/
 
 # Installer logs
 pip-log.txt
