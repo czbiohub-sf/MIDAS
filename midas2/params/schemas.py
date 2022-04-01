@@ -66,7 +66,6 @@ def fetch_default_genome_depth(dbtype):
         DEFAULT_GENOME_DEPTH = 1.0
     if dbtype == "genes":
         DEFAULT_GENOME_DEPTH = 1.0
-        DEFAULT_SAMPLE_DEPTH = 1.0
     if dbtype == "snps":
         DEFAULT_GENOME_DEPTH = 5.0
     return DEFAULT_GENOME_DEPTH
