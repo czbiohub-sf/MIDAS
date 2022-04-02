@@ -3,7 +3,7 @@ import os
 import sys
 from multiprocessing import Semaphore
 from itertools import chain
-from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg
 from midas2.models.uhgg import unified_genome_id
@@ -42,7 +42,7 @@ def run_prokka(genome_id, cleaned_genome):
         f"{genome_id}.gff",
         f"{genome_id}.tsv"
     ]
-    command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {ugid} --compliant {genome_id}.fasta")
+    command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {genome_id} --compliant {genome_id}.fasta") #ugid
     for o in output_files:
         command(f"mv {subdir}/{o} .")
 
