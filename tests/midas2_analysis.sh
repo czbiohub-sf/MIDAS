@@ -12,11 +12,11 @@ basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-outdir="${testdir}/midas2_output"
+outdir="${testdir}/midas2_analysis_output"
 mkdir -p ${outdir}
-midas_outdir="${outdir}/midas2_run_${num_cores}"
-merge_midas_outdir="${outdir}/midas2_merge_${num_cores}"
-midas_db="${outdir}/midasdb_local"
+midas_outdir="${outdir}/single_sample"
+merge_midas_outdir="${outdir}/across_samples"
+midas_db="${outdir}/midas2_database"
 
 
 logs_dir="${outdir}/logs"
@@ -64,4 +64,4 @@ echo "test merge_genes default"
 python3 -m midas2 merge_genes --samples_list ${pool_fp} --midasdb_name gtdb --midasdb_dir ${midas_db} --num_cores ${num_cores} --sample_counts 2 ${merge_midas_outdir} &> ${logs_dir}/merge_genes_${num_cores}.log
 
 
-echo "DONE Testing MIDAS"
+echo "SUCCESS MIDAS 2.0 Unit Testing"

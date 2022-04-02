@@ -9,7 +9,7 @@ from midas2.models.samplepool import SamplePool
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map
 from midas2.models.midasdb import MIDAS_DB
-from midas2.params.schemas import genes_info_schema, genes_coverage_schema, format_data, fetch_default_genome_depth, DECIMALS6
+from midas2.params.schemas import genes_info_schema, genes_coverage_schema, format_data, DECIMALS6
 from midas2.models.species import scan_cluster_info
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -93,13 +93,9 @@ def register_args(main_func):
 
 
 def process(list_of_species):
-    global dict_of_species
-
     for species_id in list_of_species:
-        sp = dict_of_species[species_id]
         accumulator = build_gene_matrices(species_id)
         assert write_gene_matrices(accumulator, species_id)
-
     return "worked"
 
 
@@ -206,7 +202,7 @@ def merge_genes(args):
         chunk_size = ceil(species_counts / args.num_cores)
 
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
-        cluster_info_files = midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
+        midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
 
         for species_id in species_ids_of_interest:
             sp = dict_of_species[species_id]

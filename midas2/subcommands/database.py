@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import os
 import sys
-import multiprocessing
-from midas2.common.argparser import add_subcommand, SUPPRESS
-from midas2.common.utils import tsprint, command, multiprocessing_map, multithreading_map, num_physical_cores, pythonpath
+
+from midas2.common.argparser import add_subcommand
+from midas2.common.utils import tsprint, command, multithreading_map, num_physical_cores, pythonpath
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
-from midas2.params.inputs import MIDASDB_DICT, MIDASDB_NAMES, MIDASDB_VERSION
+from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
 
 
 def list_midasdb(args):
@@ -31,12 +31,10 @@ def download_midasdb(args):
     else:
         download_midasdb_master(args)
 
+    return True
+
 
 def download_midasdb_master(args):
-
-    midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
-    species = midas_db.uhgg.representatives
-
     def sliced_work(i):
         n = args.num_cores
         worker_cmd = f"PYTHONPATH={pythonpath()} {sys.executable} -m midas2 database --download -s {i}:{n} --midasdb_name {args.midasdb_name} --midasdb_dir {args.midasdb_dir} --zzz_worker_mode {'--debug' if args.debug else ''}"

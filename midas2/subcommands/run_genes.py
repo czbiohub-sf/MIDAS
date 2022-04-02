@@ -68,7 +68,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -193,8 +193,8 @@ def design_chunks(species_ids_of_interest, midas_db, chunk_size):
     semaphore_for_species = dict()
     dict_of_species = {species_id: Species(species_id) for species_id in species_ids_of_interest}
 
-    num_cores = min(midas_db.num_cores, 16)
-    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], midas_db.num_cores) #<---
+    num_cores = min(midas_db.num_cores, 10)
+    flags = multithreading_map(design_chunks_per_species, [(sp, midas_db, chunk_size) for sp in dict_of_species.values()], num_cores) #<---
     assert all(flags)
 
     # Sort species by ascending num_of_genes_chunks
@@ -515,7 +515,7 @@ def run_genes(args):
 
         # Build Bowtie indexes for species in the restricted species profile
         centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
-        cluster_info_files = midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
+        midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
         tsprint(f"MIDAS2::build_bowtie2db::start")
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"MIDAS2::build_bowtie2db::finish")

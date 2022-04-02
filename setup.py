@@ -10,7 +10,12 @@ setup(name='midas2',
       author_email='chunyu.zhao@czbiohub.org',
       license='MIT',
       packages=['midas2', 'midas2/subcommands', 'midas2/common', 'midas2/params', 'midas2/models'],
-      install_requires=[],
+      install_requires=[
+        'biopython <= 1.79',
+        'numpy',
+        'pysam >= 0.18.0',
+        'gffutils >= 0.10.1'
+      ],
       dependency_links=[],
       entry_points={
         'console_scripts': [

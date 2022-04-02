@@ -4,7 +4,7 @@ import sys
 import json
 from multiprocessing import Semaphore
 
-from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, num_physical_cores, retry, find_files, pythonpath, upload, OutputStream, command, multithreading_map
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB

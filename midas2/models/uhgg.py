@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # A model for the UHGG collection of genomes (aka UHGG database).
-import os
 from collections import defaultdict
 from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
-from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, find_files
+from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, OutputStream, find_files, tsprint
 from midas2.params import inputs, outputs
 
 
@@ -16,7 +15,7 @@ def get_uhgg_layout(species_id="", component="", genome_id=""):
 
 
 def unified_genome_id(genome_id):
-    # TODO: this is an obsolete tag. should be removed for the next generation of database
+    # this is an obsolete tag only for UHGG.
     return "UHGG" + genome_id.replace("GUT_GENOME", "")
 
 
