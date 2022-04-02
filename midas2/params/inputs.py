@@ -5,13 +5,13 @@ igg = "s3://microbiome-igg"
 MIDASDB_DICT = {
     "uhgg": f"{igg}/2.0",
     "gtdb": f"{igg}/gtdb_r202",
-    "testdb": f"{igg}/testdb",
+    "testdb": f"{igg}/testdb", #<=--- dummy db
 }
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",
     "gtdb": f"version r202",
 }
-MIDASDB_NAMES = list(MIDASDB_VERSION.keys())
+MIDASDB_NAMES = list(MIDASDB_DICT.keys())
 
 
 # Check out https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#marker-genes-identification
