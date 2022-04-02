@@ -54,7 +54,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -196,7 +196,7 @@ def design_chunks_per_species(args):
     return sp.compute_snps_chunks(midas_db, chunk_size, "merge")
 
 
-def design_chunks(species_ids_of_interest, midas_db, chunk_size):
+def design_chunks(species_ids_of_interest, midas_db):
     global pool_of_samples
     global dict_of_species
     global global_args
@@ -591,7 +591,7 @@ def merge_snps(args):
         global dict_of_species
 
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
-        assert len(pool_of_samples.samples), f"No samples in the provided samples_list"
+        assert len(pool_of_samples.samples) > 0, f"No samples in the provided samples_list"
 
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
@@ -613,7 +613,7 @@ def merge_snps(args):
 
         # The unit of compute across-samples pop SNPs is: chunk_of_sites.
         tsprint(f"MIDAS2::design_chunks::start")
-        arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
+        arguments_list = design_chunks(species_ids_of_interest, midas_db)
         tsprint(f"MIDAS2::design_chunks::finish")
 
         tsprint(f"MIDAS2::multiprocessing_map::start")

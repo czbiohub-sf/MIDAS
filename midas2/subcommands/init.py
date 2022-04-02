@@ -3,10 +3,10 @@ from midas2.common.utils import tsprint, find_files
 from midas2.params.outputs import genomes
 
 def init(args):
-    if find_files(genomes["uhgg"]):
+    if find_files(genomes("uhgg")):
         msg = f"TABLE_OF_CONTENTS exits for UHGG."
         tsprint(msg)
-    if find_files(genomes["gtdb"]):
+    if find_files(genomes("gtdb")):
         msg = f"TABLE_OF_CONTENTS exits for GTDB."
         tsprint(msg)
 

@@ -2,9 +2,9 @@
 import os
 import sys
 from multiprocessing import Semaphore
-
 import gffutils
-from midas2.common.argparser import add_subcommand, SUPPRESS
+
+from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, OutputStream, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star
 from midas2.common.utilities import scan_mapfile, scan_gene_info, scan_gene_length
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg
