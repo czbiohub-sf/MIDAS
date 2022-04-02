@@ -10,14 +10,14 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, multithreading_hashmap, command, cat_files, select_from_tsv, multithreading_map
+from midas2.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
 from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
 from midas2.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
-from midas2.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps
+from midas2.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps, query_overlap_qualities
 from midas2.common.utilities import scan_fasta
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
-from midas2.models.species import Species, parse_species, load_chunks_cache
+from midas2.models.species import Species, parse_species
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -72,7 +72,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -397,14 +397,13 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                 # Compute the query overlap length: substract the gaps in the aligned from the FWD reads to define the overlap boundary
                 reads_overlap = update_overlap(reads_overlap, alns["fwd"])
 
-                overlap_pass = True
                 if reads_overlap:
                     # Keep the FWD read, split the REV reads
-                    (nm_out_rev, nm_in_rev, ngaps_ri_rev, ngaps_ro_rev) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
+                    (nm_out_rev, nm_in_rev, _, _) = mismatches_within_overlaps(alns["rev"], reads_overlap, "rev")
                     #assert nm_out_rev + nm_in_rev == dict(alns["rev"].tags)['NM'], f"REV {query_name}"
 
                     # Keep the REV read, split the FWD reads
-                    (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, ngaps_ro_fwd) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
+                    (nm_out_fwd, nm_in_fwd, ngaps_ri_fwd, _) = mismatches_within_overlaps(alns["fwd"], reads_overlap, "fwd")
                     #assert nm_out_fwd + nm_in_fwd == dict(alns["fwd"].tags)['NM'], f"FWD {query_name}"
 
                     # Update the overlap by substracting the number of gaps in the fwd overlap region
@@ -413,40 +412,24 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                     # For repeats regions, paired-end reads can be aligned with many gaps, resulting in high mismatches within the overlapping region
                     # Only keep aligned pairs indicating from the same DNA fragment
                     if abs(nm_in_fwd - nm_in_rev) > 1:
-                        overlap_pass = False
                         continue #<-----------
 
-                    mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
 
-                    # Update the aligned_length to compute the mapid
+                    mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
                     align_len = alns["rev"].query_alignment_length + alns["fwd"].query_alignment_length - reads_overlap
-                    align_len_no_gaps = align_len - ngaps_ro_rev - ngaps_ro_fwd - ngaps_ri_fwd
+                    mapid = 100 * (align_len - mismatches) / float(align_len)
 
                     # To avoid overcounting site depth for the overlapping region,
                     # "The higher quality base is used and the lower-quality base is set to BQ=0."
                     b1 = alns["fwd"].query_alignment_end - reads_overlap
                     b2 = alns["rev"].query_alignment_start + reads_overlap - 1
 
-
-                    debug_string = "\t".join([str(b1), str(b2), str(reads_overlap), str(len(alns["fwd"].query_alignment_sequence[b1:])), str(len(alns["rev"].query_alignment_sequence[:b2+1])), str(overlap_pass)])
-                    #assert reads_overlap == len(alns["fwd"].query_alignment_sequence[b1:]), f"FWD: \n {debug_string}"
-                    #assert reads_overlap == len(alns["rev"].query_alignment_sequence[:b2+1]), f"REV: \n {debug_string}"
-                    #assert len(alns["fwd"].query_alignment_sequence[b1:]) == len(alns["rev"].query_alignment_sequence[:b2+1])
-
-
                     # Only use the higher quality base in the overlap region for downstream pileup
                     f = alns["fwd"].query_qualities[b1:]
                     r = alns["rev"].query_qualities[:b2+1]
-                    for i, _ in enumerate(zip(f, r)):
-                        (x, y) = _
-                        if x >= y:
-                            r[i] = 0
-                        else:
-                            f[i] = 0
+                    f, r = query_overlap_qualities(f, r)
                     alns["fwd"].query_qualities[b1:] = f
                     alns["rev"].query_qualities[:b2+1] = r
-
-                    mapid = 100 * (align_len - mismatches) / float(align_len)
                 else:
                     mismatches = dict(alns["fwd"].tags)['NM'] + dict(alns["rev"].tags)['NM']
                     mapid = 100 * (align_len - mismatches) / float(align_len)
@@ -572,7 +555,7 @@ def midas_pileup(packed_args):
     global sample
 
     # [contig_start, contig_end)
-    species_id, chunk_id, contig_id, contig_start, contig_end, count_flag, curr_contig = packed_args
+    species_id, chunk_id, contig_id, contig_start, contig_end, _, curr_contig = packed_args
 
     repgenome_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
 
@@ -676,16 +659,13 @@ def merge_chunks_per_species(species_id):
 def compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest):
     """ Collect Compute chunk-level alignment stats from contigs' mapping summary"""
     global global_args
-    global dict_of_species
     global dict_of_site_chunks
 
     dict_of_chunk_aln_stats = dict()
 
     for spidx, species_id in enumerate(species_ids_of_interest):
-        sp = dict_of_species[species_id]
 
         cc_to_ch = defaultdict(lambda: defaultdict(dict))
-
         chunks_of_sites = dict_of_site_chunks[species_id]
 
         for chunk_id, tchunks_list in chunks_of_sites.items():

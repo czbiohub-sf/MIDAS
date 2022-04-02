@@ -4,6 +4,17 @@ import numpy as np # pylint: disable=no-name-in-module
 from midas2.params.schemas import format_data
 
 
+def query_overlap_qualities(f, r):
+    # "The higher quality base is used and the lower-quality base is set to BQ=0."
+    for i, _ in enumerate(zip(f, r)):
+        (x, y) = _
+        if x >= y:
+            r[i] = 0
+        else:
+            f[i] = 0
+    return (f, r)
+
+
 def is_allele(readcount, site_depth, snp_maf_cutoff, allele_depth_cutoff=2):
     # keep alleles passing (1) min allele read count (2) the min allele frequency
     return readcount >= allele_depth_cutoff and readcount / site_depth >= snp_maf_cutoff
