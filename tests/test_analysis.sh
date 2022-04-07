@@ -35,7 +35,7 @@ cat ${samples_fp} | awk -v OFS='\t' -v dir=$midas_outdir '{print $1, dir}' >> ${
 
 
 echo "test run_species"
-cat ${samples_fp} | xargs -Ixx bash -c "python3 -m midas2 run_species --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} --midasdb_name gtdb --midasdb_dir ${midas_db} ${midas_outdir} &> ${logs_dir}/xx_species_${num_cores}.log"
+cat ${samples_fp} | xargs -Ixx bash -c "midas2 run_species --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} --midasdb_name gtdb --midasdb_dir ${midas_db} ${midas_outdir} &> ${logs_dir}/xx_species_${num_cores}.log"
 
 echo "test merge_species"
 midas2 merge_species --samples_list ${pool_fp} --marker_depth 0.5 ${merge_midas_outdir} &> ${logs_dir}/merge_species_${num_cores}.log
