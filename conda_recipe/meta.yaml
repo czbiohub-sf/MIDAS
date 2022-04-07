@@ -1,0 +1,50 @@
+{% set name = "midas2" %}
+{% set version = "0.9" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  url: https://files.pythonhosted.org/packages/46/60/897ce242a9d2fcc12f7493afea85a5ccfb8d654b67fd6fa770bdce1e4929/midas2-0.9.tar.gz
+  sha256: ceaa3773bbc22d868429a9b6fb0061b5f3f9083b89e20c701180d520d89fe902
+  #git_url: https://github.com/czbiohub/MIDAS2.0.git
+  #git_rev: v0.9
+
+build:
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv --no-dependencies
+
+requirements:
+  host:
+    - python >=3.7,<3.8
+    - pip
+    - setuptools
+  run:
+    - python >=3.7,<3.8
+    - tbb ==2020.2
+    - numpy >=1.19.1
+    - biopython >=1.79
+    - gffutils >=0.10.1
+    - bowtie2 >=2.4.5
+    - samtools >=1.13
+    - pysam >=0.18.0
+    - hs-blastn ==0.0.5
+    - blast >=2.12.0
+    - awscli
+    - lz4
+    - prokka >=1.14.6
+    - vsearch >=2.21.1
+
+test:
+  imports:
+    - midas2
+  commands:
+    - midas2 --version
+    - midas2 run_snps --help
+
+about:
+  home: "https://github.com/czbiohub/MIDAS2.0"
+  license: MIT License
+  license_family: MIT
+  summary: "Metagenomic Intra-Species Diversity Analysis 2.0"
