@@ -47,4 +47,5 @@ dmypy.json
 \*.DS_Store
 
 tests/midas2_output/
-tests/midasdb_test/
+tests/midas2_dbs/
+genomes.tsv

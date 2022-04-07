@@ -2,7 +2,7 @@
 set -e
 
 basedir=`pwd`
-testdir="${basedir}/tests"
+testdir="${basedir}/tests/midas2_dbs"
 echo ${testdir}
 
 db_name="testdb"

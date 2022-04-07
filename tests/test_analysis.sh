@@ -12,7 +12,7 @@ basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-outdir="${testdir}"
+outdir="${testdir}/midas2_output"
 mkdir -p ${outdir}
 midas_outdir="${outdir}/single_sample"
 merge_midas_outdir="${outdir}/across_samples"

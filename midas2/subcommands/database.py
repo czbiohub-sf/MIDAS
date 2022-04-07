@@ -11,6 +11,8 @@ from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
 
 def list_midasdb(args):
     for dbname in MIDASDB_NAMES:
+        if dbname == "testdb":
+            continue
         midasdb = MIDAS_DB(args.midasdb_dir, dbname, 1)
         nspecies = len(midasdb.uhgg.species)
         ngenomes = len(midasdb.uhgg.genomes)
