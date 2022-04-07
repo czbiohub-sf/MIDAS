@@ -4,8 +4,8 @@
 igg = "s3://microbiome-igg"
 MIDASDB_DICT = {
     "uhgg": f"{igg}/2.0",
-    "gtdb": f"{igg}/gtdb_r202",
-    "testdb": f"{igg}/testdb", #<=--- dummy db
+    "gtdb": f"{igg}/gtdb",
+    "testdb": f"{igg}/testdb", #<--- dummy db
 }
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",

@@ -1,4 +1,4 @@
-name: iggtools
+name: midas2
 channels:
  - conda-forge
  - bioconda
