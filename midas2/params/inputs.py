@@ -1,11 +1,11 @@
 # These are the "raw" inputs to the MIDAS DB construction subcommands.
 # See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#inputs
 
-igg = "s3://microbiome-igg"
+igg = "s3://microbiome-pollardlab"
 MIDASDB_DICT = {
-    "uhgg": f"{igg}/2.0",
-    "gtdb": f"{igg}/gtdb",
-    "testdb": f"{igg}/testdb", #<--- dummy db
+    "uhgg": f"{igg}/uhgg_v1",
+    "gtdb": f"{igg}/gtdb_r202",
+    "testdb": f"{igg}/testdb", # <-- dummy db
 }
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",
