@@ -602,6 +602,7 @@ def midas_pileup(packed_args):
         aln_stats["contig_total_depth"] += depth
         aln_stats["contig_covered_bases"] += 1
 
+        # Ignore ambiguous sites
         if global_args.ignore_ambiguous:
             rc = [_ for _ in [count_a, count_c, count_g, count_t] if _ > 0]
             if len(rc) != len(set(rc)):
@@ -610,8 +611,6 @@ def midas_pileup(packed_args):
         if global_args.advanced:
             # Compuate single sample major/minor allele
             rc_ACGT = [count_a, count_c, count_g, count_t]
-
-            # Ignore ambiguous sites
 
             tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
             major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
