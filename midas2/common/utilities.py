@@ -249,7 +249,7 @@ def scan_gene_feature(features_file):
     features = defaultdict(dict)
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
-            if r['gene_type'] == "CDS":
+            if r['gene_type'] == "CDS": #<---
                 features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
     return features
 
