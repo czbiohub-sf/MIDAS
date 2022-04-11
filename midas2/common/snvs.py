@@ -31,6 +31,11 @@ def call_alleles(tuple_of_alleles, site_depth, snp_maf_cutoff):
     if number_alleles == 0:
         return (None, None, None, 0)
 
+    # ambiguous alleles
+    new_counts = [int(_[1]) for _ in alleles_above_cutoff]
+    if len(set(new_counts)) != number_alleles:
+        return (None, None, None, "ambiguous")
+
     snp_type = ["mono", "bi", "tri", "quad"][number_alleles - 1]
 
     # In the event of a tie -- biallelic site with 50/50 freq split -- the allele declared major is
