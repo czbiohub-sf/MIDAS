@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from midas2.models.samplepool import SamplePool
 from midas2.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files, multithreading_map
-from midas2.common.utilities import annotate_site, acgt_string, scan_gene_feature, scan_fasta, compute_gene_boundary, compute_rna_boundary, annotate_rnas
+from midas2.common.utilities import annotate_site, acgt_string, scan_gene_feature, scan_fasta, compute_gene_boundary
 from midas2.common.snvs import call_alleles
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.schemas import snps_pileup_schema, snps_pileup_basic_schema, snps_info_schema, format_data
@@ -69,7 +69,7 @@ def register_args(main_func):
                            default=DEFAULT_NUM_CORES,
                            help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
 
-    # Species and sample filters
+    # <Species, Samples> pair filters
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
@@ -95,7 +95,7 @@ def register_args(main_func):
                            default=DEFAULT_SAMPLE_COUNTS,
                            help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
-    # Per sample site filters
+    # Single-sample site filters
     subparser.add_argument('--site_depth',
                            dest='site_depth',
                            type=int,
@@ -109,7 +109,7 @@ def register_args(main_func):
                            metavar="FLOAT",
                            help=f"Maximum ratio of site depth to genome depth ({DEFAULT_SITE_RATIO}).")
 
-    # Across samples site filters
+    # Across-samples site filters
     subparser.add_argument('--site_prev',
                            dest='site_prev',
                            default=DEFAULT_SITE_PREV,
@@ -123,7 +123,7 @@ def register_args(main_func):
                            choices=['common', 'rare'],
                            help=f"Either core SNPs or rare SNPs ({DEFAULT_SNV_TYPE})")
 
-    # SNPs calling
+    # Population SNVs calling
     subparser.add_argument('--snp_pooled_method',
                            dest='snp_pooled_method',
                            type=str,
@@ -160,7 +160,7 @@ def register_args(main_func):
     subparser.add_argument('--advanced',
                            action='store_true',
                            default=False,
-                           help=f"Report majore/minor allele for each genomic sites.")
+                           help=f"Passed on from single-sample advanced.")
     subparser.add_argument('--robust_chunk',
                            action='store_true',
                            default=False,
@@ -442,8 +442,7 @@ def call_population_snps(accumulator, species_id):
 
     genes_feature = scan_gene_feature(sp.gene_feature_fp)
     genes_sequence = scan_fasta(sp.gene_seq_fp)
-    genes_boundary = compute_gene_boundary(genes_feature["CDS"])
-    rnas_boundary = compute_rna_boundary(genes_feature["RNA"])
+    genes_boundary = compute_gene_boundary(genes_feature)
 
     pooled_snps_dict = {
         "info": {},
@@ -498,18 +497,16 @@ def call_population_snps(accumulator, species_id):
         # Site Annotation
         ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
         ref_pos = int(ref_pos) # ref_pos is 1-based
+
         annots = ("IGR",) # short contigs may not carry any gene
         if ref_id in genes_boundary:
-            annots = annotate_site(ref_pos, genes_boundary[ref_id], genes_feature["CDS"][ref_id], genes_sequence) #<--
+            annots = annotate_site(ref_pos, genes_boundary[ref_id], genes_feature[ref_id], genes_sequence)
 
         locus_type = annots[0]
-        gene_id = annots[1] if len(annots) > 1 else None
         if ('any' not in global_args.locus_type and locus_type not in global_args.locus_type):
             continue
 
-        if locus_type != "CDS" and ref_id in rnas_boundary:
-            locus_type, gene_id = annotate_rnas(ref_pos, rnas_boundary[ref_id], genes_feature["RNA"][ref_id])
-
+        gene_id = annots[1] if len(annots) > 1 else None
         site_type = annots[2] if len(annots) > 2 else None
         amino_acids = annots[3] if len(annots) > 2 else None
 
