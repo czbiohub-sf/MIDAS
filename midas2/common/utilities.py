@@ -173,6 +173,14 @@ def annotate_site(ref_pos, curr_contig, curr_feature, genes_sequence):
     return locus_type, curr_gene_id, site_type, amino_acids
 
 
+def annotate_rnas(ref_pos, curr_contig, curr_feature):
+    index = binary_search_site(curr_contig["boundaries"], ref_pos)
+    if index is not None:
+        rna_id = curr_contig["rnas"][index-1]
+        curr_rna = curr_feature[rna_id]
+        locus_type = curr_rna["gene_type"]
+        return locus_type, rna_id
+    return None, None
 
 @retry
 def scan_fasta(fasta_file):
@@ -246,11 +254,13 @@ def scan_genes(annotated_genes):
 
 def scan_gene_feature(features_file):
     """ Read TAB-delimited *.genes files from gene_annotations """
-    features = defaultdict(dict)
+    features = {"CDS": defaultdict(dict), "RNA": defaultdict(dict)}
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
             if r['gene_type'] == "CDS": #<---
-                features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
+                features["CDS"][r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
+            else:
+                features["RNA"][r['contig_id']][r['gene_id']] = r
     return features
 
 
@@ -274,9 +284,11 @@ def compute_gene_boundary(features):
     gene_boundaries = defaultdict(dict)
     for contig_id in features.keys():
         features_per_contig = features[contig_id]
+
         # Sort gene features by starting genomic position
         dict_of_feature_tuples = {fid: (feat['start'], feat['end']) for fid, feat in features_per_contig.items()}
         feature_ranges_sorted = dict(sorted(dict_of_feature_tuples.items(), key=lambda x: x[1][0], reverse=False))
+
         # For non-overlapping gene ranges, linear search would report the first met range (smallest)
         # therefore, we update the gene feature files for the genes with overlapping ranges with the adjacent genes before
         prev_gene = None
@@ -295,12 +307,26 @@ def compute_gene_boundary(features):
                 feature_ranges_sorted[curr_gene] = (new_curr_start, feature_ranges_sorted[curr_gene][1])
                 gene_offsets[curr_gene] = new_curr_start - curr_start + 1
             prev_gene = curr_gene
+
         # Now, we are sure the sorted feature ranges don't have overlapping anymore
         feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges_sorted.values()) for _ in rt)
         # Convert ranges into half-open intervals.
         boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
         gene_boundaries[contig_id] = {"genes": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
     return gene_boundaries
+
+
+def compute_rna_boundary(features):
+    rna_boundaries = defaultdict(dict)
+    for contig_id in features.keys():
+        features_per_contig = features[contig_id]
+        # Sort RNAs by starting position
+        dict_of_feature_tuples = {fid: (feat['start'], feat['end']) for fid, feat in features_per_contig.items()}
+        feature_ranges_sorted = dict(sorted(dict_of_feature_tuples.items(), key=lambda x: x[1][0], reverse=False))
+        feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges_sorted.values()) for _ in rt)
+        boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
+        rna_boundaries[contig_id] = {"rnas": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
+    return rna_boundaries
 
 
 def cluster_short_contigs(unassigned_contigs, chunk_size):
