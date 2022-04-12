@@ -165,6 +165,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Only recruit properly paired reads for pileup.")
+    subparser.add_argument('--ignore_ambiguous',
+                           action='store_true',
+                           default=False,
+                           help=f"Ignore ambiguous sites with equal read counts.")
     subparser.add_argument('--advanced',
                            action='store_true',
                            default=False,
@@ -598,13 +602,20 @@ def midas_pileup(packed_args):
         aln_stats["contig_total_depth"] += depth
         aln_stats["contig_covered_bases"] += 1
 
+        # Ignore ambiguous sites
+        if global_args.ignore_ambiguous:
+            rc = [_ for _ in [count_a, count_c, count_g, count_t] if _ > 0]
+            if len(rc) != len(set(rc)):
+                continue
+
         if global_args.advanced:
             # Compuate single sample major/minor allele
             rc_ACGT = [count_a, count_c, count_g, count_t]
+
             tuple_of_alleles = zip(['A', 'C', 'G', 'T'], rc_ACGT)
             major_allele, minor_allele, _, allele_counts = call_alleles(tuple_of_alleles, depth, global_args.snp_maf)
 
-            if allele_counts == 0:
+            if major_allele is None:
                 continue
 
             major_index = 'ACGT'.index(major_allele)

@@ -173,7 +173,6 @@ def annotate_site(ref_pos, curr_contig, curr_feature, genes_sequence):
     return locus_type, curr_gene_id, site_type, amino_acids
 
 
-
 @retry
 def scan_fasta(fasta_file):
     """ Scan FASTA FILE to get seq and len """
@@ -249,8 +248,8 @@ def scan_gene_feature(features_file):
     features = defaultdict(dict)
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
-            if r['gene_type'] == "CDS":
-                features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
+            #if r['gene_type'] == "CDS": #<---
+            features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
     return features
 
 
@@ -274,9 +273,11 @@ def compute_gene_boundary(features):
     gene_boundaries = defaultdict(dict)
     for contig_id in features.keys():
         features_per_contig = features[contig_id]
+
         # Sort gene features by starting genomic position
         dict_of_feature_tuples = {fid: (feat['start'], feat['end']) for fid, feat in features_per_contig.items()}
         feature_ranges_sorted = dict(sorted(dict_of_feature_tuples.items(), key=lambda x: x[1][0], reverse=False))
+
         # For non-overlapping gene ranges, linear search would report the first met range (smallest)
         # therefore, we update the gene feature files for the genes with overlapping ranges with the adjacent genes before
         prev_gene = None
@@ -295,33 +296,10 @@ def compute_gene_boundary(features):
                 feature_ranges_sorted[curr_gene] = (new_curr_start, feature_ranges_sorted[curr_gene][1])
                 gene_offsets[curr_gene] = new_curr_start - curr_start + 1
             prev_gene = curr_gene
+
         # Now, we are sure the sorted feature ranges don't have overlapping anymore
         feature_ranges_flat = tuple(_ for rt in tuple(feature_ranges_sorted.values()) for _ in rt)
         # Convert ranges into half-open intervals.
         boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
         gene_boundaries[contig_id] = {"genes": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
     return gene_boundaries
-
-
-def cluster_short_contigs(unassigned_contigs, chunk_size):
-    """ Sort the contigs in ascending order and cluster small ones. The benefit is larger contigs mostly have individual chunks"""
-    sorted_contigs = {cid:clen for cid, clen in sorted(unassigned_contigs.items(), key=lambda x: x[1])}
-    list_of_contigs_id = list(sorted_contigs.keys())
-    list_of_contigs_length = list(sorted_contigs.values())
-    istart = 0
-    prev_istart = 0
-    chunk_id = 0
-    subset_of_contigs = defaultdict(dict)
-    t = []
-    while istart < len(list_of_contigs_length):
-        while sum(list_of_contigs_length[prev_istart:istart+1]) <= chunk_size and istart < len(list_of_contigs_length):
-            istart += 1
-        chunk_id += 1
-        subset_of_contigs[chunk_id] = {"chunk_id": chunk_id, "contigs_id": list_of_contigs_id[prev_istart:istart],
-                                       "chunk_length": sum(list_of_contigs_length[prev_istart:istart]),
-                                       "contigs_len": list_of_contigs_length[prev_istart:istart]}
-        t = t + list_of_contigs_length[prev_istart:istart]
-        prev_istart = istart
-    assert len(t) == len(list_of_contigs_length)
-    assert set(t) == set(list_of_contigs_length)
-    return subset_of_contigs

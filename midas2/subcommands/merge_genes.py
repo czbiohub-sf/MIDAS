@@ -44,7 +44,7 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
+                           help=f"Minimum read-depth across all genes with non-zero coverage per sample ({DEFAULT_GENOME_DEPTH})")
     subparser.add_argument('--sample_counts',
                            dest='sample_counts', #min_samples
                            type=int,
