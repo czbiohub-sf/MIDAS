@@ -471,11 +471,11 @@ def call_population_snps(accumulator, species_id):
 
         major_allele, minor_allele, snp_type, number_alleles = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
 
-        # Keep sites with desired snp_type
-        if ('any' not in global_args.snp_type and snp_type not in global_args.snp_type):
+        if major_allele is None:
             continue
 
-        if major_allele is None:
+        # Keep sites with desired snp_type
+        if ('any' not in global_args.snp_type and snp_type not in global_args.snp_type):
             continue
 
         major_index = 'ACGT'.index(major_allele)
