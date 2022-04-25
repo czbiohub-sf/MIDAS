@@ -1,13 +1,13 @@
 {% set name = "midas2" %}
-{% set version = "0.9.3" %}
+{% set version = "0.9.5" %}
 
 package:
   name: {{ name }}
   version: {{ version }}
 
 source:
-  url: https://files.pythonhosted.org/packages/1e/28/b235d50f5fb47b1af3142aaf168f765af53b3b5789af5a9c1f298c9e30e8/midas2-0.9.4.tar.gz
-  sha256: fb4175c9b18fccba351fe77c1c10198ef6d107df4ff11d3ac8e815805cfd3758
+  url: https://files.pythonhosted.org/packages/92/65/06be107b03de7fb95b20f4b479b966cf3f7d7ed2bd1ad2e8293c698d8f5f/midas2-0.9.5.tar.gz
+  sha256: 4801024f532f4b6d92c7202ab0404a2b48c46bea1bcf48895db426a880b74a87
   #git_url: https://github.com/czbiohub/MIDAS2.0.git
   #git_rev: v0.91
 
