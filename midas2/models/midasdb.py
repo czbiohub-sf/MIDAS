@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import os
-from midas2.common.utils import download_reference, command, multithreading_map
-from midas2.models.uhgg import UHGG
+from collections import defaultdict
+from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, command, multithreading_map
 from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, marker_set
+from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
 
 
 # The "output" or built MIDAS DB layout in S3.
@@ -49,6 +50,23 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "marker_genes_hmmsearch":        f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.hmmsearch",
         "marker_genes_log":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/build_marker_genes.log",
     }
+
+
+
+class UHGG:  # pylint: disable=too-few-public-methods
+    """
+    A model for the external prokaryotic collection of genomes.
+    """
+    def __init__(self, table_of_contents_tsv=""):
+        if table_of_contents_tsv:
+            self.toc_tsv = table_of_contents_tsv # Read in local genomes.tsv
+        else:
+            self.toc_tsv = TABLE_OF_CONTENTS # Fetch from S3
+
+        self.species, self.representatives, self.genomes = _UHGG_load(self.toc_tsv)
+
+    def fetch_repgenome_id(self, species_id):
+        return self.representatives[species_id]
 
 
 class MIDAS_DB: # pylint: disable=too-few-public-methods
@@ -130,12 +148,28 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         return fetched_files
 
 
-
     def get_target_layout(self, filename, remote, species_id="", genome_id="", component=""):
         local_path = self.construct_local_path(filename, species_id, genome_id, component)
         s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
         target_path = s3_path if remote else local_path
         return target_path
+
+
+def _UHGG_load(toc_tsv, deep_sort=False):
+    species = defaultdict(dict)
+    representatives = {}
+    genomes = {}
+    with InputStream(toc_tsv) as table_of_contents:
+        for row in select_from_tsv(table_of_contents, selected_columns=["genome", "species", "representative", "genome_is_representative"]):
+            genome_id, species_id, representative_id, _ = row
+            species[species_id][genome_id] = row
+            representatives[species_id] = representative_id
+            genomes[genome_id] = species_id
+    if deep_sort:
+        for sid in species.keys():
+            species[sid] = sorted_dict(species[sid])
+        species = sorted_dict(species)
+    return species, representatives, genomes
 
 
 def _get_dest_path(file_name, db_name):

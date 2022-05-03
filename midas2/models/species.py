@@ -76,7 +76,7 @@ class Species:
     def compute_snps_chunks(self, midas_db, chunk_size, workflow):
         """ The structure of the chunks depends on the repgenome and chunk size """
         species_id = self.id
-        genome_id = midas_db.uhgg.representatives[species_id]
+        genome_id = midas_db.uhgg.fetch_repgenome_id(species_id)
 
         if workflow == "run":
             chunk_filename = "chunks_sites_run"
