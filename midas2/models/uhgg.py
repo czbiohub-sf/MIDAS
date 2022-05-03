@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 from collections import defaultdict
 from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
-from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, OutputStream, find_files, tsprint
-from midas2.params import inputs, outputs
+from midas2.common.utils import select_from_tsv, sorted_dict, InputStream
 
 
 class UHGG:  # pylint: disable=too-few-public-methods
