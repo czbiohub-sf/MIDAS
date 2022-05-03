@@ -19,10 +19,3 @@ marker_set = "phyeco"
 MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
 hmmsearch_max_evalue = 1e-5
 hmmsearch_min_cov = 0.00
-
-
-## UHGG import genomes only.
-uhggv1 = "s3://jason.shi-bucket/IGGdb2.0"
-genomes2species = f"{uhggv1}/genomes2species.tab"
-alt_species_ids = f"{uhggv1}/alt_species_ids.tsv"
-uhgg_genomes = f"{uhggv1}/clean_set"

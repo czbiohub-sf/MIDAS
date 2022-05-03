@@ -13,8 +13,8 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "table_of_contents":             f"genomes.tsv",
         "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
 
-        "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
         "annotation_file":               f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
+        "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
         "annotation_fna":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
         "annotation_ffn":                f"gene_annotations/{species_id}/{genome_id}/{genome_id}.ffn",
         "annotation_genes":              f"gene_annotations/{species_id}/{genome_id}/{genome_id}.genes",
@@ -58,13 +58,11 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         self.db_name = MIDASDB_DICT[db_name] # s3 dir
         self.num_cores = num_cores
         self.local_toc = self.fetch_files("table_of_contents")
-
         self.uhgg = UHGG(self.local_toc)
 
 
     def get_repgenome_id(self, species_id):
         return self.uhgg.fetch_repgenome_id(species_id)
-        #return self.uhgg.representatives[species_id]
 
 
     def construct_local_path(self, filename, species_id="", genome_id="", component=""):

@@ -10,7 +10,7 @@
 # the shared arguments and shared help text defined in midas2.common.argparser.
 #
 from midas2.subcommands import aws_batch_init, aws_batch_submit, init, \
-    import_uhgg, annotate_genome, build_pangenome, \
+    annotate_genome, build_pangenome, \
     infer_markers, build_midasdb, database, \
     run_species, run_genes, run_snps, \
     merge_species, merge_snps, merge_genes, \

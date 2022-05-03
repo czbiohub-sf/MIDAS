@@ -6,7 +6,6 @@ from itertools import chain
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg
-from midas2.models.uhgg import unified_genome_id
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -23,13 +22,12 @@ def find_files_with_retry(f):
 @retry
 def rename_genome(genome_id, cleaned_genome):
     command(f"rm -f {genome_id}.fasta")
-    command(f"aws s3 cp --only-show-errors {cleaned_genome} - | lz4 -dc > {genome_id}.fasta")
+    command(f"mv {cleaned_genome} {genome_id}.fasta")
 
 
 def run_prokka(genome_id, cleaned_genome):
     # Prokka will crash if installed <6 months ago.  It's a feature.  See tbl2asn.
 
-    ugid = unified_genome_id(genome_id) #<---- this should be obsolete for the next generation of database
     rename_genome(genome_id, cleaned_genome)
 
     subdir = "prokka_dir"
@@ -42,7 +40,9 @@ def run_prokka(genome_id, cleaned_genome):
         f"{genome_id}.gff",
         f"{genome_id}.tsv"
     ]
-    command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {genome_id} --compliant {genome_id}.fasta") #ugid
+
+    command(f"prokka --kingdom Bacteria --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {genome_id} --compliant {genome_id}.fasta")
+
     for o in output_files:
         command(f"mv {subdir}/{o} .")
 
@@ -133,7 +133,7 @@ def annotate_genome_worker(args):
     dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
     last_output = drop_lz4(os.path.basename(dest_file))
 
-    cleaned_genome_fp = midas_db.get_target_layout("imported_genome", True, species_id, genome_id, "fna")
+    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id)
     output_files = run_prokka(genome_id, cleaned_genome_fp)
 
     if not args.debug:
@@ -151,7 +151,7 @@ def annotate_genome_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('annotate_genome', main_func, help='Genome annotation for specified genomes using Prokka')
+    subparser = add_subcommand('annotate_genome', main_func, help='Genome annotation for specified genomes using Prokka with all cores')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
