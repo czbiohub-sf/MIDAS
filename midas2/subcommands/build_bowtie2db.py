@@ -83,7 +83,7 @@ def build_bowtie2db(args):
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
         tsprint(f"MIDAS::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
 
-        # Fetch UHGG related files
+        # Fetch MIDAS Reference Database Files
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
 
         if args.bt2_indexes_name == "repgenomes":

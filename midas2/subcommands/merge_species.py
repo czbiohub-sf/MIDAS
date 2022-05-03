@@ -6,7 +6,7 @@ import numpy as np
 from midas2.models.samplepool import SamplePool
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, OutputStream
-from midas2.params.schemas import species_merge_schema, species_prevalence_schema, format_data
+from midas2.params.schemas import species_profile_schema, species_prevalence_schema, format_data
 
 
 DEFAULT_MARKER_DEPTH = 0.0
@@ -88,7 +88,7 @@ def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
 def write_species_results(pool_of_samples, transposed):
     """ Write the transposed tables into separate files """
     sample_names = pool_of_samples.fetch_samples_names()
-    col_names = list(species_merge_schema.keys())[1:]
+    col_names = list(species_profile_schema.keys())[1:]
 
     for col in col_names:
         outpath = pool_of_samples.get_target_layout(f"species_{col}")
@@ -111,7 +111,7 @@ def merge_species(args):
 
         # Slice the across-samples species profile matrix by species_id
         tsprint(f"MIDAS2::write_species_results::start")
-        cols = list(species_merge_schema.keys())[1:]
+        cols = list(species_profile_schema.keys())[1:]
         transposed = transpose(pool_of_samples, cols)
         write_species_results(pool_of_samples, transposed)
         tsprint(f"MIDAS2::write_species_results::finish")

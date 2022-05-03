@@ -34,6 +34,11 @@ def find_files_with_retry(f):
 # 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
 @retry
 def clean_genes(packed_ids):
+    """
+    1. extra newlines have been removed from the gene sequences, so that each gene sequence occupies a single line below the gene header
+    2. DNA letters have been converted to uppercase, and
+    3. degenerate genes (with empty sequences or headers containing "|") have been excluded
+    """
     genome_id, input_annotations = packed_ids
 
     output_genes = f"{genome_id}.genes.ffn"
