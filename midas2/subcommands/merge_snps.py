@@ -631,6 +631,7 @@ def merge_snps(args):
 
         # The unit of compute across-samples pop SNPs is: chunk_of_sites.
         tsprint(f"MIDAS2::design_chunks::start")
+        midas_db.fetch_files("repgenome", species_ids_of_interest)
         arguments_list = design_chunks(species_ids_of_interest, midas_db)
         tsprint(f"MIDAS2::design_chunks::finish")
 

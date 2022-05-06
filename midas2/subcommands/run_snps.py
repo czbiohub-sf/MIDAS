@@ -805,13 +805,13 @@ def run_snps(args):
         tsprint(f"MIDAS::design_chunks::start")
         num_cores_download = min(args.num_cores, species_counts)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
-
+        midas_db.fetch_files("repgenome", species_ids_of_interest)
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"MIDAS::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
-        contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
         tsprint(f"MIDAS::build_bowtie2db::start")
+        contigs_files = [midas_db.get_target_layout("representative_genome", False, spid) for spid in species_ids_of_interest]
         build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
         tsprint(f"MIDAS::build_bowtie2db::finish")
 
