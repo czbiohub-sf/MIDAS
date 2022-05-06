@@ -811,7 +811,7 @@ def run_snps(args):
 
         # Build Bowtie indexes for species in the restricted species profile
         tsprint(f"MIDAS::build_bowtie2db::start")
-        contigs_files = [midas_db.get_target_layout("representative_genome", False, spid) for spid in species_ids_of_interest]
+        contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
         build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
         tsprint(f"MIDAS::build_bowtie2db::finish")
 
