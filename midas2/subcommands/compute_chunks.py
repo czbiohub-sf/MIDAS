@@ -9,6 +9,7 @@ from midas2.common.utils import tsprint, num_physical_cores, retry, find_files, 
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 # Up to this many concurrent species builds.
@@ -55,7 +56,7 @@ def compute_chunks_master(args):
         genome_id = repgenome_for_species[species_id]
 
         dest_filename, msg = get_dest_filename(args.chunk_type, species_id, genome_id)
-        dest_file = midas_db.get_target_layout(dest_filename, True, species_id, genome_id, args.chunk_size)
+        dest_file = midas_db.get_target_layout(dest_filename, True, species_id, genome_id, args.chunk_size) #<--- s3_file
 
         if find_files_with_retry(dest_file):
             if not args.force:
@@ -134,7 +135,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
