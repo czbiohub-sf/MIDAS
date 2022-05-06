@@ -5,13 +5,8 @@ from math import floor
 from collections import defaultdict
 from operator import itemgetter
 
-from midas2.common.utils import InputStream, OutputStream, retry, command, select_from_tsv, find_files
+from midas2.common.utils import InputStream, OutputStream, command, select_from_tsv
 from midas2.common.utilities import scan_fasta, scan_cluster_info
-
-
-@retry
-def find_files_with_retry(f):
-    return find_files(f)
 
 
 class Species:
@@ -25,7 +20,6 @@ class Species:
         self.chunks_of_sites_fp = None
         self.num_of_snps_chunks = None
         self.max_contig_length = None
-        self.chunk_size = None
 
         # Genes chunk
         self.cluster_info_fp = None
@@ -35,9 +29,9 @@ class Species:
         self.chunks_contigs = None
 
         # MERGE Flow: select species
-        self.list_of_samples = [] # samples associate with current species
+        self.list_of_samples = [] # relevant samples for given species
         self.samples_count = 0
-        self.list_of_samples_depth = [] # mean_coverage
+        self.list_of_samples_depth = [] # mean genome coverage
 
         # Merge SNPs
         self.gene_feature_fp = None
@@ -49,19 +43,12 @@ class Species:
 
         species_id = self.id
 
-        s3_file = midas_db.get_target_layout("chunks_centroids", True, species_id, "", chunk_size)
         local_file = midas_db.get_target_layout("chunks_centroids", False, species_id, "", chunk_size)
-        cluster_info_fp = midas_db.fetch_file("pangenome_cluster_info", species_id)
+        cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
 
-        if os.path.exists(local_file):
-            pass
-        elif find_files_with_retry(s3_file):
-            midas_db.fetch_file("chunks_centroids", species_id, "", chunk_size)
-        else:
+        if not os.path.exists(local_file):
             chunks_of_centroids = design_genes_chunks(species_id, cluster_info_fp, chunk_size)
             write_chunks_cache(chunks_of_centroids, local_file)
-
-        # Load chunk cache to get the num_of_gene_chunks
         chunks_of_centroids = load_chunks_cache(local_file)
         _, _, num_of_genes_chunks, num_of_centroids = chunks_of_centroids[-1]
 
@@ -75,6 +62,7 @@ class Species:
 
     def compute_snps_chunks(self, midas_db, chunk_size, workflow):
         """ The structure of the chunks depends on the repgenome and chunk size """
+
         species_id = self.id
         genome_id = midas_db.uhgg.fetch_repgenome_id(species_id)
 
@@ -83,16 +71,10 @@ class Species:
         if workflow == "merge":
             chunk_filename = "chunks_sites_merge"
 
-
-        s3_file = midas_db.get_target_layout(chunk_filename, True, species_id, genome_id, chunk_size)
         local_file = midas_db.get_target_layout(chunk_filename, False, species_id, genome_id, chunk_size)
-        contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
+        contigs_fp = midas_db.get_target_layout("representative_genome", False, species_id, genome_id)
 
-        if os.path.exists(local_file):
-            pass
-        elif find_files_with_retry(s3_file):
-            midas_db.fetch_file(chunk_filename, species_id, genome_id, chunk_size)
-        else:
+        if not os.path.exists(local_file):
             if workflow == "run":
                 chunks_of_sites = design_run_snps_chunks(species_id, contigs_fp, chunk_size)
             if workflow == "merge":
@@ -113,7 +95,7 @@ class Species:
             chunks_contigs = dict()
             for chunk_list in chunks_of_sites.values():
                 _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
-                loc_fp = midas_db.get_target_layout("chunks_merge_list_of_contigs", False, species_id, chunk_id, chunk_size)
+                loc_fp = midas_db.get_target_layout("chunks_contig_lists", False, species_id, chunk_id, chunk_size)
 
                 if contig_id == -1:
                     chunks_contigs[chunk_id] = loc_fp
@@ -123,8 +105,8 @@ class Species:
                             stream.write("\n".join(list_of_contigs) + "\n")
 
             self.chunks_contigs = chunks_contigs
-            self.gene_feature_fp = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
-            self.gene_seq_fp = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+            self.gene_feature_fp = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
+            self.gene_seq_fp = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
 
         return chunks_of_sites
 
@@ -132,7 +114,7 @@ class Species:
     def get_repgenome(self, midas_db):
         species_id = self.id
         genome_id = midas_db.get_repgenome_id(species_id)
-        self.contigs = scan_fasta(midas_db.fetch_file("representative_genome", species_id, genome_id))
+        self.contigs = scan_fasta(midas_db.get_target_layout("representative_genome", False, species_id, genome_id))
 
 
     def get_cluster_info_fp(self, midas_db):
@@ -229,18 +211,27 @@ def partition_contigs_into_chunks(unassigned_contigs, chunk_size, chunk_id):
         # Iteratively add smaller contigs until exceed chunk size
         while curr_chunk_length + sum(list_of_contigs_length[jstart:prev_jstart]) <= chunk_size and istart < jstart:
             jstart = jstart - 1
+
         # Collect all the added shorted contigs
         added_clens = list_of_contigs_length[jstart+1:prev_jstart]
         curr_clens = [curr_chunk_length] + added_clens
         curr_chunk_length += sum(added_clens)
+
         # Record the list of contig_ids assigned to current chunk_id
         curr_cids = [list_of_contigs_id[istart]] + list_of_contigs_id[jstart+1:prev_jstart]
-        subset_of_contigs[chunk_id] = {"chunk_id": chunk_id, "contigs_id": curr_cids, "chunk_length": curr_chunk_length, "list_of_contigs_length": curr_clens}
+        subset_of_contigs[chunk_id] = {
+            "chunk_id": chunk_id,
+            "contigs_id": curr_cids,
+            "chunk_length": curr_chunk_length,
+            "list_of_contigs_length": curr_clens
+        }
+
         # Update the pointer and chunk_id
         list_of_partitoned_contigs = list_of_partitoned_contigs + curr_clens
         istart = istart + 1
         prev_jstart = jstart + 1
         chunk_id += 1
+
     assert len(list_of_partitoned_contigs) == len(list_of_contigs_length)
     assert set(list_of_partitoned_contigs) == set(list_of_contigs_length)
 
