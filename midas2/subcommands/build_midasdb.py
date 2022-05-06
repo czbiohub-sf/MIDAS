@@ -184,10 +184,9 @@ def generate_cluster_info_worker(args):
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     # Collect mapfile from all genomes of species_id
-    list_of_genomes = species[species_id].keys()
-    list_of_mapfiles = [midas_db.fetch_file("marker_genes_map", species_id, genome_id) for genome_id in list_of_genomes]
+    mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], False)
     species_mapfile = f"mapfile"
-    cat_files(list_of_mapfiles, species_mapfile, 20)
+    cat_files(mapfiles_by_genomes, species_mapfile, 20)
 
     # <gene_id, marker_id>
     dict_of_markers = scan_mapfile(species_mapfile)
