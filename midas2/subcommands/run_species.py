@@ -420,13 +420,11 @@ def run_species(args):
 
         tsprint(f"MIDAS2::fetch_midasdb_files::start")
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
-
-        marker_db_files = midas_db.fetch_files("marker_db")
-        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
-
+        markerdb_files = midas_db.fetch_files("marker_db")
+        markerdb_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
         tsprint(f"MIDAS2::fetch_midasdb_files::finish")
 
-        with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
+        with InputStream(markerdb_hmm_cutoffs) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
@@ -435,12 +433,12 @@ def run_species(args):
         if args.debug and os.path.exists(m8_file):
             tsprint(f"Use existing {m8_file} according to --debug flag.")
         else:
-            map_reads_hsblastn(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
+            map_reads_hsblastn(m8_file, args.r1, args.r2, args.word_size, markerdb_files["fa"], args.max_reads, args.num_cores)
         tsprint(f"MIDAS2::map_reads_hsblastn::finish")
 
         tsprint(f"MIDAS2::read in marker information::start")
         genes_that_are_marker_fp = sample.get_target_layout("species_marker_genes")
-        markers_info, markers_length, markers_gene_list = read_markers_info(marker_db_files["fa"], marker_db_files["map"], genes_that_are_marker_fp)
+        markers_info, markers_length, markers_gene_list = read_markers_info(markerdb_files["fa"], markerdb_files["map"], genes_that_are_marker_fp)
         tsprint(f"MIDAS2::read in marker information::finish")
 
         # Classify reads
