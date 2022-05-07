@@ -126,6 +126,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
     def fetch_file(self, filename, species_id="", genome_id="", component=""):
         """ Fetch single file only from S3 """
+        if species_id and not genome_id:
+            genome_id = self.get_repgenome_id(species_id)
         (s3_path, local_path) = self.construct_file_tuple(filename, species_id, genome_id, component)
         return _fetch_file_from_s3((s3_path, local_path))
 
@@ -208,9 +210,9 @@ def _fetch_file_from_s3(packed_args):
     s3_path, local_path = packed_args
     local_dir = os.path.dirname(local_path)
 
-    print(f"_fetch_file_from_s3: {s3_path}")
-    print(f"_fetch_file_from_s3: {local_dir}")
-    print(f"_fetch_file_from_s3: {local_path}")
+    #print(f"_fetch_file_from_s3: {s3_path}")
+    #print(f"_fetch_file_from_s3: {local_dir}")
+    #print(f"_fetch_file_from_s3: {local_path}")
 
     if not os.path.isdir(local_dir):
         command(f"mkdir -p {local_dir}")

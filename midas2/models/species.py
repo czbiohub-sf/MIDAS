@@ -105,8 +105,8 @@ class Species:
                             stream.write("\n".join(list_of_contigs) + "\n")
 
             self.chunks_contigs = chunks_contigs
-            self.gene_feature_fp = midas_db.fetch_files("annotation_genes", [species_id])[species_id]
-            self.gene_seq_fp = midas_db.fetch_files("annotation_ffn", [species_id])[species_id]
+            self.gene_feature_fp = midas_db.fetch_file("annotation_genes", species_id)
+            self.gene_seq_fp = midas_db.fetch_file("annotation_ffn", species_id)
 
         return chunks_of_sites
 

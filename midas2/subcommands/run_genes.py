@@ -457,15 +457,6 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
             stream.write("\t".join(map(format_data, vals)) + "\n")
 
 
-def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
-    with OutputStream(outfile) as stream:
-        stream.write("\t".join(genes_chunk_summary_schema.keys()) + "\n")
-        for rec in chunks_gene_coverage:
-            if rec["chunk_id"] == -1:
-                continue
-            stream.write("\t".join(map(format_data, rec.values())) + "\n")
-
-
 def run_genes(args):
 
     try:
@@ -536,7 +527,6 @@ def run_genes(args):
 
         tsprint(f"MIDAS2::write_species_coverage_summary::start")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
-        write_chunk_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_chunk_summary"))
         tsprint(f"MIDAS2::write_species_coverage_summary::finish")
 
     except Exception as error:
