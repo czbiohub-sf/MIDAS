@@ -169,5 +169,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.
     compute_chunks(args)
