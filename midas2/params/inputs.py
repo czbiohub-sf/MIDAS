@@ -5,7 +5,6 @@ igg = "s3://microbiome-pollardlab"
 server="https://microbiome-pollardlab.s3.us-west-2.amazonaws.com"
 
 MIDASDB_DICT = {
-    #"uhgg": f"{igg}/uhgg_v1",
     "uhgg": f"{server}/uhgg",
     "gtdb": f"{igg}/gtdb_r202",
     "newdb": f"{server}/newdb",

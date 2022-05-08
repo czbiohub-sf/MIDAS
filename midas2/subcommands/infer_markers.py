@@ -101,17 +101,22 @@ def infer_markers_master(args):
         species_id = species_for_genome[genome_id]
 
         dest_file = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
+        local_file = midas_db.get_target_layout("marker_genes_map", False, species_id, genome_id)
 
         msg = f"Running HMMsearch for genome {genome_id} from species {species_id}."
-        if find_files_with_retry(dest_file):
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for genome {genome_id} already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Running", "Rerunning")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for genome {genome_id} already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Running", "Rerunning")
 
         tsprint(msg)
         last_dest = midas_db.get_target_layout("marker_genes_log", True, species_id, genome_id)
-
         worker_log = midas_db.get_target_layout("marker_genes_log", False, species_id, genome_id)
         worker_subdir = os.path.dirname(worker_log)
 
@@ -121,7 +126,7 @@ def infer_markers_master(args):
             command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} &>> {worker_log}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 infer_markers --genome {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode --zzz_worker_marker_genes_hmm {os.path.abspath(marker_genes_hmm)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
@@ -131,8 +136,9 @@ def infer_markers_master(args):
         finally:
             # Cleanup should not raise exceptions of its own, so as not to interfere with any
             # prior exceptions that may be more informative.  Hence check=False.
-            if not args.debug:
+            if args.upload:
                 upload(f"{worker_log}", last_dest, check=False)
+            if not args.debug:
                 command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -158,7 +164,7 @@ def infer_markers_worker(args):
     output_files = compute_marker_genes(genome_id, species_id, marker_genes_hmm, midas_db)
 
     # Upload to S3
-    if not args.debug:
+    if args.upload:
         last_dest = midas_db.get_target_layout("marker_genes_map", True, species_id, genome_id)
         command(f"aws s3 rm --recursive {os.path.dirname(last_dest)}")
 
@@ -194,10 +200,14 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
+    subparser.add_argument('--upload',
+                           action='store_true',
+                           default=False,
+                           help='Upload built files to AWS S3')
     return main_func
 
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.
     infer_markers(args)

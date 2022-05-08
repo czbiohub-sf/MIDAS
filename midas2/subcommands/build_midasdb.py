@@ -24,6 +24,8 @@ def find_files_with_retry(f):
 
 def parse_gff_to_tsv(gff3_file, genes_file):
     """ Convert GFF3 features format into genes.feature """
+    command(f"rm -f {genes_file}")
+    command(f"rm -f {gff3_file}.db")
     db = gffutils.create_db(gff3_file, f"{gff3_file}.db")
     with OutputStream(genes_file) as stream:
         stream.write("\t".join(["gene_id", "contig_id", "start", "end", "strand", "gene_type"]) + "\n")
@@ -61,17 +63,23 @@ def generate_gene_feature_master(args):
         species_id = species_for_genome[genome_id]
 
         dest_file = midas_db.get_target_layout("annotation_genes", True, species_id, genome_id)
-        msg = f"Builing gene features for genome {genome_id} from species {species_id}."
-        if find_files_with_retry(dest_file):
+        local_file = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
+
+        msg = f"Building gene features for genome {genome_id} from species {species_id}."
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for genome {genome_id} gene features already exists.  Specify --force to overwrite.")
                 return
-            msg = msg.replace("Importing", "Reimporting")
+            msg = msg.replace("Building", "Rebuilding")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for genome {genome_id} gene features already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Building", "Rebuilding")
 
         with CONCURRENT_BUILDS:
             tsprint(msg)
             last_dest = midas_db.get_target_layout("gene_features_log", True, species_id, genome_id)
-
             worker_log = midas_db.get_target_layout("gene_features_log", False, species_id, genome_id)
             worker_subdir = os.path.dirname(worker_log)
 
@@ -81,7 +89,7 @@ def generate_gene_feature_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_gene_feature --genomes {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_gene_feature --genomes {genome_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -89,8 +97,9 @@ def generate_gene_feature_master(args):
             try:
                 command(worker_cmd)
             finally:
-                if not args.debug:
+                if args.upload:
                     upload(f"{worker_log}", last_dest, check=False)
+                if not args.debug:
                     command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -115,7 +124,7 @@ def generate_gene_feature_worker(args):
     output_genes = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
     assert parse_gff_to_tsv(input_annotation, output_genes)
 
-    if not args.debug:
+    if args.upload:
         dest_file = midas_db.get_target_layout("annotation_genes", True, species_id, genome_id)
         upload(output_genes, dest_file)
 
@@ -137,17 +146,24 @@ def generate_cluster_info_master(args):
         species_genomes = species[species_id]
 
         dest_file = midas_db.get_target_layout("pangenome_cluster_info", True, species_id)
+        local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
         msg = f"Computing cluster_info for species {species_id} with {len(species_genomes)} total genomes."
+
         if find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Computing", "Recomputing")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Computing", "Recomputing")
 
         with CONCURRENT_BUILDS:
             tsprint(msg)
-            last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
 
+            last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
             worker_log = midas_db.get_target_layout("cluster_info_log", False, species_id)
             worker_subdir = os.path.dirname(worker_log)
 
@@ -157,7 +173,7 @@ def generate_cluster_info_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -165,8 +181,9 @@ def generate_cluster_info_master(args):
             try:
                 command(worker_cmd)
             finally:
-                if not args.debug:
+                if args.upload:
                     upload(f"{worker_log}", last_dest, check=False)
+                if not args.debug:
                     command(f"rm -rf {worker_subdir}", check=False)
 
     species_id_list = decode_species_arg(args, species)
@@ -184,9 +201,9 @@ def generate_cluster_info_worker(args):
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     # Collect mapfile from all genomes of species_id
-    mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], False)
+    mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], rep_only=False)
     species_mapfile = f"mapfile"
-    cat_files(mapfiles_by_genomes, species_mapfile, 20)
+    cat_files(mapfiles_by_genomes.values(), species_mapfile, 20)
 
     # <gene_id, marker_id>
     dict_of_markers = scan_mapfile(species_mapfile)
@@ -201,7 +218,6 @@ def generate_cluster_info_worker(args):
 
     dest_file = midas_db.get_target_layout("pangenome_cluster_info", True, species_id)
     local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
-
     with OutputStream(local_file) as stream:
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
         for r in dict_of_centroids.values():
@@ -213,9 +229,11 @@ def generate_cluster_info_worker(args):
             val = list(r.values()) + [gene_len, marker_id]
             stream.write("\t".join(map(str, val)) + "\n")
 
-    if not args.debug:
+    if args.upload:
         command(f"aws s3 rm {dest_file}")
         upload(local_file, dest_file, check=False)
+
+    command("rm -f genes.len gene_info.txt mapfile")
 
 
 def build_markerdb(args):
@@ -224,16 +242,22 @@ def build_markerdb(args):
     species = midas_db.uhgg.species
 
     build_markerdb_log_s3 = midas_db.get_target_layout("build_markerdb_log", remote=True)
+    build_markerdb_log = midas_db.get_target_layout("build_markerdb_log", remote=False)
+    build_marker_subdir = os.path.dirname(build_markerdb_log)
     msg = f"Collating marker genes sequences."
-    if find_files_with_retry(build_markerdb_log_s3):
+
+    if args.upload and find_files_with_retry(build_markerdb_log_s3):
         if not args.force:
             tsprint(f"Destination {build_markerdb_log_s3} already exists.  Specify --force to overwrite.")
             return
         msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
-    tsprint(msg)
+    if not args.upload and os.path.exists(build_markerdb_log):
+        if not args.force:
+            tsprint(f"Destination {build_markerdb_log} already exists.  Specify --force to overwrite.")
+            return
+        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
 
-    build_markerdb_log = midas_db.get_target_layout("build_markerdb_log", remote=False)
-    build_marker_subdir = os.path.dirname(build_markerdb_log)
+    tsprint(msg)
 
     if not args.debug:
         command(f"rm -rf {build_marker_subdir}")
@@ -264,7 +288,7 @@ def build_markerdb(args):
     command(cmd_index)
 
     # Upload generated fasta and index files
-    if not args.debug:
+    if args.upload:
         upload_tasks = list(zip(midas_db.get_target_layout("marker_db", False), midas_db.get_target_layout("marker_db", True)))
         multithreading_map(upload_star, upload_tasks)
         upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
@@ -303,12 +327,16 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
+    subparser.add_argument('--upload',
+                           action='store_true',
+                           default=False,
+                           help='Upload built files to AWS S3')
     return main_func
 
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.
     if args.generate_gene_feature:
         generate_gene_feature(args)
     if args.generate_cluster_info:

@@ -158,17 +158,23 @@ def build_pangenome_master(args):
         # The species build will upload this file last, after everything else is successfully uploaded.
         # Therefore, if this file exists in s3, there is no need to redo the species build.
         dest_file = destpath(midas_db, species_id, "gene_info.txt")
+        local_file = midas_db.get_target_layout("pangenome_genes_info", False, species_id)
         msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
-        if find_files_with_retry(dest_file):
+
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for species {species_id} pangenome already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Building", "Rebuilding")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for species {species_id} pangenome already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Building", "Rebuilding")
 
         with CONCURRENT_SPECIES_BUILDS:
             tsprint(msg)
             last_dest = midas_db.get_target_layout("pangenome_log", True, species_id)
-
             worker_log = midas_db.get_target_layout("pangenome_log", False, species_id)
             worker_subdir = os.path.dirname(worker_log)
 
@@ -178,7 +184,7 @@ def build_pangenome_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -188,8 +194,9 @@ def build_pangenome_master(args):
             finally:
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
-                if not args.debug:
+                if args.upload:
                     upload(f"{worker_log}", last_dest, check=False)
+                if not args.debug:
                     command(f"rm -rf {worker_subdir}", check=False)
 
     # Check for destination presence in s3 with up to 10-way concurrency.
@@ -222,6 +229,9 @@ def build_pangenome_worker(args):
         ffn_files, len_files = transpose(temp_files)
         command("cat " + " ".join(ffn_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
+        if not args.upload:
+            command("rm " + " ".join(ffn_files))
+            command("rm " + " ".join(len_files))
 
     # The initial clustering to max_percent takes longest.
     max_percent, lower_percents = CLUSTERING_PERCENTS[0], CLUSTERING_PERCENTS[1:]
@@ -234,7 +244,7 @@ def build_pangenome_worker(args):
     xref(cluster_files, "gene_info.txt")
     command(f"cp centroids.{max_percent}.ffn centroids.ffn")
 
-    if not args.debug:
+    if args.upload:
         # Create list of (source, dest) pairs for uploading.
         # Note that centroids.{max_percent}.ffn is uploaded to two different destinations.
         upload_tasks = [
@@ -251,9 +261,13 @@ def build_pangenome_worker(args):
         last_dest_file = destpath(midas_db, species_id, last_output)
         command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
         multithreading_map(upload_star, upload_tasks)
-
         # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
         upload(last_output, last_dest_file)
+
+    # Clean up temporary files
+    command("rm -f genes.ffn")
+    for src in flatten(cluster_files.values()):
+        command(f"rm -f {src}")
 
 
 def register_args(main_func):
@@ -263,10 +277,6 @@ def register_args(main_func):
                            dest='species',
                            required=False,
                            help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
-    subparser.add_argument('--zzz_worker_toc',
-                           dest='zzz_worker_toc',
-                           required=False,
-                           help=SUPPRESS) # "reserved to pass table of contents from master to worker"
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,
@@ -278,6 +288,10 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
+    subparser.add_argument('--upload',
+                           action='store_true',
+                           default=False,
+                           help='Upload built files to AWS S3')
     return main_func
 
 
