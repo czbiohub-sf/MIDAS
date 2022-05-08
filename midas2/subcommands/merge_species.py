@@ -9,7 +9,7 @@ from midas2.common.utils import tsprint, OutputStream
 from midas2.params.schemas import species_profile_schema, species_prevalence_schema, format_data
 
 
-DEFAULT_MARKER_DEPTH = 0.0
+DEFAULT_MARKER_COVERAGE = 0.0
 
 
 def register_args(main_func):
@@ -22,17 +22,17 @@ def register_args(main_func):
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to run_species.py output directories")
-    subparser.add_argument('--marker_depth',
-                           dest='marker_depth',
+    subparser.add_argument('--median_marker_coverage',
+                           dest='median_marker_coverage',
                            type=float,
                            metavar="FLOAT",
-                           default=DEFAULT_MARKER_DEPTH,
-                           help=f"Minimum per-sample marker-gene-depth for estimating species prevalence ({DEFAULT_MARKER_DEPTH})")
+                           default=DEFAULT_MARKER_COVERAGE,
+                           help=f"Minimum per-sample median marker coverage for estimating species prevalence ({DEFAULT_MARKER_COVERAGE})")
     return main_func
 
 
 def compute_prevalence(rowvector, threshold):
-    return sum(1 if val >= threshold else 0 for val in rowvector)
+    return sum(1 if val > threshold else 0 for val in rowvector) #<--
 
 
 def transpose(pool_of_samples, columns):
@@ -61,11 +61,9 @@ def compute_stats(tabundance, tcoverage):
     for species_id in species_ids:
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
-
         values = [species_id, np.median(species_abun), np.mean(species_abun), \
               np.median(species_cov), np.mean(species_cov), \
-              compute_prevalence(species_cov, args.marker_depth)]
-
+              compute_prevalence(species_cov, args.median_marker_coverage)]
         stats[species_id] = values
     return stats
 
@@ -73,7 +71,6 @@ def compute_stats(tabundance, tcoverage):
 def write_stats(stats, species_prevalence_filepath, sort_by="median_coverage"):
     """ Sort species in stats by descending relative abundance """
     with OutputStream(species_prevalence_filepath) as ostream:
-
         colnames = list(species_prevalence_schema.keys())
         ostream.write("\t".join(colnames) + "\n")
 
@@ -118,7 +115,7 @@ def merge_species(args):
 
         # Calculate summary statistics for coverage and relative abundance
         tsprint(f"MIDAS2::write_stats::start")
-        stats = compute_stats(transposed["marker_relative_abundance"], transposed["median_marker_coverage"]) #<-- marker_coverage
+        stats = compute_stats(transposed["marker_relative_abundance"], transposed["median_marker_coverage"]) #<--
         write_stats(stats, pool_of_samples.get_target_layout("species_prevalence"), "median_coverage")
         tsprint(f"MIDAS2::write_stats::finish")
 
