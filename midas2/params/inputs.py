@@ -2,13 +2,14 @@
 # See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#inputs
 
 igg = "s3://microbiome-pollardlab"
-gidb = "https://microbiome-pollardlab.s3.us-west-2.amazonaws.com"
+server="https://microbiome-pollardlab.s3.us-west-2.amazonaws.com"
 
 MIDASDB_DICT = {
-    "uhgg": f"{igg}/uhgg_v1",
+    #"uhgg": f"{igg}/uhgg_v1",
+    "uhgg": f"{server}/uhgg",
     "gtdb": f"{igg}/gtdb_r202",
-    "testdb": f"{igg}/testdb",
-    "gidb": f"{gidb}/gidb"
+    "newdb": f"{igg}/newdb",
+    "gidb": f"{server}/gidb"
 }
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",

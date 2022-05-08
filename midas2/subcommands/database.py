@@ -10,9 +10,7 @@ from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
 
 
 def list_midasdb(args):
-    for dbname in MIDASDB_NAMES:
-        if dbname == "testdb":
-            continue
+    for dbname in MIDASDB_VERSION.keys():
         midasdb = MIDAS_DB(args.midasdb_dir, dbname, 1)
         nspecies = len(midasdb.uhgg.species)
         ngenomes = len(midasdb.uhgg.genomes)
@@ -57,6 +55,7 @@ def download_midasdb_worker(args):
     assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
 
     midasdb = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, 4) #<--- 4 way concurrency
+    print(os.path.abspath(args.midasdb_dir))
     species = midasdb.uhgg.representatives
 
     species_id_list = decode_species_arg(args, species)

@@ -54,6 +54,7 @@ def get_tarball_layout(species_id="", genome_id=""):
     return {
         # Target Folder
         "table_of_contents":             f"genomes.tsv",
+        "metadata":                      f"metadata.tsv",
         "repgenome":                     f"gene_annotations/{species_id}/{genome_id}",
         "pangenome":                     f"pangenomes/{species_id}",
         "markerdb":                      f"markers/{marker_set}",
