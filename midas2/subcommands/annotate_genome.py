@@ -69,19 +69,24 @@ def annotate_genome_master(args):
         species_id = species_for_genome[genome_id]
 
         dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
+        local_file = midas_db.get_target_layout("annotation_file", False, species_id, genome_id, "fna")
 
         msg = f"Annotating genome {genome_id} from species {species_id}."
-        if find_files_with_retry(dest_file):
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for genome {genome_id} annotations already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Importing", "Reimporting")
 
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for genome {genome_id} annotations already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Importing", "Reimporting")
 
         with CONCURRENT_PROKKA_RUNS:
             tsprint(msg)
             last_dest = midas_db.get_target_layout("annotation_log", True, species_id, genome_id)
-
             worker_log = midas_db.get_target_layout("annotation_log", False, species_id, genome_id)
             worker_subdir = os.path.dirname(worker_log)
 
@@ -91,7 +96,7 @@ def annotate_genome_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 annotate_genome --genome {genome_id} --zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 annotate_genome --genome {genome_id} --zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -101,8 +106,9 @@ def annotate_genome_master(args):
             finally:
                 # Cleanup should not raise exceptions of its own, so as not to interfere with any
                 # prior exceptions that may be more informative.  Hence check=False.
-                if not args.debug:
+                if args.upload:
                     upload(f"{worker_log}", last_dest, check=False)
+                if not args.debug:
                     command(f"rm -rf {worker_subdir}", check=False)
 
     if args.genomes:
@@ -130,13 +136,13 @@ def annotate_genome_worker(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
-    last_output = drop_lz4(os.path.basename(dest_file))
-
-    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id)
+    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fna")
+    print(cleaned_genome_fp)
     output_files = run_prokka(genome_id, cleaned_genome_fp)
 
-    if not args.debug:
+    if args.upload:
+        dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
+        last_output = drop_lz4(os.path.basename(dest_file))
         upload_tasks = []
         for o in output_files:
             otype = o.rsplit(".")[-1]
@@ -145,7 +151,6 @@ def annotate_genome_worker(args):
 
         command(f"aws s3 rm --recursive {dest_file.rsplit('/', 1)[0]}")
         multithreading_map(upload_star, upload_tasks)
-
         # Upload this last because it indicates all other work has succeeded.
         upload(last_output, dest_file)
 
@@ -171,10 +176,14 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
+    subparser.add_argument('--upload',
+                           action='store_true',
+                           default=False,
+                           help='Upload built files to AWS S3')
     return main_func
 
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.")
     annotate_genome(args)

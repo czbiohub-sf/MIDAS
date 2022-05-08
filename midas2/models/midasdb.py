@@ -50,10 +50,9 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
     }
 
 
-def get_tarball_layout(species_id="", genome_id=""):
+def get_tarball_layout(species_id="", genome_id=""): # target folder
     return {
-        # Target Folder
-        "table_of_contents":             f"genomes.tsv",
+        "toc":                           f"genomes.tsv",
         "metadata":                      f"metadata.tsv",
         "repgenome":                     f"gene_annotations/{species_id}/{genome_id}",
         "pangenome":                     f"pangenomes/{species_id}",
@@ -67,11 +66,11 @@ class UHGG:  # pylint: disable=too-few-public-methods
     """
     A model for the external prokaryotic collection of genomes.
     """
-    def __init__(self, table_of_contents_tsv=""):
+    def __init__(self, table_of_contents_tsv="", dbname="uhgg"):
         if table_of_contents_tsv:
             self.toc_tsv = table_of_contents_tsv # Read in local genomes.tsv
         else:
-            self.toc_tsv = TABLE_OF_CONTENTS # Fetch from S3
+            self.toc_tsv = TABLE_OF_CONTENTS(dbname) # Fetch from S3 only
 
         self.species, self.representatives, self.genomes = _UHGG_load(self.toc_tsv)
 
@@ -85,9 +84,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         self.db_dir = os.path.abspath(db_dir) # local dir
         self.db_name = MIDASDB_DICT[db_name] # remote dir
         self.num_cores = num_cores
-        self.local_toc = self.fetch_files("table_of_contents")
-        self.uhgg = UHGG(self.local_toc)
-
+        self.local_toc = self.fetch_files(get_toc_name(self.db_name))
+        self.uhgg = UHGG(self.local_toc, db_name)
 
     def get_repgenome_id(self, species_id):
         return self.uhgg.fetch_repgenome_id(species_id)
@@ -187,12 +185,16 @@ def _UHGG_load(toc_tsv, deep_sort=False):
     return species, representatives, genomes
 
 
+def get_toc_name(remote_path):
+    return "table_of_contents" if remote_path.startswith("s3://") else "toc"
+
+
 def _get_dest_path(file_name, db_name):
     """ Append S3 MIDAS_DB path to file(s) """
-    if db_name.startswith("s3://"):
-        compress_cmd = "lz4"
-    else:
+    if db_name.startswith("https://"):
         compress_cmd = "tar.gz"
+    else:
+        compress_cmd = "lz4"
 
     if isinstance(file_name, list):
         return [os.path.join(db_name, f"{fn}.{compress_cmd}") for fn in file_name]

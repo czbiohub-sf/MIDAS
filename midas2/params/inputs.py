@@ -8,7 +8,8 @@ MIDASDB_DICT = {
     #"uhgg": f"{igg}/uhgg_v1",
     "uhgg": f"{server}/uhgg",
     "gtdb": f"{igg}/gtdb_r202",
-    "newdb": f"{igg}/newdb",
+    "newdb": f"{server}/newdb",
+    "testdb": f"{igg}/testdb",
     "gidb": f"{server}/gidb"
 }
 MIDASDB_VERSION = {
