@@ -11,7 +11,7 @@ from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
 
 def list_midasdb(args):
     for dbname in MIDASDB_VERSION.keys():
-        midasdb = MIDAS_DB(os.path.join(args.midasdb_dir, dbname), dbname, 1)
+        midasdb = MIDAS_DB(os.path.join(args.midasdb_dir, f"midasdb_{dbname}"), dbname, 1)
         nspecies = len(midasdb.uhgg.species)
         ngenomes = len(midasdb.uhgg.genomes)
         dbversion = MIDASDB_VERSION[dbname]
