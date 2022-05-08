@@ -22,7 +22,7 @@ def find_files_with_retry(f):
 @retry
 def rename_genome(genome_id, cleaned_genome):
     command(f"rm -f {genome_id}.fasta")
-    command(f"mv {cleaned_genome} {genome_id}.fasta")
+    command(f"cp {cleaned_genome} {genome_id}.fasta")
 
 
 def run_prokka(genome_id, cleaned_genome):
@@ -45,7 +45,7 @@ def run_prokka(genome_id, cleaned_genome):
 
     for o in output_files:
         command(f"mv {subdir}/{o} .")
-
+    command(f"rm -r {subdir}")
     return output_files
 
 

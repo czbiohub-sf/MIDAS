@@ -195,7 +195,6 @@ def _get_dest_path(file_name, db_name):
         compress_cmd = "tar.gz"
     else:
         compress_cmd = "lz4"
-
     if isinstance(file_name, list):
         return [os.path.join(db_name, f"{fn}.{compress_cmd}") for fn in file_name]
     return os.path.join(db_name, f"{file_name}.{compress_cmd}")
