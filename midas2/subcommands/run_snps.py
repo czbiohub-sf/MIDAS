@@ -700,47 +700,40 @@ def compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
     return dict_of_chunk_aln_stats
 
 
-def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, chunk_output, dict_of_chunk_aln_stats):
+def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, dict_of_chunk_aln_stats):
     """ Collect species pileup aln stats from all chunks and write to file """
 
     species_pileup_summary = defaultdict(dict)
 
-    with OutputStream(chunk_output) as stream:
-        stream.write("\t".join(snps_chunk_summary_schema.keys()) + "\n")
+    for records in chunks_pileup_summary:
+        if records is True:
+            continue
+        for record in records:
+            species_id = record["species_id"]
+            chunk_id = record["chunk_id"]
+            contig_id = record["contig_id"]
 
-        for records in chunks_pileup_summary:
-            if records is True:
-                continue
+            record["aligned_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["aligned_reads"]
+            record["mapped_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["mapped_reads"]
 
-            for record in records:
-                species_id = record["species_id"]
-                chunk_id = record["chunk_id"]
-                contig_id = record["contig_id"]
+            if species_id not in species_pileup_summary:
+                species_pileup_summary[species_id] = {
+                    "species_id": species_id,
+                    "genome_length": 0,
+                    "covered_bases": 0,
+                    "total_depth": 0,
+                    "aligned_reads": 0,
+                    "mapped_reads": 0,
+                    "fraction_covered": 0.0,
+                    "mean_coverage": 0.0
+                    }
 
-                record["aligned_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["aligned_reads"]
-                record["mapped_reads"] = dict_of_chunk_aln_stats[species_id][chunk_id][contig_id]["mapped_reads"]
-
-                stream.write("\t".join(map(format_data, record.values())) + "\n")
-
-                if species_id not in species_pileup_summary:
-                    species_pileup_summary[species_id] = {
-                        "species_id": species_id,
-                        "genome_length": 0,
-                        "covered_bases": 0,
-                        "total_depth": 0,
-                        "aligned_reads": 0,
-                        "mapped_reads": 0,
-                        "fraction_covered": 0.0,
-                        "mean_coverage": 0.0
-                        }
-
-                curr_species_pileup = species_pileup_summary.get(species_id)
-                curr_species_pileup["genome_length"] += record["chunk_length"]
-                curr_species_pileup["total_depth"] += record["contig_total_depth"]
-                curr_species_pileup["covered_bases"] += record["contig_covered_bases"]
-                curr_species_pileup["aligned_reads"] += record["aligned_reads"]
-                curr_species_pileup["mapped_reads"] += record["mapped_reads"]
-
+            curr_species_pileup = species_pileup_summary.get(species_id)
+            curr_species_pileup["genome_length"] += record["chunk_length"]
+            curr_species_pileup["total_depth"] += record["contig_total_depth"]
+            curr_species_pileup["covered_bases"] += record["contig_covered_bases"]
+            curr_species_pileup["aligned_reads"] += record["aligned_reads"]
+            curr_species_pileup["mapped_reads"] += record["mapped_reads"]
 
     # Secondary round compute: need to loop over species to compute fraction_covered
     for species_id in species_pileup_summary.keys():
@@ -805,13 +798,13 @@ def run_snps(args):
         tsprint(f"MIDAS::design_chunks::start")
         num_cores_download = min(args.num_cores, species_counts)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
-
+        midas_db.fetch_files("repgenome", species_ids_of_interest)
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"MIDAS::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
-        contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
         tsprint(f"MIDAS::build_bowtie2db::start")
+        contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
         build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
         tsprint(f"MIDAS::build_bowtie2db::finish")
 
@@ -839,10 +832,9 @@ def run_snps(args):
 
         tsprint(f"MIDAS::write_species_pileup_summary::start")
         snps_summary_fp = sample.get_target_layout("snps_summary")
-        snps_chunk_summary_fp = sample.get_target_layout("snps_chunk_summary")
 
         dict_of_chunk_aln_stats = compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
-        write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, snps_chunk_summary_fp, dict_of_chunk_aln_stats)
+        write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, dict_of_chunk_aln_stats)
         tsprint(f"MIDAS::write_species_pileup_summary::finish")
 
     except Exception as error:

@@ -457,15 +457,6 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
             stream.write("\t".join(map(format_data, vals)) + "\n")
 
 
-def write_chunk_coverage_summary(chunks_gene_coverage, outfile):
-    with OutputStream(outfile) as stream:
-        stream.write("\t".join(genes_chunk_summary_schema.keys()) + "\n")
-        for rec in chunks_gene_coverage:
-            if rec["chunk_id"] == -1:
-                continue
-            stream.write("\t".join(map(format_data, rec.values())) + "\n")
-
-
 def run_genes(args):
 
     try:
@@ -509,14 +500,13 @@ def run_genes(args):
         tsprint(f"MIDAS2::design_chunks::start")
         num_cores_download = min(species_counts, args.num_cores)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
-
+        midas_db.fetch_files("pangenome", species_ids_of_interest)
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
         tsprint(f"MIDAS2::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
-        centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
-        midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
         tsprint(f"MIDAS2::build_bowtie2db::start")
+        centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint(f"MIDAS2::build_bowtie2db::finish")
 
@@ -537,7 +527,6 @@ def run_genes(args):
 
         tsprint(f"MIDAS2::write_species_coverage_summary::start")
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
-        write_chunk_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_chunk_summary"))
         tsprint(f"MIDAS2::write_species_coverage_summary::finish")
 
     except Exception as error:

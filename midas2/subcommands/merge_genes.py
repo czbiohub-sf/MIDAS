@@ -202,7 +202,7 @@ def merge_genes(args):
         chunk_size = ceil(species_counts / args.num_cores)
 
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
-        midas_db.fetch_files("pangenome_cluster_info", species_ids_of_interest)
+        midas_db.fetch_files("pangenome", species_ids_of_interest)
 
         for species_id in species_ids_of_interest:
             sp = dict_of_species[species_id]

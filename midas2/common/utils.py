@@ -23,7 +23,8 @@ num_physical_cores = (num_vcpu + 1) // 2
 COMPRESSORS = {
     ".lz4": "lz4 -dc",
     ".bz2": "bzip2 -dc",   # consider lbzip2 if available
-    ".gz": "gzip -dc"
+    ".gz": "gzip -dc",
+    ".tar.gz": "tar -xz -C",
 }
 
 
@@ -644,6 +645,25 @@ def download_reference(ref_path, local_dir="."):
     except:
         command(f"rm -f {local_path}")
         raise
+    return local_path
+
+
+@retry
+def download_tarball(ref_path, local_dir="."):
+    assert os.path.basename(ref_path).endswith(".tar.gz"), f"Only download tarfile"
+    uncompress_cmd = COMPRESSORS[".tar.gz"]
+    local_path = os.path.join(local_dir, os.path.basename(ref_path).split(".tar.gz")[0])
+    if os.path.exists(local_path):
+        tsprint(f"Overwriting pre-existing {local_path} with reference download.")
+        command(f"rm -f {local_path}")
+    if not os.path.exists(local_dir):
+        command(f"mkdir -p {local_dir}")
+    try:
+        command(f"set -o pipefail; wget -q -O- {ref_path} | {uncompress_cmd} {local_dir}")
+    except:
+        command(f"rm -rf {local_path}")
+        raise
+    assert os.path.exists(local_path), f"Tarball download failed"
     return local_path
 
 

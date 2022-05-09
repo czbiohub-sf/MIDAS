@@ -23,7 +23,8 @@ def get_pool_layout(dbtype=""):
             "species_marker_read_counts":        f"species/species_marker_read_counts.tsv",
             "species_marker_coverage":           f"species/species_marker_coverage.tsv",
             "species_median_marker_coverage":    f"species/species_marker_median_coverage.tsv",
-            "species_marker_relative_abundance": f"species/species_relative_abundance.tsv",
+            "species_marker_relative_abundance": f"species/spcies_relative_abundance.tsv",
+            "species_unique_fraction_covered":   f"species/species_unique_fraction_covered.tsv",
 
             # SNPs
             "snps_summary":                     f"snps/snps_summary.tsv",

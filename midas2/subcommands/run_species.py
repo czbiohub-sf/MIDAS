@@ -11,7 +11,7 @@ from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
-from midas2.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, species_marker_profile_schema, format_data, DECIMALS6
+from midas2.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data, DECIMALS6
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -362,8 +362,7 @@ def merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_
 def normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list):
     """ Normalize counts by gene length and sum contrain """
 
-    species_abundance = defaultdict(lambda: defaultdict(int)) # indexed by <species_id>
-    markers_abundance = defaultdict(lambda: defaultdict(dict)) # indexed by <species_id, marker_id>
+    sp_abun = defaultdict(lambda: defaultdict(int)) # indexed by <species_id>
     for spid, sp_mkdict in species_alns.items():
         lomc = []
         for mkid, mkdict in sp_mkdict.items():
@@ -376,61 +375,41 @@ def normalize_counts(species_alns, species_covered_markers, markers_length, mark
             lomc.append(mkcov)
 
             # Accumulate information across markers per species
-            species_abundance[spid]["read_counts"] += readcounts
-            species_abundance[spid]["total_bps"] += aln_bps
-            species_abundance[spid]["total_marker_length"] += mklength
-
-            # Record information for <species_id, marker_id>
-            markers_abundance[spid][mkid]["gene_id"] = ",".join(markers_gene_list[spid][mkid])
-            markers_abundance[spid][mkid]["length"] = mklength
-            markers_abundance[spid][mkid]["coverage"] = mkcov
-            markers_abundance[spid][mkid]["total_reads"] = mkdict["unique"] + mkdict["ambiguous"]
-            markers_abundance[spid][mkid]["uniq_reads"] = mkdict["unique"]
-            markers_abundance[spid][mkid]["ambi_reads"] = mkdict["ambiguous"]
-            markers_abundance[spid][mkid]["total_alnbps"] = mkdict["unique_bps"] + mkdict["ambiguous_bps"]
-            markers_abundance[spid][mkid]["uniq_alnbps"] = mkdict["unique_bps"]
-            markers_abundance[spid][mkid]["ambi_alnbps"] = mkdict["ambiguous_bps"]
+            sp_abun[spid]["read_counts"] += readcounts
+            sp_abun[spid]["total_bps"] += aln_bps
+            sp_abun[spid]["total_marker_length"] += mklength
 
         # Second round of collecting information per species
-        species_abundance[spid]["coverage"] = species_abundance[spid]["total_bps"] / species_abundance[spid]["total_marker_length"]
-        species_abundance[spid]["median_coverage"] = np.median(lomc)
+        sp_abun[spid]["coverage"] = sp_abun[spid]["total_bps"] / sp_abun[spid]["total_marker_length"]
+        sp_abun[spid]["median_coverage"] = np.median(lomc)
 
-        species_abundance[spid]["total_covered"] = species_covered_markers[spid]["total_covered"]
-        species_abundance[spid]["unique_covered"] = species_covered_markers[spid]["unique_covered"]
-        species_abundance[spid]["ambiguous_covered"] = species_covered_markers[spid]["ambiguous_covered"]
-        species_abundance[spid]["total_marker_counts"] = species_covered_markers[spid]["total_marker_counts"]
-        species_abundance[spid]["unique_fraction_covered"] = species_abundance[spid]["unique_covered"] / species_abundance[spid]["total_marker_counts"]
+        sp_abun[spid]["total_covered"] = species_covered_markers[spid]["total_covered"]
+        sp_abun[spid]["unique_covered"] = species_covered_markers[spid]["unique_covered"]
+        sp_abun[spid]["ambiguous_covered"] = species_covered_markers[spid]["ambiguous_covered"]
+        sp_abun[spid]["total_marker_counts"] = species_covered_markers[spid]["total_marker_counts"]
+        sp_abun[spid]["unique_fraction_covered"] = sp_abun[spid]["unique_covered"] / sp_abun[spid]["total_marker_counts"]
 
     # Third round: compute relative abundance based on vertical coverage: only among detected species.
-    sample_coverage = sum(_['coverage'] for _ in species_abundance.values())
-    for r in species_abundance.values():
+    sample_coverage = sum(_['coverage'] for _ in sp_abun.values())
+    for r in sp_abun.values():
         r["relative_abundance"] = r["coverage"] / sample_coverage if sample_coverage > 0 else 0.0
 
     tsprint(f"  total marker-gene coverage {sample_coverage:.3f}")
-    return species_abundance, markers_abundance
+    return sp_abun
 
 
-def write_abundance(species_path, markers_path, species_abundance, markers_abundance):
+def write_abundance(species_path, sp_abun):
     """ Write species results to specified output file """
     # Sort the species by median_coverage
-    output_order = sorted(species_abundance.keys(), key=lambda sid: species_abundance[sid]['median_coverage'], reverse=True)
+    output_order = sorted(sp_abun.keys(), key=lambda sid: sp_abun[sid]['median_coverage'], reverse=True)
 
     with OutputStream(species_path) as outfile:
         outfile.write('\t'.join(species_profile_schema.keys()) + '\n')
         for species_id in output_order:
-            r = species_abundance[species_id]
-            record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'], r['relative_abundance'],
-                      r['total_covered'], r['unique_covered'], r['ambiguous_covered'],
-                      r['total_marker_counts'], r['unique_fraction_covered'], r['total_marker_length']]
+            r = sp_abun[species_id]
+            record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'],
+                        r['relative_abundance'], r['unique_fraction_covered']]
             outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
-
-    with OutputStream(markers_path) as outfile:
-        outfile.write('\t'.join(species_marker_profile_schema.keys()) + '\n')
-        for species_id in output_order:
-            for mid, md in markers_abundance[species_id].items():
-                record = [species_id, mid, md['length'], md["gene_id"], md['total_reads'], md['total_alnbps'],
-                          md['coverage'], md['uniq_reads'], md['ambi_reads'], md['uniq_alnbps'], md['ambi_alnbps']]
-                outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
 def run_species(args):
@@ -441,13 +420,12 @@ def run_species(args):
 
         tsprint(f"MIDAS2::fetch_midasdb_files::start")
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
-
+        midas_db.fetch_files("markerdb")
+        midas_db.fetch_files("markerdb_models")
         marker_db_files = midas_db.fetch_files("marker_db")
-        marker_db_hmm_cutoffs = midas_db.fetch_files("marker_db_hmm_cutoffs")
-
         tsprint(f"MIDAS2::fetch_midasdb_files::finish")
 
-        with InputStream(marker_db_hmm_cutoffs) as cutoff_params:
+        with InputStream(midas_db.get_target_layout("marker_db_hmm_cutoffs", False)) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
@@ -480,10 +458,10 @@ def run_species(args):
         # Estimate species abundance
         tsprint(f"MIDAS2::normalize_counts::start")
         species_alns, species_covered_markers = merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length)
-        species_abundance, markers_abundance = normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list)
+        species_abundance = normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list)
         tsprint(f"MIDAS2::normalize_counts::finish")
 
-        write_abundance(sample.get_target_layout("species_summary"), sample.get_target_layout("markers_summary"), species_abundance, markers_abundance)
+        write_abundance(sample.get_target_layout("species_summary"), species_abundance)
 
     except Exception as error:
         if not args.debug:

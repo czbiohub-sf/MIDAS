@@ -9,6 +9,7 @@ from midas2.common.utils import tsprint, num_physical_cores, retry, find_files, 
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
+from midas2.params.inputs import MIDASDB_NAMES
 
 
 # Up to this many concurrent species builds.
@@ -56,10 +57,16 @@ def compute_chunks_master(args):
 
         dest_filename, msg = get_dest_filename(args.chunk_type, species_id, genome_id)
         dest_file = midas_db.get_target_layout(dest_filename, True, species_id, genome_id, args.chunk_size)
+        local_file = midas_db.get_target_layout(dest_filename, False, species_id, genome_id, args.chunk_size)
 
-        if find_files_with_retry(dest_file):
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for species {species_id} already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Designing", "Redesigning")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for species {species_id} already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Designing", "Redesigning")
 
@@ -76,7 +83,7 @@ def compute_chunks_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} &>> {worker_subdir}/{worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_subdir}/{worker_log}"
             with open(f"{worker_subdir}/{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -119,7 +126,7 @@ def compute_chunks_worker(args):
         json.dump(chunks_to_cache, stream)
 
     dest_file = midas_db.get_target_layout(dest_filename, True, species_id, genome_id, args.chunk_size)
-    if not args.debug:
+    if args.upload:
         command(f"aws s3 rm {dest_file}")
         upload(local_file, dest_file)
 
@@ -134,7 +141,7 @@ def register_args(main_func):
                            dest='midasdb_name',
                            type=str,
                            default="uhgg",
-                           choices=['uhgg', 'gtdb', 'testdb'],
+                           choices=MIDASDB_NAMES,
                            help=f"MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
@@ -153,10 +160,14 @@ def register_args(main_func):
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+    subparser.add_argument('--upload',
+                           action='store_true',
+                           default=False,
+                           help='Upload built files to AWS S3')
     return main_func
 
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.
     compute_chunks(args)

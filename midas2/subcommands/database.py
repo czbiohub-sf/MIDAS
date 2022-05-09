@@ -3,40 +3,41 @@ import os
 import sys
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, command, multithreading_map, num_physical_cores, pythonpath
+from midas2.common.utils import tsprint, command, multithreading_map, num_physical_cores, pythonpath, InputStream
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
 
 
 def list_midasdb(args):
-    for dbname in MIDASDB_NAMES:
-        if dbname == "testdb":
-            continue
-        midasdb = MIDAS_DB(args.midasdb_dir, dbname, 1)
+    for dbname in MIDASDB_VERSION.keys():
+        midasdb = MIDAS_DB(os.path.join(args.midasdb_dir, f"midasdb_{dbname}"), dbname, 1)
         nspecies = len(midasdb.uhgg.species)
         ngenomes = len(midasdb.uhgg.genomes)
         dbversion = MIDASDB_VERSION[dbname]
         print(f"{dbname} {ngenomes} genomes from {nspecies} species {dbversion}")
 
 
-def download_midasdb(args):
+def init_midasdb(args):
     midasdb = MIDAS_DB(args.midasdb_dir, args.midasdb_name, 1)
-    midasdb.fetch_files("marker_db")
-    midasdb.fetch_files("marker_db_hmm_cutoffs")
+    midasdb.fetch_files("markerdb")
+    midasdb.fetch_files("markerdb_models")
+    midasdb.fetch_files("chunks")
+    # TODO: metadata and md5sum
+    return True
 
-    if args.markerdb_only:
-        return True
 
+def download_midasdb(args):
+    assert args.species is not None or args.species_list is not None, f"Need to provide --species or --species_list for download task."
     if args.zzz_worker_mode:
         download_midasdb_worker(args)
     else:
         download_midasdb_master(args)
-
     return True
 
 
 def download_midasdb_master(args):
+
     def sliced_work(i):
         n = args.num_cores
         worker_cmd = f"PYTHONPATH={pythonpath()} {sys.executable} -m midas2 database --download -s {i}:{n} --midasdb_name {args.midasdb_name} --midasdb_dir {args.midasdb_dir} --zzz_worker_mode {'--debug' if args.debug else ''}"
@@ -48,7 +49,25 @@ def download_midasdb_master(args):
                 command(f"rm -r {args.midasdb_dir}")
             raise error
 
-    multithreading_map(sliced_work, range(0, args.num_cores), num_threads=args.num_cores)
+    if  args.species == "all":
+        multithreading_map(sliced_work, range(0, args.num_cores), num_threads=args.num_cores)
+        return True
+
+    midasdb = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
+    species = midasdb.uhgg.species
+    if args.species_list is not None:
+        assert os.path.exists(args.species_list), f"Need to provide valid --species_list file."
+        species_id_list = []
+        with InputStream(args.species_list) as stream:
+            for line in stream:
+                species_id_list.append(line.strip())
+    else:
+        species_id_list = decode_species_arg(args, species)
+    nspecies = len(species_id_list)
+    tsprint(f"  Downloading MIDAS database for {nspecies} species::start")
+    midasdb.fetch_files("repgenome", species_id_list)
+    midasdb.fetch_files("pangenome", species_id_list)
+    tsprint(f"  Downloading MIDAS database for {nspecies} species::finish")
 
 
 def download_midasdb_worker(args):
@@ -61,18 +80,10 @@ def download_midasdb_worker(args):
 
     species_id_list = decode_species_arg(args, species)
     i, n = args.species.split(":")
-    snps_chunk_size = 1000000
-    genes_chunk_size = 50000
 
     tsprint(f"  Downloading MIDAS database for sliced species {i} with {n} cores in total::start")
-    midasdb.fetch_files("annotation_fna", species_id_list)
-    midasdb.fetch_files("annotation_genes", species_id_list)
-    midasdb.fetch_files("annotation_ffn", species_id_list)
-    midasdb.fetch_files("pangenome_centroids", species_id_list)
-    midasdb.fetch_files("pangenome_cluster_info", species_id_list)
-    midasdb.fetch_chunks("chunks_sites_run", species_id_list, snps_chunk_size)
-    midasdb.fetch_chunks("chunks_sites_merge", species_id_list, snps_chunk_size)
-    midasdb.fetch_chunks("chunks_centroids", species_id_list, genes_chunk_size)
+    midasdb.fetch_files("repgenome", species_id_list)
+    midasdb.fetch_files("pangenome", species_id_list)
     tsprint(f"  Downloading MIDAS database for sliced species {i} with {n} cores in total::finish")
     return True
 
@@ -83,6 +94,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"List available MIDAS databases on S3.")
+    subparser.add_argument('--init',
+                           action='store_true',
+                           default=False,
+                           help=f"Initiate the download of MIDASDB with minimal files needed.")
     subparser.add_argument('--download',
                            action='store_true',
                            default=False,
@@ -98,10 +113,6 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--markerdb_only',
-                           action='store_true',
-                           default=False,
-                           help=f"Only download marker databases related files.")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
@@ -112,7 +123,12 @@ def register_args(main_func):
                            '--species',
                            dest='species',
                            required=False,
-                           help="species slice in format idx:modulus, e.g. 1:30.")
+                           help="species[,species...] whose MIDASDB(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
+    subparser.add_argument('--species_list',
+                           dest='species_list',
+                           type=str,
+                           required=False,
+                           help="One-column species list file")
     return main_func
 
 
@@ -121,5 +137,7 @@ def main(args):
     #tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
     if args.list:
         list_midasdb(args)
+    if args.init:
+        init_midasdb(args)
     if args.download:
         download_midasdb(args)

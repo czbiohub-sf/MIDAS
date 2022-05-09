@@ -5,7 +5,8 @@ from midas2.params.inputs import MIDASDB_DICT
 
 def genomes(midasdb_name="uhgg"):
     igg = MIDASDB_DICT[midasdb_name]
-    return f"{igg}/genomes.tsv.lz4"
+    toc = f"{igg}/genomes.tsv.lz4" if igg.startswith("s3") else f"{igg}/genomes.tsv.tar.gz"
+    return toc
 
 def get_opsdir(midasdb_name="uhgg"):
     igg = MIDASDB_DICT[midasdb_name]
