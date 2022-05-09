@@ -6,11 +6,11 @@ server="https://microbiome-pollardlab.s3.us-west-2.amazonaws.com"
 
 MIDASDB_DICT = {
     "uhgg": f"{server}/uhgg",
-    "gtdb": f"{igg}/gtdb_r202",
-    "newdb": f"{server}/newdb",
-    "testdb": f"{igg}/testdb",
-    "gidb": f"{server}/gidb"
+    "gtdb": f"{server}/gtdb",
+    "newdb": f"{server}/newdb", # reserved for building new MIDASDB locally
+    "s3db": f"{igg}/testdb", # reserved for building new MIDASDB and upload to S3
 }
+
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",
     "gtdb": f"version r202",

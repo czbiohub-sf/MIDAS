@@ -2,16 +2,20 @@
 set -e
 
 basedir=`pwd`
-testdir="${basedir}/tests/midasdb_newdb"
+testdir="${basedir}/tests"
 echo ${testdir}
 
-db_name="testdb"
-db_dir="$testdir"
+db_name="newdb"
+db_dir="$testdir/midasdb_newdb"
 
 echo "START MIDAS 2.0 Database Build Testing"
-echo "testdb is built locally at $db_dir"
+echo "MIDASDB $db_name is built locally at $db_dir"
 
-#rm -rf $db_dir
+rm -rf $db_dir
+
+echo "Make copy of custom collection of genomes"
+cp -r ${testdir}/genomes $db_dir
+
 
 echo "Annotate Genomes and Repgenome"
 midas2 annotate_genome --species all --midasdb_name $db_name --midasdb_dir $db_dir --debug --force
