@@ -137,7 +137,6 @@ def annotate_genome_worker(args):
     species_id = species_for_genome[genome_id]
 
     cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fna")
-    print(cleaned_genome_fp)
     output_files = run_prokka(genome_id, cleaned_genome_fp)
 
     if args.upload:
