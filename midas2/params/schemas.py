@@ -243,3 +243,11 @@ genes_feature_schema = {
     "strand": str,
     "gene_type": str,
 }
+
+
+md5sum_schema = {
+    "db": str,
+    "file_name": str,
+    "species_id": str,
+    "md5sum": str,
+}

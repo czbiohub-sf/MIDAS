@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 import os
+import json
+from hashlib import md5
 from collections import defaultdict
 from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, command, multithreading_map, download_tarball
-from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, marker_set
+from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, MD5SUM_JSON, marker_set
 from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
+
+
+DEFAULT_SITE_CHUNK_SIZE = 1000000
+DEFAULT_GENE_CHUNK_SIZE = 50000
+DEFAULT_CHUNKS = [DEFAULT_GENE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE]
 
 
 # The Target Layout of MIDAS Reference Database both on S3 and locally.
@@ -54,12 +61,23 @@ def get_tarball_layout(species_id="", genome_id=""): # target folder
     return {
         "toc":                           f"genomes.tsv",
         "metadata":                      f"metadata.tsv",
+        "md5sum":                        f"md5sum.json",
         "repgenome":                     f"gene_annotations/{species_id}/{genome_id}",
         "pangenome":                     f"pangenomes/{species_id}",
         "markerdb":                      f"markers/{marker_set}",
         "markerdb_models":               f"markers_models/{marker_set}",
         "chunks":                        f"chunks"
     }
+
+
+tarball_mapping = {
+    "toc":                           ["table_of_contents"],
+    "repgenome":                     ["annotation_fna", "annotation_ffn", "annotation_genes"],
+    "pangenome":                     ["pangenome_centroids", "pangenome_cluster_info"],
+    "markerdb":                      MARKER_FILE_EXTS,
+    "markerdb_models":               ["hmm", "hmm_cutoffs"],
+    "chunks":                        ["chunks_centroids", "chunks_sites_run", "chunks_sites_merge"],
+}
 
 
 class UHGG:  # pylint: disable=too-few-public-methods
@@ -84,8 +102,11 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         self.db_dir = os.path.abspath(db_dir) # local dir
         self.db_name = MIDASDB_DICT[db_name] # remote dir
         self.num_cores = num_cores
-        self.local_toc = self.fetch_files(get_toc_name(self.db_name))
+        self.has_md5sum = True if db_name in MD5SUM_JSON else False
+        self.md5sum = load_json(self.fetch_files("md5sum")) if self.has_md5sum else None # TODO: how to check the md5sum of the json file??
+        self.local_toc = self.fetch_files("toc" if self.has_md5sum else "table_of_contents")
         self.uhgg = UHGG(self.local_toc, db_name)
+
 
     def get_repgenome_id(self, species_id):
         return self.uhgg.fetch_repgenome_id(species_id)
@@ -112,7 +133,6 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         local_path = self.construct_local_path(filename, species_id, genome_id, component)
         if not remote:
             return local_path
-
         s3_path = self.construct_dest_path(filename, species_id, genome_id, component)
         return s3_path
 
@@ -124,7 +144,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
 
     def fetch_file(self, filename, species_id="", genome_id="", component=""):
-        """ Fetch single file only from S3 """
+        """ Fetch Single File Only From *S3* Bucket. And return local single-file path. """
         if species_id and not genome_id:
             genome_id = self.get_repgenome_id(species_id)
         (s3_path, local_path) = self.construct_file_tuple(filename, species_id, genome_id, component)
@@ -132,7 +152,86 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
 
 
     def fetch_files(self, filename, list_of_species="", rep_only=True):
-        """ Fetch files for list of species """
+        """ Two purposes: fetch remote file (if not exists) and return a dictionary. """
+        if filename in get_tarball_layout():
+            # Return Fetched Directory
+            return self.fetch_tarball(filename, list_of_species)
+        else:
+            # Return Fetched File(s)
+            return self.fetch_individual_files(filename, list_of_species, rep_only)
+
+
+    def fetch_tarball(self, filename, list_of_species):
+        """ Fetch tarball from GIDB server and Check MD5SUM """
+        # Rep-genome and Pan-genome
+        if list_of_species:
+            args_list = []
+            for species_id in list_of_species:
+                genome_id = self.get_repgenome_id(species_id)
+                args_list.append(self.construct_file_tuple(filename, species_id, genome_id))
+            if len(args_list) > 1:
+                _fetched_files = multithreading_map(_fetch_file_from_s3, args_list, self.num_cores)
+            else:
+                _fetched_files = [_fetch_file_from_s3(args_list[0])]
+
+            fetched_files = dict(zip(list_of_species, _fetched_files))
+            for species_id in list_of_species:
+                fetched_filenames = tarball_mapping[filename]
+                for _filename in fetched_filenames:
+                    genome_id = self.get_repgenome_id(species_id)
+                    _fetched_file = self.get_target_layout(_filename, False, species_id, genome_id)
+                    md5_fetched = file_md5sum(_fetched_file)
+                    md5_lookup = self.md5sum[filename][species_id][_filename]
+                    assert md5_fetched == md5_lookup, f"Error for downloading {_fetched_file} from {filename}. Please delete the folder and redownload."
+            return fetched_files
+
+        # Single Copy Marker Genes DB
+        if filename == "markerdb":
+            fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
+            fetched_files = self.get_target_layout("marker_db", False)
+            fetched_files = dict(zip(MARKER_FILE_EXTS, fetched_files))
+            for _ in MARKER_FILE_EXTS:
+                _fetched_file = fetched_files[_]
+                md5_fetched = file_md5sum(_fetched_file)
+                md5_lookup = self.md5sum[filename][_]
+                assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            return {filename: fetched_dir}
+
+        if filename == "markerdb_models":
+            fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
+            for _ in tarball_mapping[filename]:
+                _fetched_file = self.get_target_layout(f"marker_db_{_}", False)
+                md5_fetched = file_md5sum(_fetched_file)
+                md5_lookup = self.md5sum[filename][_]
+                assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            return {filename: fetched_dir}
+
+        # Chunks
+        if filename == "chunks":
+            fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
+            fetched_filenames = tarball_mapping[filename]
+            rep_genomes = self.uhgg.representatives
+            for sid, gid in rep_genomes.items():
+                for i,ct in enumerate(fetched_filenames):
+                    _fetched_file = self.get_target_layout(ct, False, sid, gid, DEFAULT_CHUNKS[i])
+                    md5_fetched = file_md5sum(_fetched_file)
+                    md5_lookup = self.md5sum[filename][sid][ct]
+                    assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            return {filename: fetched_dir}
+
+        # Single File: key of the tarball layout
+        _fetched_file = _fetch_file_from_s3(self.construct_file_tuple(filename))
+        md5_fetched = file_md5sum(_fetched_file)
+        if filename != "md5sum":
+            md5_lookup = self.md5sum[filename]
+        else:
+            md5_lookup = MD5SUM_JSON[os.path.basename(self.db_name)]
+        assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+        return _fetched_file
+
+
+    def fetch_individual_files(self, filename, list_of_species, rep_only):
+        """ Fetch S3 individual file (if not exists) and/or return local file path in a dictionary. """
         if list_of_species:
             if not rep_only:
                 assert len(list_of_species) == 1, f"Only download all genomes for single species"
@@ -143,6 +242,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
                     genome_id = self.get_repgenome_id(species_id)
                     args_list.append(self.construct_file_tuple(filename, species_id, genome_id))
                 else:
+                    # During pan-genome and marker-db built, collect all the genomes for given species.
+                    # Either from S3 or locally, therefore no need to check md5sum.
                     species_genomes_ids = self.uhgg.species[species_id].keys()
                     args_list.extend([self.construct_file_tuple(filename, species_id, genome_id) for genome_id in species_genomes_ids])
 
@@ -164,7 +265,6 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
             fetched_files = [_fetch_file_from_s3(_) for _ in list_of_file_tuples]
             return dict(zip(MARKER_FILE_EXTS, fetched_files))
 
-        # Fetch single file with filename as the MIDASDB Target Layout key
         return _fetch_file_from_s3(self.construct_file_tuple(filename))
 
 
@@ -183,10 +283,6 @@ def _UHGG_load(toc_tsv, deep_sort=False):
             species[sid] = sorted_dict(species[sid])
         species = sorted_dict(species)
     return species, representatives, genomes
-
-
-def get_toc_name(remote_path):
-    return "table_of_contents" if remote_path.startswith("s3://") else "toc"
 
 
 def _get_dest_path(file_name, db_name):
@@ -211,16 +307,23 @@ def _fetch_file_from_s3(packed_args):
     """ Fetch local path from Remote. Return local_path if already exist. """
     s3_path, local_path = packed_args
     local_dir = os.path.dirname(local_path)
-
-    #print(f"_fetch_file_from_s3: {s3_path}")
-    #print(f"_fetch_file_from_s3: {local_dir}")
-    #print(f"_fetch_file_from_s3: {local_path}")
-
+    # local_path: single-file or single-folder
+    # local_dir: parent directory of local_path
+    # s3_path: https or s3 link of tarball of LZ4 file
     if not os.path.isdir(local_dir):
         command(f"mkdir -p {local_dir}")
     if os.path.exists(local_path):
         return local_path
-
     if s3_path.startswith("s3://"):
         return download_reference(s3_path, local_dir)
     return download_tarball(s3_path, local_dir)
+
+
+def load_json(jsonfile):
+    with InputStream(jsonfile) as stream:
+        md5sum_dict = json.load(stream)
+    return md5sum_dict
+
+
+def file_md5sum(local_file):
+    return md5(open(local_file, "rb").read()).hexdigest()
