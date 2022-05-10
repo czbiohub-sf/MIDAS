@@ -18,6 +18,11 @@ MIDASDB_VERSION = {
 MIDASDB_NAMES = list(MIDASDB_DICT.keys())
 
 
+MD5SUM_JSON = {
+    "uhgg": "cf71fe7a82f01b81cafb4944cd3a0017",
+    "gtdb": ""
+}
+
 marker_set = "phyeco"
 MARKER_FILE_EXTS = ["fa", "fa.bwt", "fa.header", "fa.sa", "fa.sequence", "map"]
 hmmsearch_max_evalue = 1e-5
