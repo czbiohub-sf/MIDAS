@@ -21,7 +21,7 @@ from midas2.models.species import Species, parse_species
 from midas2.params.inputs import MIDASDB_NAMES
 
 
-DEFAULT_MARKER_DEPTH = 5.0
+
 DEFAULT_MARKER_MEDIAN_DEPTH = 2
 
 DEFAULT_ALN_MAPID = 94.0
