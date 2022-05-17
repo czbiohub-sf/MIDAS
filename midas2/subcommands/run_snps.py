@@ -29,7 +29,6 @@ DEFAULT_ALN_MAPQ = 10
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
-DEFAULT_ALN_TRIM = 0
 
 DEFAULT_CHUNK_SIZE = 1000000
 DEFAULT_MAX_FRAGLEN = 2000
@@ -154,12 +153,6 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
-    subparser.add_argument('--aln_trim',
-                           dest='aln_trim',
-                           default=DEFAULT_ALN_TRIM,
-                           type=int,
-                           metavar="INT",
-                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
 
     subparser.add_argument('--paired_only',
                            action='store_true',
