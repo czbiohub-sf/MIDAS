@@ -61,7 +61,7 @@ echo "Testing Single-Sample SNPs Module"
 cat ${samples_fp} | xargs -Ixx bash -c \
     "midas2 run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
     --num_cores ${num_cores} --chunk_size 500000 \
-    --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} --select_threshold=-1 \
+    --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --advanced --ignore_ambiguous \
     --select_by median_marker_coverage,unique_fraction_covered \
     --select_threshold=5,0.5 \
@@ -79,7 +79,7 @@ midas2 merge_snps --samples_list ${pool_fp} \
 echo "Testing Single-Sample Genes Module With Existing Bowtie Database"
 head -n 2 ${samples_fp} | xargs -Ixx bash -c \
     "midas2 run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} \
-     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
+     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} --select_threshold=-1 \
      --prebuilt_bowtie2_indexes ${merge_midas_outdir}/bt2_indexes/pangenomes \
      --prebuilt_bowtie2_species ${merge_midas_outdir}/bt2_indexes/pangenomes.species \
      ${midas_outdir} &> ${logs_dir}/xx_genes_${num_cores}_w_bowtie2.log"
