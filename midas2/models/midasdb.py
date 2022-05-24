@@ -287,7 +287,7 @@ def _UHGG_load(toc_tsv, deep_sort=False):
 
 def _get_dest_path(file_name, db_name):
     """ Append S3 MIDAS_DB path to file(s) """
-    if db_name.startswith("https://"):
+    if db_name.startswith("http://"): #<------------------------------https://
         compress_cmd = "tar.gz"
     else:
         compress_cmd = "lz4"
