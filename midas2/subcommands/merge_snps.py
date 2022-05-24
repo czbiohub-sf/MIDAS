@@ -5,7 +5,7 @@ import multiprocessing
 from collections import defaultdict
 
 from midas2.models.samplepool import SamplePool
-from midas2.common.utils import tsprint, num_physical_cores, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files, multithreading_map
+from midas2.common.utils import tsprint, command, InputStream, OutputStream, multiprocessing_map, select_from_tsv, cat_files, multithreading_map, args_string
 from midas2.common.utilities import annotate_site, acgt_string, scan_gene_feature, scan_fasta, compute_gene_boundary
 from midas2.common.snvs import call_alleles
 from midas2.models.midasdb import MIDAS_DB
@@ -43,13 +43,7 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"TSV file mapping sample name to run_species.py output directories")
-    subparser.add_argument('--chunk_size',
-                           dest='chunk_size',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_CHUNK_SIZE,
-                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+                           help=f"Path to TSV file mapping sample name to single sample midas output directory.")
 
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
@@ -61,39 +55,33 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--num_cores',
-                           dest='num_cores',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_NUM_CORES,
-                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
+                           help=f"Path to local MIDAS Database.")
 
     # <Species, Samples> pair filters
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
+                           help=f"Comma separated list of species ids OR path to list of species TXT.")
     subparser.add_argument('--genome_depth',
                            dest='genome_depth',
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_GENOME_DEPTH,
-                           help=f"Minimum average read depth per sample ({DEFAULT_GENOME_DEPTH})")
+                           help=f"Minimum <single sample, species> vertical genome coverage (>={DEFAULT_GENOME_DEPTH})")
     subparser.add_argument('--genome_coverage',
-                           dest='genome_coverage', #fract_cov
+                           dest='genome_coverage',
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_GENOME_COVERAGE,
-                           help=f"Fraction of reference sites covered by at least 1 read ({DEFAULT_GENOME_COVERAGE})")
+                           help=f"Minimum <single sample, species> horizontal genome coverage (>={DEFAULT_GENOME_COVERAGE})")
     # Species filters
     subparser.add_argument('--sample_counts',
                            dest='sample_counts', #min_samples
                            type=int,
                            metavar="INT",
                            default=DEFAULT_SAMPLE_COUNTS,
-                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+                           help=f"Discard species with prevalence < MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
     # Single-sample site filters
     subparser.add_argument('--site_depth',
@@ -101,13 +89,13 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            default=DEFAULT_SITE_DEPTH,
-                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
+                           help=f"Minimum number of post-filtered reads per genomic site (>={DEFAULT_SITE_DEPTH})")
     subparser.add_argument('--site_ratio',
                            dest='site_ratio',
                            default=DEFAULT_SITE_RATIO,
                            type=float,
                            metavar="FLOAT",
-                           help=f"Maximum ratio of site depth to genome depth ({DEFAULT_SITE_RATIO}).")
+                           help=f"Maximum ratio of site depth to genome vertical depth (<={DEFAULT_SITE_RATIO}).")
 
     # Across-samples site filters
     subparser.add_argument('--site_prev',
@@ -129,13 +117,13 @@ def register_args(main_func):
                            type=str,
                            default=DEFAULT_SNP_POOLED_METHOD,
                            choices=['prevalence', 'abundance'],
-                           help=f"Method of call across-samples-pooled-SNPs based on either prevalence or abundance (Default: {DEFAULT_SNP_POOLED_METHOD}).")
+                           help=f"Method of call population SNV based on prevalence or abundance (Default: {DEFAULT_SNP_POOLED_METHOD}).")
     subparser.add_argument('--snp_maf',
                            dest='snp_maf',
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_SNP_MAF,
-                           help=f"Minimum pooled-minor-allele_frequency to call an allele present ({DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
+                           help=f"Minimum population minor allele frequency to call an allele (>={DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
     subparser.add_argument('--snp_type',
                            type=str,
                            dest='snp_type',
@@ -157,10 +145,23 @@ def register_args(main_func):
                            nargs='+',
                            help=f"Use genomic sites that intersect: 'CDS': coding genes, 'RNA': rRNA and tRNA genes, 'IGS': intergenic regions. (Default: {DEFAULT_LOCUS_TYPE}")
 
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
+    subparser.add_argument('--chunk_size',
+                           dest='chunk_size',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_CHUNK_SIZE,
+                           help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+
     subparser.add_argument('--advanced',
                            action='store_true',
                            default=False,
-                           help=f"Passed on from single-sample advanced.")
+                           help=f"Must passed on if single sample SNV analysis were run in advanced mode.")
     subparser.add_argument('--robust_chunk',
                            action='store_true',
                            default=False,
@@ -469,7 +470,7 @@ def call_population_snps(accumulator, species_id):
             site_depth = count_samples
             tuple_of_alleles = (('A', scA), ('C', scC), ('G', scG), ('T', scT))
 
-        major_allele, minor_allele, snp_type, number_alleles = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
+        major_allele, minor_allele, snp_type, _ = call_alleles(tuple_of_alleles, site_depth, global_args.snp_maf)
 
         if major_allele is None:
             continue
@@ -495,7 +496,7 @@ def call_population_snps(accumulator, species_id):
             sample_mafs.append(maf_by_sample)
 
         # Site Annotation
-        ref_id, ref_pos, ref_allele = site_id.rsplit("|", 2)
+        ref_id, ref_pos, _ = site_id.rsplit("|", 2)
         ref_pos = int(ref_pos) # ref_pos is 1-based
 
         annots = ("IGR",) # short contigs may not carry any gene
@@ -609,7 +610,7 @@ def merge_snps(args):
         global dict_of_species
 
         pool_of_samples = SamplePool(args.samples_list, args.midas_outdir, "snps")
-        assert len(pool_of_samples.samples) > 0, f"No samples in the provided samples_list"
+        assert pool_of_samples.samples, f"No samples in the provided samples_list"
 
         dict_of_species = pool_of_samples.select_species("snps", args)
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
@@ -620,6 +621,9 @@ def merge_snps(args):
         pool_of_samples.create_dirs(["outdir", "tempdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug, quiet=True)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "tempdir", args.debug, quiet=True)
+
+        with OutputStream(pool_of_samples.get_target_layout("snps_log")) as stream:
+            stream.write(f"Across samples population SNV calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
 
         tsprint(f"MIDAS2::write_species_summary::start")
         pool_of_samples.write_summary_files(dict_of_species, "snps")
@@ -640,6 +644,9 @@ def merge_snps(args):
         assert all(s == "worked" for s in proc_flags), f"Error: some chunks failed"
         tsprint(f"MIDAS2::multiprocessing_map::finish")
 
+        if not args.debug:
+            pool_of_samples.remove_dirs(["tempdir"])
+
     except AssertionError as error:
         tsprint(f"Bugs in the codes, keep the outputs for debugging purpose.")
         # ideally exiting the program, logging the issue, and notifying the user.
@@ -653,5 +660,5 @@ def merge_snps(args):
 
 @register_args
 def main(args):
-    tsprint(f"Population SNPs calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Across samples population SNV calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     merge_snps(args)

@@ -10,16 +10,15 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map
+from midas2.common.utils import tsprint, InputStream, OutputStream, multiprocessing_map, command, cat_files, select_from_tsv, multithreading_map, args_string
 from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, bowtie2_index_exists, _keep_read
-from midas2.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_chunk_summary_schema, snps_pileup_basic_schema
+from midas2.params.schemas import snps_profile_schema, snps_pileup_schema, format_data, snps_pileup_basic_schema
 from midas2.common.snvs import call_alleles, reference_overlap, update_overlap, mismatches_within_overlaps, query_overlap_qualities
 from midas2.common.utilities import scan_fasta
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
 from midas2.models.species import Species, parse_species
 from midas2.params.inputs import MIDASDB_NAMES
-
 
 
 DEFAULT_MARKER_MEDIAN_DEPTH = 2
@@ -29,9 +28,10 @@ DEFAULT_ALN_MAPQ = 10
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 DEFAULT_ALN_BASEQ = 30
+DEFAULT_ALN_TRIM = 0
 
 DEFAULT_CHUNK_SIZE = 1000000
-DEFAULT_MAX_FRAGLEN = 2000
+DEFAULT_MAX_FRAGLEN = 5000
 DEFAULT_NUM_CORES = 8
 
 DEFAULT_SITE_DEPTH = 2
@@ -56,17 +56,17 @@ def register_args(main_func):
                            dest='r2',
                            help="FASTA/FASTQ file containing 2nd mate if using paired-end reads.")
 
-    # Prebuilt/predownload
+    # Prebuilt
     subparser.add_argument('--prebuilt_bowtie2_indexes',
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
                            metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
+                           help=f"Path to prebuilt rep-genome bowtie2 database indexes")
     subparser.add_argument('--prebuilt_bowtie2_species',
                            dest='prebuilt_bowtie2_species',
                            type=str,
                            metavar="CHAR",
-                           help=f"List of species used for building the prebuild bowtie2 indexes.")
+                           help=f"Path to list of species in the prebuild bowtie2 indexes.")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,
@@ -77,14 +77,14 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
 
     # Species related
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
+                           help=f"Comma separated list of species ids OR path to list of species TXT.")
     subparser.add_argument('--select_by',
                            dest='select_by',
                            type=str,
@@ -96,7 +96,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default=str(DEFAULT_MARKER_MEDIAN_DEPTH),
-                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
+                           help=f"Comman separated correponsding cutoff to select_by (>XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
 
     # Alignment flags (Bowtie2 or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -115,14 +115,20 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+
     subparser.add_argument('--fragment_length',
                            type=float,
                            dest='fragment_length',
                            metavar='FLOAT',
                            default=DEFAULT_MAX_FRAGLEN,
                            help=f"Maximum fragment length for paired reads ({DEFAULT_MAX_FRAGLEN}).")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s) for read alignment.  (All)")
 
-    #  Pileup flags (samtools, or postprocessing)
+    # Post-alignment filter flags
     subparser.add_argument('--aln_mapid',
                            dest='aln_mapid',
                            type=float,
@@ -153,11 +159,31 @@ def register_args(main_func):
                            type=int,
                            metavar="INT",
                            help=f"Discard bases with quality < ALN_BASEQ ({DEFAULT_ALN_BASEQ})")
-
+    subparser.add_argument('--aln_trim',
+                           dest='aln_trim',
+                           default=DEFAULT_ALN_TRIM,
+                           type=int,
+                           metavar="INT",
+                           help=f"Trim ALN_TRIM base-pairs from 3'right end of read ({DEFAULT_ALN_TRIM})")
     subparser.add_argument('--paired_only',
                            action='store_true',
                            default=False,
                            help=f"Only recruit properly paired reads for pileup.")
+
+    # Pileup
+    subparser.add_argument('--site_depth',
+                           dest='site_depth',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_SITE_DEPTH,
+                           help=f"Only perform pileup for genomic site covered by post-filtered reads (>={DEFAULT_SITE_DEPTH})")
+    subparser.add_argument('--snp_maf',
+                           dest='snp_maf',
+                           type=float,
+                           metavar="FLOAT",
+                           default=DEFAULT_SNP_MAF,
+                           help=f"Minimum single sample minor-allele_frequency to call an allele present (>={DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
+
     subparser.add_argument('--ignore_ambiguous',
                            action='store_true',
                            default=False,
@@ -171,38 +197,19 @@ def register_args(main_func):
                            default=False,
                            help=f"Report majore/minor allele for each genomic sites.")
 
-    # File related
+    # Resource related
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
                            metavar="INT",
                            default=DEFAULT_NUM_CORES,
                            help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
-
-    subparser.add_argument('--site_depth',
-                           dest='site_depth',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_SITE_DEPTH,
-                           help=f"Minimum number of reads mapped to genomic site ({DEFAULT_SITE_DEPTH})")
-    subparser.add_argument('--snp_maf',
-                           dest='snp_maf',
-                           type=float,
-                           metavar="FLOAT",
-                           default=DEFAULT_SNP_MAF,
-                           help=f"Minimum single sample minor-allele_frequency to call an allele present ({DEFAULT_SNP_MAF}), Values > 0.0 and < 0.5 are accepted.")
-
     return main_func
 
 
@@ -470,7 +477,7 @@ def sort_bam(pargs):
 
     species_id, numcores = pargs
 
-    filtered_bamfile = sample.get_target_layout("species_bam", species_id) # <species_id> output
+    filtered_bamfile = sample.get_target_layout("species_bam", species_id)
     sorted_bamfile = sample.get_target_layout("species_sorted_bam", species_id)
 
     samtools_sort(filtered_bamfile, sorted_bamfile, global_args.debug, numcores)
@@ -589,11 +596,12 @@ def midas_pileup(packed_args):
         ref_allele = contig_seq[ref_pos]
         row = [contig_id, ref_pos + 1, ref_allele, depth, count_a, count_c, count_g, count_t]
 
+        if depth > 0:
+            aln_stats["contig_total_depth"] += depth
+            aln_stats["contig_covered_bases"] += 1
+
         if depth < global_args.site_depth:
             continue
-
-        aln_stats["contig_total_depth"] += depth
-        aln_stats["contig_covered_bases"] += 1
 
         # Ignore ambiguous sites
         if global_args.ignore_ambiguous:
@@ -755,6 +763,9 @@ def run_snps(args):
         sample = Sample(args.sample_name, args.midas_outdir, "snps")
         sample.create_dirs(["outdir", "tempdir"], args.debug, quiet=True)
 
+        with OutputStream(sample.get_target_layout("snps_log")) as stream:
+            stream.write(f"Single sample SNV calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
+
         species_list = parse_species(args)
 
         # Prepare Bowtie2 genome database path and name, prebuilt or to be built.
@@ -830,6 +841,11 @@ def run_snps(args):
         write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, dict_of_chunk_aln_stats)
         tsprint(f"MIDAS::write_species_pileup_summary::finish")
 
+        if not args.debug:
+            sample.remove_dirs(["tempdir"])
+            if not args.prebuilt_bowtie2_indexes:
+                sample.remove_dirs(["bt2_indexes_dir"])
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error. Specify --debug flag to keep.")
@@ -841,5 +857,5 @@ def run_snps(args):
 
 @register_args
 def main(args):
-    tsprint(f"Single nucleotide polymorphisms calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Single sample SNV calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     run_snps(args)

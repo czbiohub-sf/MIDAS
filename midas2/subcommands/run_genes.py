@@ -10,12 +10,12 @@ import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files
+from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files, args_string
 from midas2.common.utilities import fetch_genes_are_markers
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
 from midas2.models.species import Species, parse_species, load_chunks_cache
-from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_chunk_summary_schema, genes_are_markers_schema
+from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_are_markers_schema
 from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -28,7 +28,7 @@ DEFAULT_ALN_MAPQ = 2
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 
-DEFAULT_SITE_DEPTH = 2
+DEFAULT_READ_DEPTH = 2
 
 DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
@@ -58,12 +58,12 @@ def register_args(main_func):
                            dest='prebuilt_bowtie2_indexes',
                            type=str,
                            metavar="CHAR",
-                           help=f"Prebuilt bowtie2 database indexes")
+                           help=f"Path to prebuilt pan-genome bowtie2 database indexes")
     subparser.add_argument('--prebuilt_bowtie2_species',
                            dest='prebuilt_bowtie2_species',
                            type=str,
                            metavar="CHAR",
-                           help=f"List of species used for building the prebuild bowtie2 indexes.")
+                           help=f"Path to list of species in the prebuild bowtie2 indexes.")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,
@@ -74,13 +74,13 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
 
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
+                           help=f"Comma separated list of species ids OR path to list of species TXT.")
     subparser.add_argument('--select_by',
                            dest='select_by',
                            type=str,
@@ -91,7 +91,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default=str(DEFAULT_MARKER_MEDIAN_DEPTH),
-                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
+                           help=f"Comman separated correponsding cutoff to select_by (>XX) ({DEFAULT_MARKER_MEDIAN_DEPTH}, )")
 
     #  Alignment flags (Bowtie2, or postprocessing)
     subparser.add_argument('--aln_speed',
@@ -116,6 +116,11 @@ def register_args(main_func):
                            metavar='FLOAT',
                            default=DEFAULT_MAX_FRAGLEN,
                            help=f"Maximum fragment length for paired reads.")
+    subparser.add_argument('--max_reads',
+                           dest='max_reads',
+                           type=int,
+                           metavar="INT",
+                           help=f"Number of reads to use from input file(s) for read alignment.  (All)")
 
     # Coverage flags
     subparser.add_argument('--aln_mapid',
@@ -143,26 +148,21 @@ def register_args(main_func):
                            metavar="FLOAT",
                            help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
 
-    # Site filters
-    subparser.add_argument('--site_depth',
-                           dest='site_depth',
+    # Gene filters
+    subparser.add_argument('--read_depth',
+                           dest='read_depth',
                            type=int,
                            metavar="INT",
-                           default=DEFAULT_SITE_DEPTH,
-                           help=f"Minimum number of reads mapped to one gene ({DEFAULT_SITE_DEPTH})")
+                           default=DEFAULT_READ_DEPTH,
+                           help=f"Discard genes with post-filtered reads < READ_DEPTH  ({DEFAULT_READ_DEPTH})")
 
-    # File related
+    # Resource related
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
-    subparser.add_argument('--max_reads',
-                           dest='max_reads',
-                           type=int,
-                           metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
@@ -288,7 +288,7 @@ def compute_coverage_per_chunk(species_id, chunk_id):
 
                 mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
 
-                if mapped_reads < global_args.site_depth:
+                if mapped_reads < global_args.read_depth:
                     continue
 
                 # Compute vertical coverage only for aligned gene region
@@ -296,9 +296,9 @@ def compute_coverage_per_chunk(species_id, chunk_id):
                 gene_total_depth = 0
                 counts = bamfile.count_coverage(gene_id, read_callback=keep_read)
                 for within_chunk_index in range(0, gene_length):
-                    site_depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
-                    gene_total_depth += site_depth
-                    if site_depth > 0:
+                    gene_depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
+                    gene_total_depth += gene_depth
+                    if gene_depth > 0:
                         gene_covered_bases += 1
 
                 gene_fraction_covered = gene_covered_bases / gene_length
@@ -467,6 +467,9 @@ def run_genes(args):
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
+        with OutputStream(sample.get_target_layout("genes_log")) as stream:
+            stream.write(f"Single sample pan-gene copy number variant calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
+
         species_list = parse_species(args)
 
         if args.prebuilt_bowtie2_indexes:
@@ -529,6 +532,11 @@ def run_genes(args):
         write_species_coverage_summary(chunks_gene_coverage, sample.get_target_layout("genes_summary"))
         tsprint(f"MIDAS2::write_species_coverage_summary::finish")
 
+        if not args.debug:
+            sample.remove_dirs(["tempdir"])
+            if not args.prebuilt_bowtie2_indexes:
+                sample.remove_dirs(["bt2_indexes_dir"])
+
     except Exception as error:
         if not args.debug:
             tsprint("Deleting untrustworthy outputs due to error.  Specify --debug flag to keep.")
@@ -540,5 +548,5 @@ def run_genes(args):
 
 @register_args
 def main(args):
-    tsprint(f"Pangenome copy number profiling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Single sample pan-gene copy number variant calling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     run_genes(args)

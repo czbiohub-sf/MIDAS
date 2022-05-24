@@ -7,7 +7,7 @@ from math import ceil
 
 from midas2.models.samplepool import SamplePool
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map
+from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, args_string
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.schemas import genes_info_schema, genes_coverage_schema, format_data, DECIMALS6
 from midas2.models.species import scan_cluster_info
@@ -31,14 +31,14 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"TSV file mapping sample name to run_species.py output directories")
+                           help=f"Path to TSV file mapping sample name to single sample midas output directory.")
 
     # Species and sample filters
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
+                           help=f"Comma separated list of species ids OR path to list of species TXT.")
     subparser.add_argument('--genome_depth',
                            dest='genome_depth',
                            type=float,
@@ -46,11 +46,11 @@ def register_args(main_func):
                            default=DEFAULT_GENOME_DEPTH,
                            help=f"Minimum read-depth across all genes with non-zero coverage per sample ({DEFAULT_GENOME_DEPTH})")
     subparser.add_argument('--sample_counts',
-                           dest='sample_counts', #min_samples
+                           dest='sample_counts',
                            type=int,
                            metavar="INT",
                            default=DEFAULT_SAMPLE_COUNTS,
-                           help=f"select species with >= MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
+                           help=f"Discard species with prevalence < MIN_SAMPLES ({DEFAULT_SAMPLE_COUNTS})")
 
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
@@ -62,18 +62,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Local MIDAS Database path mirroing S3.")
-    subparser.add_argument('--midas_db',
-                           dest='midas_db',
-                           type=str,
-                           metavar="CHAR",
-                           help=f"local MIDAS DB which mirrors the s3 IGG db")
-    subparser.add_argument('--num_cores',
-                           dest='num_cores',
-                           type=int,
-                           metavar="INT",
-                           default=DEFAULT_NUM_CORES,
-                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
+                           help=f"Path to local MIDAS Database.")
 
     # Presence/Absence
     subparser.add_argument('--min_copy',
@@ -88,6 +77,13 @@ def register_args(main_func):
                            default=DEFAULT_CLUSTER_ID,
                            choices=['75', '80', '85', '90', '95', '99'],
                            help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
+
+    subparser.add_argument('--num_cores',
+                           dest='num_cores',
+                           type=int,
+                           metavar="INT",
+                           default=DEFAULT_NUM_CORES,
+                           help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
 
     return main_func
 
@@ -194,6 +190,10 @@ def merge_genes(args):
 
         pool_of_samples.create_dirs(["outdir"], args.debug)
         pool_of_samples.create_species_subdirs(species_ids_of_interest, "outdir", args.debug, quiet=True)
+
+        with OutputStream(pool_of_samples.get_target_layout("genes_log")) as stream:
+            stream.write(f"Across samples pan-gene CNV merging in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
+
         pool_of_samples.write_summary_files(dict_of_species, "genes")
 
         # Download genes_info for every species in the restricted species profile.
@@ -221,5 +221,5 @@ def merge_genes(args):
 
 @register_args
 def main(args):
-    tsprint(f"Merge pangenome coverage in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Across samples pan-gene CNV merging in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     merge_genes(args)

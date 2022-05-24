@@ -46,18 +46,10 @@ cat ${samples_fp} | xargs -Ixx bash -c \
 
 
 echo "Testing Across-Samples Species Module"
-midas2 merge_species --samples_list ${pool_fp} \
-    --median_marker_coverage 0  ${merge_midas_outdir} &> ${logs_dir}/merge_species_${num_cores}.log
+midas2 merge_species --samples_list ${pool_fp} --min_cov 2  ${merge_midas_outdir} &> ${logs_dir}/merge_species_${num_cores}.log
 
 
-echo "Testing Build Pan-Genome Bowtie2 Databases"
-midas2 build_bowtie2db --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
-    --species_list 102454 --num_cores ${num_cores} \
-    --bt2_indexes_name pangenomes --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes \
-    &> ${logs_dir}/build_bowtie2_pan_${num_cores}.log
-
-
-echo "Testing Single-Sample SNPs Module"
+echo "Testing Single-Sample SNV Module"
 cat ${samples_fp} | xargs -Ixx bash -c \
     "midas2 run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
     --num_cores ${num_cores} --chunk_size 500000 \
@@ -68,7 +60,7 @@ cat ${samples_fp} | xargs -Ixx bash -c \
     ${midas_outdir} &> ${logs_dir}/xx_snps_${num_cores}.log"
 
 
-echo "Testing Across-Samples SNPs Module"
+echo "Testing Across-Samples SNV Module"
 midas2 merge_snps --samples_list ${pool_fp} \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --advanced --num_cores ${num_cores} --chunk_size 1000000 \
@@ -76,7 +68,15 @@ midas2 merge_snps --samples_list ${pool_fp} \
     &> ${logs_dir}/merge_snps_${num_cores}.log
 
 
-echo "Testing Single-Sample Genes Module With Existing Bowtie Database"
+echo "Testing Build Pan-Genome Bowtie2 Databases"
+midas2 build_bowtie2db --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
+    --species_profile  ${merge_midas_outdir}/species/species_prevalence.tsv \
+    --select_by sample_counts --select_threshold 1 --num_cores ${num_cores} \
+    --bt2_indexes_name pangenomes --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes \
+    &> ${logs_dir}/build_bowtie2_pan_${num_cores}.log
+
+
+echo "Testing Single-Sample CNV Module With Existing Bowtie Database"
 head -n 2 ${samples_fp} | xargs -Ixx bash -c \
     "midas2 run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} \
      --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} --select_threshold=-1 \
@@ -85,7 +85,7 @@ head -n 2 ${samples_fp} | xargs -Ixx bash -c \
      ${midas_outdir} &> ${logs_dir}/xx_genes_${num_cores}_w_bowtie2.log"
 
 
-echo "Testing Across-Samples Genes Module"
+echo "Testing Across-Samples CNV Module"
 midas2 merge_genes --samples_list ${pool_fp} --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
      --num_cores ${num_cores} --sample_counts 2 ${merge_midas_outdir} \
      &> ${logs_dir}/merge_genes_${num_cores}.log

@@ -5,11 +5,11 @@ import numpy as np
 
 from midas2.models.samplepool import SamplePool
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, OutputStream
+from midas2.common.utils import tsprint, OutputStream, args_string
 from midas2.params.schemas import species_profile_schema, species_prevalence_schema, format_data
 
 
-DEFAULT_MARKER_COVERAGE = 0.0
+DEFAULT_MARKER_COVERAGE = 1.0
 
 
 def register_args(main_func):
@@ -22,17 +22,17 @@ def register_args(main_func):
                            type=str,
                            required=True,
                            help=f"TSV file mapping sample name to run_species.py output directories")
-    subparser.add_argument('--median_marker_coverage',
-                           dest='median_marker_coverage',
+    subparser.add_argument('--min_cov',
+                           dest='min_cov',
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_MARKER_COVERAGE,
-                           help=f"Minimum per-sample median marker coverage for estimating species prevalence ({DEFAULT_MARKER_COVERAGE})")
+                           help=f"Minimum median marker coverage for estimating species prevalence (>={DEFAULT_MARKER_COVERAGE})")
     return main_func
 
 
 def compute_prevalence(rowvector, threshold):
-    return sum(1 if val > threshold else 0 for val in rowvector) #<--
+    return sum(1 if val >= threshold else 0 for val in rowvector) #<----
 
 
 def transpose(pool_of_samples, columns):
@@ -62,8 +62,7 @@ def compute_stats(tabundance, tcoverage):
         species_abun = tabundance[species_id][1:]
         species_cov = tcoverage[species_id][1:]
         values = [species_id, np.median(species_abun), np.mean(species_abun), \
-              np.median(species_cov), np.mean(species_cov), \
-              compute_prevalence(species_cov, args.median_marker_coverage)]
+              np.median(species_cov), np.mean(species_cov), compute_prevalence(species_cov, args.min_cov)]
         stats[species_id] = values
     return stats
 
@@ -106,6 +105,9 @@ def merge_species(args):
         pool_of_samples.init_samples("species")
         pool_of_samples.create_dirs(["outdir"], args.debug)
 
+        with OutputStream(pool_of_samples.get_target_layout("species_log")) as stream:
+            stream.write(f"Across samples abundant species merging in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
+
         # Slice the across-samples species profile matrix by species_id
         tsprint(f"MIDAS2::write_species_results::start")
         cols = list(species_profile_schema.keys())[1:]
@@ -128,5 +130,5 @@ def merge_species(args):
 
 @register_args
 def main(args):
-    tsprint(f"Merge species coverage profile in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Across samples abundant species merging in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     merge_species(args)
