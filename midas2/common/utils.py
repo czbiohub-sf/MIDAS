@@ -713,3 +713,9 @@ if __name__ == "__main__":
         n_sleepers = num_physical_cores * 31
     for n in range(max(1, n_sleepers - 3), n_sleepers + 4):
         test_sleepers(n, quiet=True)
+
+
+def args_string(args):
+    keys_to_ignore = ("zzz", "batch", "force")
+    new_args = dict((k, v) for k, v in vars(args).items() if not k.startswith(keys_to_ignore))
+    return new_args
