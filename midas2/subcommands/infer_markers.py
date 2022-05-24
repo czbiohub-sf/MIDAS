@@ -199,7 +199,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,

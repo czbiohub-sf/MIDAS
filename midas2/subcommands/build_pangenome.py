@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
-from midas2.common.argparser import add_subcommand, SUPPRESS
+from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
@@ -287,7 +287,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,

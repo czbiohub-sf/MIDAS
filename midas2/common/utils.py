@@ -716,6 +716,6 @@ if __name__ == "__main__":
 
 
 def args_string(args):
-    keys_to_ignore = ("zzz", "batch", "force")
+    keys_to_ignore = ("zzz", "batch", "force", "analysis_ready")
     new_args = dict((k, v) for k, v in vars(args).items() if not k.startswith(keys_to_ignore))
     return new_args

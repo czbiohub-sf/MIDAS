@@ -45,7 +45,7 @@ def register_args(main_func):
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids")
+                           help=f"Comma separated list of species ids OR path to species list txt file")
     subparser.add_argument('--species_profile',
                            dest='species_profile',
                            type=str,
@@ -62,7 +62,7 @@ def register_args(main_func):
                            type=str,
                            metavar="CHAR",
                            default=str(DEFAULT_SAMPLE_COUNTS),
-                           help=f"Comman separated correponsding cutoff for filtering species (> XX) ({DEFAULT_SAMPLE_COUNTS}, )")
+                           help=f"Comman separated correponsding cutoff to select_by (>XX) ({DEFAULT_SAMPLE_COUNTS}, )")
 
     subparser.add_argument('--num_cores',
                            dest='num_cores',

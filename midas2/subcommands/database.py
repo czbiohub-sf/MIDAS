@@ -23,7 +23,7 @@ def init_midasdb(args):
     midasdb.fetch_files("markerdb")
     midasdb.fetch_files("markerdb_models")
     midasdb.fetch_files("chunks")
-    # TODO: metadata and md5sum
+    midasdb.fetch_files("metadata")
     return True
 
 
@@ -37,7 +37,6 @@ def download_midasdb(args):
 
 
 def download_midasdb_master(args):
-
     def sliced_work(i):
         n = args.num_cores
         worker_cmd = f"PYTHONPATH={pythonpath()} {sys.executable} -m midas2 database --download -s {i}:{n} --midasdb_name {args.midasdb_name} --midasdb_dir {args.midasdb_dir} --zzz_worker_mode {'--debug' if args.debug else ''}"
@@ -63,11 +62,13 @@ def download_midasdb_master(args):
                 species_id_list.append(line.strip())
     else:
         species_id_list = decode_species_arg(args, species)
+
     nspecies = len(species_id_list)
     tsprint(f"  Downloading MIDAS database for {nspecies} species::start")
     midasdb.fetch_files("repgenome", species_id_list)
     midasdb.fetch_files("pangenome", species_id_list)
     tsprint(f"  Downloading MIDAS database for {nspecies} species::finish")
+    return True
 
 
 def download_midasdb_worker(args):
@@ -112,7 +113,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
@@ -128,7 +129,7 @@ def register_args(main_func):
                            dest='species_list',
                            type=str,
                            required=False,
-                           help="One-column species list file")
+                           help="Path to list of species TXT file.")
     return main_func
 
 

@@ -102,8 +102,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         self.db_dir = os.path.abspath(db_dir) # local dir
         self.db_name = MIDASDB_DICT[db_name] # remote dir
         self.num_cores = num_cores
-        self.has_md5sum = True if db_name in MD5SUM_JSON else False
-        self.md5sum = load_json(self.fetch_files("md5sum")) if self.has_md5sum else None # TODO: how to check the md5sum of the json file??
+        self.has_md5sum = db_name in MD5SUM_JSON
+        self.md5sum = load_json(self.fetch_files("md5sum")) if self.has_md5sum else None
         self.local_toc = self.fetch_files("toc" if self.has_md5sum else "table_of_contents")
         self.uhgg = UHGG(self.local_toc, db_name)
 
@@ -156,9 +156,8 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         if filename in get_tarball_layout():
             # Return Fetched Directory
             return self.fetch_tarball(filename, list_of_species)
-        else:
-            # Return Fetched File(s)
-            return self.fetch_individual_files(filename, list_of_species, rep_only)
+        # Return Fetched File(s)
+        return self.fetch_individual_files(filename, list_of_species, rep_only)
 
 
     def fetch_tarball(self, filename, list_of_species):
@@ -212,7 +211,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
             fetched_filenames = tarball_mapping[filename]
             rep_genomes = self.uhgg.representatives
             for sid, gid in rep_genomes.items():
-                for i,ct in enumerate(fetched_filenames):
+                for i, ct in enumerate(fetched_filenames):
                     _fetched_file = self.get_target_layout(ct, False, sid, gid, DEFAULT_CHUNKS[i])
                     md5_fetched = file_md5sum(_fetched_file)
                     md5_lookup = self.md5sum[filename][sid][ct]

@@ -8,7 +8,7 @@ import numpy as np
 import Bio.SeqIO
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv
+from midas2.common.utils import tsprint, num_physical_cores, InputStream, OutputStream, select_from_tsv, args_string
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
 from midas2.params.schemas import BLAST_M8_SCHEMA, MARKER_INFO_SCHEMA, species_profile_schema, format_data, DECIMALS6
@@ -17,7 +17,6 @@ from midas2.params.inputs import MIDASDB_NAMES
 
 DEFAULT_WORD_SIZE = 28
 DEFAULT_ALN_COV = 0.75
-DEFAULT_ALN_MAPID = 94.0
 DEFAULT_MARKER_READS = 2
 DEFAULT_MARKER_COVERED = 2
 
@@ -50,7 +49,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
 
     subparser.add_argument('--word_size',
                            dest='word_size',
@@ -188,16 +187,14 @@ def read_markers_info(fasta_file, map_file, genes_that_are_marker_fp):
     # Extract the mapping of <marker_id, genome_id, species_id> from the phyeco.map file
     markers_info = defaultdict(dict)
     markers_length = defaultdict(lambda: defaultdict(int))
-    markers_gene_list = defaultdict(lambda: defaultdict(list))
-    filter_cmd = f"grep -Fwf {genes_that_are_marker_fp}"
 
+    filter_cmd = f"grep -Fwf {genes_that_are_marker_fp}"
     with InputStream(map_file, filter_cmd) as stream:
         for r in select_from_tsv(stream, schema=MARKER_INFO_SCHEMA, result_structure=dict):
             markers_info[r["gene_id"]] = r
             markers_length[r['species_id']][r['marker_id']] += int(r["gene_length"])
-            markers_gene_list[r['species_id']][r['marker_id']].append(r["gene_id"])
         stream.ignore_errors()
-    return markers_info, markers_length, markers_gene_list
+    return markers_info, markers_length
 
 
 def find_best_hits(m8_file, markers_info, marker_cutoffs, args):
@@ -213,7 +210,6 @@ def find_best_hits(m8_file, markers_info, marker_cutoffs, args):
             cutoff = args.aln_mapid if args.aln_mapid is not None else cutoff
             if aln['pid'] < cutoff:
                 continue
-
             if query_coverage(aln) < args.aln_cov: # filter local alignments
                 continue
 
@@ -260,7 +256,6 @@ def assign_unique(alns, markers_info, args):
     unique_alns = defaultdict(lambda: defaultdict(dict))
     unique_counts = defaultdict(int)
     non_unique_counts = 0
-
     unique_reads = defaultdict(lambda: defaultdict(list))
     for aln in alns:
         if len(aln) == 1:
@@ -354,12 +349,16 @@ def merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_
         amb_covered = len(lom_amb)
         total_covered = len(set(lom_uniq + lom_amb))
 
-        species_covered_markers[spid] = {"total_covered":total_covered, "unique_covered":uniq_covered, "ambiguous_covered":amb_covered, "total_marker_counts": len(marker_dict.keys())}
-
+        species_covered_markers[spid] = {
+            "total_covered":total_covered,
+            "unique_covered":uniq_covered,
+            "ambiguous_covered":amb_covered,
+            "total_marker_counts": len(marker_dict.keys())
+        }
     return species_alns, species_covered_markers
 
 
-def normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list):
+def normalize_counts(species_alns, species_covered_markers, markers_length):
     """ Normalize counts by gene length and sum contrain """
 
     sp_abun = defaultdict(lambda: defaultdict(int)) # indexed by <species_id>
@@ -408,7 +407,7 @@ def write_abundance(species_path, sp_abun):
         for species_id in output_order:
             r = sp_abun[species_id]
             record = [species_id, r['read_counts'], r['median_coverage'], r['coverage'],
-                        r['relative_abundance'], r['unique_fraction_covered']]
+                      r['relative_abundance'], r['unique_fraction_covered']]
             outfile.write("\t".join(map(format_data, record, repeat(DECIMALS6, len(record)))) + "\n")
 
 
@@ -417,6 +416,9 @@ def run_species(args):
     try:
         sample = Sample(args.sample_name, args.midas_outdir, "species")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
+
+        with OutputStream(sample.get_target_layout("species_log")) as stream:
+            stream.write(f"Single sample abundant species profiling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
 
         tsprint(f"MIDAS2::fetch_midasdb_files::start")
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
@@ -439,7 +441,7 @@ def run_species(args):
 
         tsprint(f"MIDAS2::read in marker information::start")
         genes_that_are_marker_fp = sample.get_target_layout("species_marker_genes")
-        markers_info, markers_length, markers_gene_list = read_markers_info(marker_db_files["fa"], marker_db_files["map"], genes_that_are_marker_fp)
+        markers_info, markers_length = read_markers_info(marker_db_files["fa"], marker_db_files["map"], genes_that_are_marker_fp)
         tsprint(f"MIDAS2::read in marker information::finish")
 
         # Classify reads
@@ -458,10 +460,12 @@ def run_species(args):
         # Estimate species abundance
         tsprint(f"MIDAS2::normalize_counts::start")
         species_alns, species_covered_markers = merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length)
-        species_abundance = normalize_counts(species_alns, species_covered_markers, markers_length, markers_gene_list)
+        species_abundance = normalize_counts(species_alns, species_covered_markers, markers_length)
         tsprint(f"MIDAS2::normalize_counts::finish")
-
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
+
+        if not args.debug:
+            sample.remove_dirs(["tempdir"])
 
     except Exception as error:
         if not args.debug:
@@ -472,5 +476,5 @@ def run_species(args):
 
 @register_args
 def main(args):
-    tsprint(f"Species abundance estimation in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
+    tsprint(f"Single sample abundant species profiling in subcommand {args.subcommand} with args\n{json.dumps(vars(args), indent=4)}")
     run_species(args)

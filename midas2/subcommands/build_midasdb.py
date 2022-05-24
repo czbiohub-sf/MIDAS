@@ -314,7 +314,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"MIDAS Database name.")
+                           help=f"Path to local MIDAS Database.")
     subparser.add_argument('--generate_gene_feature',
                            action='store_true',
                            default=False,

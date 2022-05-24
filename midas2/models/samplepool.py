@@ -23,14 +23,16 @@ def get_pool_layout(dbtype=""):
             "species_marker_read_counts":        f"species/species_marker_read_counts.tsv",
             "species_marker_coverage":           f"species/species_marker_coverage.tsv",
             "species_median_marker_coverage":    f"species/species_marker_median_coverage.tsv",
-            "species_marker_relative_abundance": f"species/spcies_relative_abundance.tsv",
+            "species_marker_relative_abundance": f"species/species_relative_abundance.tsv",
             "species_unique_fraction_covered":   f"species/species_unique_fraction_covered.tsv",
+            "species_log":                       f"species/species_log.txt",
 
             # SNPs
             "snps_summary":                     f"snps/snps_summary.tsv",
             "snps_info":                        f"snps/{species_id}/{species_id}.snps_info.tsv.lz4",
             "snps_freq":                        f"snps/{species_id}/{species_id}.snps_freqs.tsv.lz4",
             "snps_depth":                       f"snps/{species_id}/{species_id}.snps_depth.tsv.lz4",
+            "snps_log":                         f"snps/snps_log.txt",
 
             "snps_list_of_contigs":             f"temp/{dbtype}/{species_id}/cid.{chunk_id}_list_of_contigs",
             "snps_info_by_chunk":               f"temp/{dbtype}/{species_id}/cid.{chunk_id}_snps_info.tsv.lz4",
@@ -43,6 +45,7 @@ def get_pool_layout(dbtype=""):
             "genes_depth":                     f"genes/{species_id}/{species_id}.genes_depth.tsv.lz4",
             "genes_copynum":                   f"genes/{species_id}/{species_id}.genes_copynum.tsv.lz4",
             "genes_presabs":                   f"genes/{species_id}/{species_id}.genes_presabs.tsv.lz4",
+            "genes_log":                       f"genes/genes_log.txt",
 
             "genes_reads_by_chunk":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_reads.tsv.lz4",
             "genes_depth_by_chunk":            f"temp/{dbtype}/{species_id}/cid.{chunk_id}_genes_depth.tsv.lz4",

@@ -147,7 +147,7 @@ def register_args(main_func):
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Local MIDAS Database path mirroing S3.")
+                           help=f"Path to local MIDAS Database.")
     subparser.add_argument('--chunk_type',
                            dest='chunk_type',
                            type=str,
