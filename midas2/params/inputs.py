@@ -20,7 +20,7 @@ MIDASDB_NAMES = list(MIDASDB_DICT.keys())
 
 MD5SUM_JSON = {
     "uhgg": "cf71fe7a82f01b81cafb4944cd3a0017",
-    "gtdb": ""
+    "gtdb": "cea856e55d0dfb82bc3d20b3b2267d5c"
 }
 
 marker_set = "phyeco"
