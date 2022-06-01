@@ -2,7 +2,7 @@
 # See https://github.com/czbiohub/MIDAS2.0/wiki/MIDAS-DB#inputs
 
 igg = "s3://microbiome-pollardlab"
-server="http://midasdb.pollard.gladstone.org"
+server="https://midasdb.pollard.gladstone.org"
 
 MIDASDB_DICT = {
     "uhgg": f"{server}/uhgg",

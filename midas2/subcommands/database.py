@@ -20,10 +20,14 @@ def list_midasdb(args):
 
 def init_midasdb(args):
     midasdb = MIDAS_DB(args.midasdb_dir, args.midasdb_name, 1)
+    tsprint(f"Initate MIDASDB {args.midasdb_name} to {args.midasdb_dir}::start")
     midasdb.fetch_files("markerdb")
     midasdb.fetch_files("markerdb_models")
-    midasdb.fetch_files("chunks")
     midasdb.fetch_files("metadata")
+    tsprint(f"Initate MIDASDB {args.midasdb_name} to {args.midasdb_dir}::finish")
+    tsprint(f"Download chunks for MIDASDB {args.midasdb_name} to {args.midasdb_dir}::start")
+    midasdb.fetch_files("chunks")
+    tsprint(f"Download chunks for MIDASDB {args.midasdb_name} to {args.midasdb_dir}::finish")
     return True
 
 
