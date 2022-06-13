@@ -4,4 +4,4 @@ Metagenomic Intra-Species Diversity Analysis ([MIDAS](https://genome.cshlp.org/c
 
 MIDAS 2.0 used the same analysis workflow as the original [MIDAS tool](https://github.com/snayfach/MIDAS), and is engineered to work with more comprehensive MIDAS Reference Databases (MIDASDBs), and to run on  collections of thousands of samples in a fast and scalable manner. 
 
-MIDAS 2.0 user manual is available at [ReadTheDocs](https://midas2-tutorial.readthedocs.io/en/stable/).
+MIDAS 2.0 user manual is available at [ReadTheDocs](https://midas20.readthedocs.io/en/latest/#).
