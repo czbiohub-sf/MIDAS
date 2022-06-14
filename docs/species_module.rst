@@ -72,9 +72,6 @@ profiling results for the samples listed our
 
   midas2 merge_species \
     --samples_list list_of_samples.tsv \
-    --midasdb_name uhgg \
-    --midasdb_dir my_midasdb_uhgg \
-    --num_cores 4 \
     --min_cov 2 \
     midas2_output/merge
 
