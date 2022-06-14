@@ -338,11 +338,11 @@ Adjust Population SNV Filters
 Advanced users can refer to :ref:`this page<population_snv_calling>` for understanding the compute of population SNV.
 The species, sample, and site filters for the across-samples SNV calling can be customized with command-line options. For example,
 
--   We can select species with ``horizontal coverage > 40%``, ``vertical coverage > 3X`` and present in more than 30 relevant samples:
+-   We can select species with ``horizontal coverage > 40%``, ``vertical coverage > 3X`` and present in more than 2 relevant samples:
 
 .. code-block:: shell
 
-    --genome_coverage 0.4 --genome_depth 3 --sample_counts 30
+    --genome_coverage 0.4 --genome_depth 3 --sample_counts 2
 
 -   We can apply the following site selections: only consider site with ``read depth >= 5``, and ``read depth <= 3 * genome_depth``, and the minimal allele frequency to call an allele present is 0.05.
 
@@ -364,7 +364,7 @@ Now we can put all the above-mentioned filters in one `merge_snps` command:
       --samples_list list_of_samples.tsv \
       --midasdb_name uhgg \
       --midasdb_dir my_midasdb_uhgg \
-      --genome_coverage 0.4 --genome_depth 3 --sample_counts 30 \
+      --genome_coverage 0.4 --genome_depth 3 --sample_counts 2 \
       --site_depth 5 --site_ratio 3 --snp_maf 0.05 \
       --snp_type bi --snv_type common --site_prev 0.8 --locus_type CDS --snp_pooled_method prevalence \
       --num_cores 8 \
