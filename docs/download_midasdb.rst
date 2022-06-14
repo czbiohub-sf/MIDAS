@@ -4,7 +4,7 @@ Downloading the MIDASDB
 =======================
 
 MIDAS Reference Database (MIDASDB) is comprised of three components: representative genomes,
-species pangenomes, and marker genes.
+species pangenomes, and marker genes. For each MIDASDB, six-digit numeric species ids are randomly assigned and stored in the corresponding metadata file (``metadata.tsv``).
 
 
 .. figure:: images/Fig2.MIDASDB.png
