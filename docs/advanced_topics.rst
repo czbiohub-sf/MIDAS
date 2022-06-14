@@ -107,6 +107,9 @@ There are two command-line parameters that users need to pass:
 - ``--debug``: keep the local file after successfully build the database
 - ``--force``: re-build the database even if already locally exists
 
+Six-digit numeric species ids are randomly assigned and stored in the corresponding metadata file (``metadata.tsv``)
+
+
 MIDAS 2.0 reserved the ``--midasdb_name newdb`` for building custome MIDASDB, and the new MIDASDB will be built at ``--midasdb_dir``.
 
 Rep-genome
