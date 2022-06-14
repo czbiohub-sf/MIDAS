@@ -12,6 +12,7 @@ species pangenomes, and marker genes. For each MIDASDB, six-digit numeric specie
   :align: center
 
 
+
 For MIDAS 2.0, we have already built two
 MIDASDBs from large, public, microbial genome databases:
 
