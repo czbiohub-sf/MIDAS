@@ -93,7 +93,7 @@ The FASTA/FASTQ file containing single-end or paired-ends sequencing reads needs
 
 .. code-block:: shell
 
-    --R1 /path/to/R1.fastq.gz  --R2 /path/to/R2.fastq.gz
+    -1 /path/to/R1.fastq.gz  -2 /path/to/R2.fastq.gz
 
 
 Across-samples Commands
