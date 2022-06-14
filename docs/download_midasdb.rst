@@ -83,7 +83,7 @@ Parsing the MIDAS 2.0 :ref:`output files<across_samples_species_profile>` (``mid
 
 .. code-block:: shell
 
-  awk '$6 > 1 {print $6}' midas2_output/merge/species/species_prevalence.tsv > all_species_list.tsv
+  awk '$6 > 1 {print $1}' midas2_output/merge/species/species_prevalence.tsv > all_species_list.tsv
 
 
 Finally, we can download database components (both reference genomes and pangenome collections) based on these species.
