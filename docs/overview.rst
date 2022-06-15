@@ -1,16 +1,16 @@
 #######################################
-MIDAS 2.0 Overview
+MIDAS2 Overview
 #######################################
 
-MIDAS 2.0 was developed to address the computational challenges presented by
+MIDAS2 was developed to address the computational challenges presented by
 increasingly large reference genome databases.
-MIDAS 2.0 implements the same analyses as the original
+MIDAS2 implements the same analyses as the original
 `MIDAS tool <https://github.com/snayfach/MIDAS>`_, but re-engineered to
 
 #. host multiple MIDAS Reference Database (MIDAS DB) from public microbial genome collections
 #. enable thousands of metagenomic samples to be efficiently genotyped.
 
-MIDAS 2.0 contains two analysis modules focused on:
+MIDAS2 contains two analysis modules focused on:
 
 #. Single nucleotide variants (SNV): :ref:`SNV module <snv_module>`
 #. Pan-genome copy number variation (CNV): :ref:`CNV module <cnv_module>`
@@ -26,7 +26,7 @@ cross-samples merging.
 MIDAS Reference Database
 ========================
 
-MIDAS 2.0, as any reference-based strain-level genomic variation analysis
+MIDAS2, as any reference-based strain-level genomic variation analysis
 pipeline, also presuppose a reference database construction step has already
 taken place.
 The MIDAS Reference Database (MIDASDB) refers to a set of custom files needed
@@ -41,11 +41,11 @@ representing 31,007 high-quality bacterial genome.
 However, in the past few years, the number of sequenced microbial genomes have
 increased vastly, in particular with the addition of metagenome-assembled
 genomes (MAGs) sequenced from varied habitats.
-Therefore, it is necessary to update MIDAS 2.0 reference database accordingly.
+Therefore, it is necessary to update MIDAS2 reference database accordingly.
 On the other hand, processing the large amount of available genome sequences
 poses a significant computational challenge.
 
-For MIDAS 2.0, instead of generating the species clusters from scratch, we take
+For MIDAS2, instead of generating the species clusters from scratch, we take
 advantage of two published collections of prokaryotic genome databases, and
 build the new MIDASDB for both.
 
@@ -55,7 +55,7 @@ More information about these genome collections can be found in
 Command-line Usage
 ==================
 
-MIDAS 2.0 operates through a command-line interface (CLI).
+MIDAS2 operates through a command-line interface (CLI).
 This interface enables reproducible analyses and allows MIDAS to be
 integrated into workflow management frameworks.
 
@@ -68,8 +68,8 @@ Common CLI Options
 Output Directory
 ----------------
 
-MIDAS 2.0 writes its outputs to a user-specified root directory,
-which is always passed as a mandatory argument to each of the MIDAS 2.0 analyses command.
+MIDAS2 writes its outputs to a user-specified root directory,
+which is always passed as a mandatory argument to each of the MIDAS2 analyses command.
 
 For example, in :ref:`Quickstart<demo_midas_ourdir>`, ``midas2_output`` is the chosen output directory, and all analyses steps operate within it.
 
@@ -119,7 +119,7 @@ A template is shown here:
 MIDAS Reference Database
 ------------------------
 
-For all MIDAS 2.0 analysis, users need to choose
+For all MIDAS2 analysis, users need to choose
 
 #. a valid precomputed MIDASDB name (uhgg, gtdb) as ``--midasdb_name``
 #. a valid local path for the downloaded MIDASDB ``--midasdb_dir``.
@@ -133,4 +133,4 @@ Others Parameters
 
 Users can set the ``--num_cores`` to the number of physical cores to use: e.g. ``--num_cores 16``.
 
-And all MIDAS 2.0 analyses can print out the full help message and exit by ``-h`` or ``--help``.
+And all MIDAS2 analyses can print out the full help message and exit by ``-h`` or ``--help``.

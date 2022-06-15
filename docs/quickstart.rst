@@ -5,10 +5,10 @@ Setup
 *****
 
 
-Install MIDAS 2.0
+Install MIDAS2
 -----------------
 
-On a Linux machine, download a copy of MIDAS 2.0 from our GitHub repository, and
+On a Linux machine, download a copy of MIDAS2 from our GitHub repository, and
 install the dependencies. We do not currently support non-Linux environments.
 
 
@@ -20,18 +20,18 @@ install the dependencies. We do not currently support non-Linux environments.
 
 .. code-block:: shell
 
-  $ git clone https://github.com/czbiohub/MIDAS2.0.git
-  $ cd MIDAS2.0
+  $ git clone https://github.com/czbiohub/MIDAS2.git
+  $ cd MIDAS2
 
-  $ conda env create -n midas2.0 -f midas2.yml
-  $ conda activate midas2.0
+  $ conda env create -n midas2 -f midas2.yml
+  $ conda activate midas2
   $ cpanm Bio::SearchIO::hmmer --force # Temporary fix for Prokka
 
-Install MIDAS2.0.
+Install MIDAS2.
 
 .. code-block:: shell
 
-  $ pip install .
+  $ pip install midas2
 
 
 Alternative installation procedures are also :ref:`described elsewhere<installation>`.
@@ -169,7 +169,7 @@ We can take a look at the ``list_of_samples.tsv``:
   sample2	midas2_output
 
 
-Based on this output, we can run ``merge_snps`` and MIDAS 2.0 will know to
+Based on this output, we can run ``merge_snps`` and MIDAS2 will know to
 look at ``midas2_output/sample1/snps/snps_summary.tsv`` for the ``run_snps``
 output from sample1.
 

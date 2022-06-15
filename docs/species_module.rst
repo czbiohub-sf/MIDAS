@@ -9,7 +9,7 @@ Microbiome data usually contains hundreds of species in one sample,
 and an ideal reference database is both representative and
 comprehensive in terms of the abundant species in the sample. A badly chosen reference may suffer
 both from ambiguous mapping of reads to two or more sequences or spurious cross-mapping to
-incorrect sequences. Therefore, a typical MIDAS 2.0 workflow starts with a species selection step,
+incorrect sequences. Therefore, a typical MIDAS2 workflow starts with a species selection step,
 which filters the MIDASDB to sufficiently abundant species in each particular
 sample.
 
@@ -21,7 +21,7 @@ sample.
 Single-Sample Analysis
 ======================
 
-MIDAS 2.0 estimates species coverage by profiling the coverage of universal,
+MIDAS2 estimates species coverage by profiling the coverage of universal,
 single copy, taxonomic marker genes (SCGs, 15 per species), to quickly
 determine which species are abundant in the sample.
 
@@ -50,7 +50,7 @@ determine which species are abundant in the sample.
 
 .. note::
 
-  The first time ``run_species`` is used, MIDAS 2.0 will automatically download
+  The first time ``run_species`` is used, MIDAS2 will automatically download
   the marker gene database.
 
 .. warning::
@@ -160,7 +160,7 @@ Where the columns have the following meaning:
     run MIDAS multiple times with different parameters.
 
 
-MIDAS 2.0 also writes two species-by-sample matrices in the output
+MIDAS2 also writes two species-by-sample matrices in the output
 directory: ``midas2_output/merge/species``.
 Median marker coverage, and unique fraction covered are written to
 ``midas2_output/merge/species/species_marker_median_coverage.tsv`` and

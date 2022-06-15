@@ -3,22 +3,22 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to MIDAS 2.0
+Welcome to MIDAS2
 ====================================
 
 
-Metagenomic Intra-Species Diversity Analysis System 2.0 (MIDAS 2.0) is an
+Metagenomic Intra-Species Diversity Analysis System 2 (MIDAS2) is an
 integrated pipeline for profiling single nucleotide variants (SNVs) and gene
-copy number variants (CNVs) in shotgun metagenomic reads. MIDAS 2.0 implements
+copy number variants (CNVs) in shotgun metagenomic reads. MIDAS2 implements
 the same analyses as the original
 `MIDAS <https://github.com/snayfach/MIDAS>`_,
 but re-engineered to addresses the computational challenges presented by
 increasingly large reference genome databases.
 
-MIDAS 2.0 was developed by `Chunyu Zhao <chunyu.zhao@czbiohub.org>`_
+MIDAS2 was developed by `Chunyu Zhao <chunyu.zhao@czbiohub.org>`_
 and Boris Dimitrov in the `Pollard Lab <https://docpollard.org/>`_ at
 Chan Zuckerberg Biohub.
-MIDAS 2.0 expands on the original MIDAS developed by
+MIDAS2 expands on the original MIDAS developed by
 `Stephen Nayfach <snayfach@gmail.com>`_.
 
 

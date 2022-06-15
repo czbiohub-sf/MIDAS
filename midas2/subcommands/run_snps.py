@@ -284,7 +284,7 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
     global dict_of_species
     global sample
 
-    tsprint(f"  MIDAS::filter_bam_by_single_read::{species_id}-0::start filter_bam_by_single_read")
+    tsprint(f"  MIDAS2::filter_bam_by_single_read::{species_id}-0::start filter_bam_by_single_read")
 
     # List of contigs for given species
     sp = dict_of_species[species_id]
@@ -322,7 +322,7 @@ def filter_bam_by_single_read(species_id, repbamfile, filtered_bamfile):
         filtered_bam.write(aln)
     filtered_bam.close()
 
-    tsprint(f"  MIDAS::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
+    tsprint(f"  MIDAS2::filter_bam_by_single_read::{species_id}-0::finish filter_bam_by_single_read")
     return reads_stats
 
 
@@ -333,7 +333,7 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
     global dict_of_species
     global sample
 
-    tsprint(f"  MIDAS::filter_bam_by_proper_pair::{species_id}-0::start filter_bam_by_proper_pair")
+    tsprint(f"  MIDAS2::filter_bam_by_proper_pair::{species_id}-0::start filter_bam_by_proper_pair")
 
     # List of contigs for given species
     sp = dict_of_species[species_id]
@@ -455,7 +455,7 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
         filtered_bam.write(alns["rev"])
     filtered_bam.close()
 
-    tsprint(f"  MIDAS::filter_bam_by_proper_pair::{species_id}-0::finish filter_bam_by_proper_pair")
+    tsprint(f"  MIDAS2::filter_bam_by_proper_pair::{species_id}-0::finish filter_bam_by_proper_pair")
     return reads_stats
 
 
@@ -497,17 +497,17 @@ def process_chunk_of_sites(packed_args):
         global dict_of_species
         sp = dict_of_species[species_id]
 
-        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::wait merge_chunks_per_species")
+        tsprint(f"  MIDAS2::process_chunk_of_sites::{species_id}-{chunk_id}::wait merge_chunks_per_species")
         for _ in range(sp.num_of_snps_chunks):
             semaphore_for_species[species_id].acquire()
-        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::start merge_chunks_per_species")
+        tsprint(f"  MIDAS2::process_chunk_of_sites::{species_id}-{chunk_id}::start merge_chunks_per_species")
         ret = merge_chunks_per_species(species_id)
-        tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::finish merge_chunks_per_species")
+        tsprint(f"  MIDAS2::process_chunk_of_sites::{species_id}-{chunk_id}::finish merge_chunks_per_species")
         return ret
 
-    tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
+    tsprint(f"  MIDAS2::process_chunk_of_sites::{species_id}-{chunk_id}::start compute_pileup_per_chunk")
     ret = compute_pileup_per_chunk(packed_args)
-    tsprint(f"  MIDAS::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
+    tsprint(f"  MIDAS2::process_chunk_of_sites::{species_id}-{chunk_id}::finish compute_pileup_per_chunk")
 
     return ret
 
@@ -793,32 +793,32 @@ def run_snps(args):
 
         species_ids_of_interest = species_list if no_filter else sample.select_species(args, species_list)
         species_counts = len(species_ids_of_interest)
-
-        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
         assert species_counts > 0, f"No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(len(species_ids_of_interest))
 
+        sample.create_species_subdirs(species_ids_of_interest, "temp", args.debug, quiet=True)
+
         # Fetch representative genome fastas for each species (multiprocessing)
-        tsprint(f"MIDAS::design_chunks::start")
+        tsprint(f"MIDAS2::design_chunks::start")
         num_cores_download = min(args.num_cores, species_counts)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores_download)
         midas_db.fetch_files("repgenome", species_ids_of_interest)
         arguments_list = design_chunks(species_ids_of_interest, midas_db, args.chunk_size)
-        tsprint(f"MIDAS::design_chunks::finish")
+        tsprint(f"MIDAS2::design_chunks::finish")
 
         # Build Bowtie indexes for species in the restricted species profile
-        tsprint(f"MIDAS::build_bowtie2db::start")
+        tsprint(f"MIDAS2::build_bowtie2db::start")
         contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
         build_bowtie2_db(bt2db_dir, bt2db_name, contigs_files, args.num_cores)
-        tsprint(f"MIDAS::build_bowtie2db::finish")
+        tsprint(f"MIDAS2::build_bowtie2db::finish")
 
-        tsprint(f"MIDAS::bowtie2_align::start")
+        tsprint(f"MIDAS2::bowtie2_align::start")
         repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam")
         bowtie2_align(bt2db_dir, bt2db_name, repgenome_bamfile, args)
         samtools_index(repgenome_bamfile, args.debug, args.num_cores)
-        tsprint(f"MIDAS::bowtie2_align::finish")
+        tsprint(f"MIDAS2::bowtie2_align::finish")
 
-        tsprint(f"MIDAS::filter_bam::start")
+        tsprint(f"MIDAS2::filter_bam::start")
         args_list = []
         for species_id in species_ids_of_interest:
             repgenome_bamfile = sample.get_target_layout("snps_repgenomes_bam") # input
@@ -828,18 +828,18 @@ def run_snps(args):
 
         cores_per_species = max(4, floor(args.num_cores/species_counts))
         multiprocessing_map(sort_bam, [(species_id, cores_per_species) for species_id in species_ids_of_interest], floor(args.num_cores/cores_per_species))
-        tsprint(f"MIDAS::filter_bam::finish")
+        tsprint(f"MIDAS2::filter_bam::finish")
 
-        tsprint(f"MIDAS::multiprocessing_map::start")
+        tsprint(f"MIDAS2::multiprocessing_map::start")
         chunks_pileup_summary = multiprocessing_map(process_chunk_of_sites, arguments_list, args.num_cores)
-        tsprint(f"MIDAS::multiprocessing_map::finish")
+        tsprint(f"MIDAS2::multiprocessing_map::finish")
 
-        tsprint(f"MIDAS::write_species_pileup_summary::start")
+        tsprint(f"MIDAS2::write_species_pileup_summary::start")
         snps_summary_fp = sample.get_target_layout("snps_summary")
 
         dict_of_chunk_aln_stats = compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
         write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, dict_of_chunk_aln_stats)
-        tsprint(f"MIDAS::write_species_pileup_summary::finish")
+        tsprint(f"MIDAS2::write_species_pileup_summary::finish")
 
         if not args.debug:
             sample.remove_dirs(["tempdir"])

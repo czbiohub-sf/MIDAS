@@ -40,7 +40,7 @@ RUN conda clean --all -y
 RUN cpanm Bio::SearchIO::hmmer --force
 
 
-RUN pip3 install 'git+https://github.com/czbiohub/MIDAS2.0.git' --upgrade
+RUN pip3 install 'git+https://github.com/czbiohub/MIDAS2.git' --upgrade
 RUN midas2 --version
 
 

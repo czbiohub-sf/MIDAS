@@ -1,4 +1,4 @@
-name: midas2.0
+name: midas2
 channels:
   - anaconda
   - bioconda

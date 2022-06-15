@@ -13,7 +13,7 @@ species pangenomes, and marker genes. For each MIDASDB, six-digit numeric specie
 
 
 
-For MIDAS 2.0, we have already built two
+For MIDAS2, we have already built two
 MIDASDBs from large, public, microbial genome databases:
 
 .. code-block:: shell
@@ -79,7 +79,7 @@ sharding to download and decompress only the necessary portions of a
 MIDASDB.
 
 Afterwards, we can collect a list of species present in a list of samples.
-Parsing the MIDAS 2.0 :ref:`output files<across_samples_species_profile>` (``midas2_output/merge/species/species_prevalence.tsv``) presents a convenient way to do this.
+Parsing the MIDAS2 :ref:`output files<across_samples_species_profile>` (``midas2_output/merge/species/species_prevalence.tsv``) presents a convenient way to do this.
 
 .. code-block:: shell
 

@@ -82,26 +82,26 @@ def build_bowtie2db(args):
             species_ids_of_interest = filter_species(args.species_profile, args.select_by, args.select_threshold)
         else:
             raise Exception(f"Need to provide either species_list or species_profile as input arguments")
-        tsprint(f"MIDAS::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
+        tsprint(f"MIDAS2::build_bowtie2db::build bt2 indexees for the listed species: {species_ids_of_interest}")
 
         # Fetch MIDAS Reference Database Files
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, args.num_cores)
 
         if args.bt2_indexes_name == "repgenomes":
-            tsprint(f"MIDAS::build_bowtie2_repgenomes_indexes::start")
+            tsprint(f"MIDAS2::build_bowtie2_repgenomes_indexes::start")
             midas_db.fetch_files("repgenome", species_ids_of_interest)
             contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
             tsprint(contigs_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, contigs_files, args.num_cores)
-            tsprint(f"MIDAS::build_bowtie2_repgenomes_indexes::finish")
+            tsprint(f"MIDAS2::build_bowtie2_repgenomes_indexes::finish")
 
         if args.bt2_indexes_name == "pangenomes":
-            tsprint(f"MIDAS::build_bowtie2_pangenomes_indexes::start")
+            tsprint(f"MIDAS2::build_bowtie2_pangenomes_indexes::start")
             midas_db.fetch_files("pangenome", species_ids_of_interest)
             centroids_files = midas_db.fetch_files("pangenome_centroids", species_ids_of_interest)
             tsprint(centroids_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, centroids_files, args.num_cores)
-            tsprint(f"MIDAS::build_bowtie2_pangenomes_indexes::finish")
+            tsprint(f"MIDAS2::build_bowtie2_pangenomes_indexes::finish")
 
     except Exception as error:
         if not args.debug:

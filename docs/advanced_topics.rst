@@ -43,9 +43,9 @@ Important Concepts
 Population SNV Computation
 --------------------------
 
-There are three main steps to compute and report population SNV in MIDAS 2.0.
+There are three main steps to compute and report population SNV in MIDAS2.
 
-First, for each relevant genomic site, MIDAS 2.0 determines the set of alleles present across all relevant samples.
+First, for each relevant genomic site, MIDAS2 determines the set of alleles present across all relevant samples.
 Specifically, for each allele (A, C, G, T), ``merge_snps`` command
 
 #. tallys the sample counts (``sc_``) of relevant samples containing corresponding allele (``scA:scT``)
@@ -65,9 +65,9 @@ the population minor allele refers to the second most prevalent/abundant allele.
 For example, the population major allele of the site ``gnl|Prokka|UHGG000587_14|34360|A`` in the above example is ``A`` defined
 by accumulated read counts and ``C`` defined by accumulated sample counts.
 
-Third, MIDAS 2.0 collects and reports the sample-by-site matrix of the corresponding (1) site depth and (2)
+Third, MIDAS2 collects and reports the sample-by-site matrix of the corresponding (1) site depth and (2)
 allele frequency of the above calculated population minor allele for all the relevant samples.
-In these two matrices, MIDAS 2.0 encode ``site_depth = 0`` and ``allele_frequency = -1`` with the special meaning of missing <site, sample> pair.
+In these two matrices, MIDAS2 encode ``site_depth = 0`` and ``allele_frequency = -1`` with the special meaning of missing <site, sample> pair.
 
 
 Chunkified Pileup Implementation
@@ -82,7 +82,7 @@ With the uses of multiple CPUs, multiple chunks can be processed at the same tim
 Therefore, for large collections of samples, we recommend higher CPU counts and smaller chunk size to
 optimally balance memory and I/O usage, especially for highly prevalent species.
 Users can adjust the number of sites per chunk via ``chunk_size`` (default value = 1000000).
-MIDAS 2.0 also has a ``robust_chunk`` option, where assigning different chunk sizes to different species based on the species prevalence.
+MIDAS2 also has a ``robust_chunk`` option, where assigning different chunk sizes to different species based on the species prevalence.
 
 
 
@@ -91,7 +91,7 @@ MIDAS 2.0 also has a ``robust_chunk`` option, where assigning different chunk si
 Build Your Own MIDASDB
 **********************
 
-MIDAS 2.0 users can locally build a new MIDASDB for a custom collection of genomes.
+MIDAS2 users can locally build a new MIDASDB for a custom collection of genomes.
 The target layout of MIDASDB can be found at :ref:`MIDASDB Layout<db_layout>`.
 This section is focused specifically on the database construction commands.
 
@@ -110,7 +110,7 @@ There are two command-line parameters that users need to pass:
 Six-digit numeric species ids are randomly assigned and can be stored in the corresponding metadata file (``metadata.tsv``)
 
 
-MIDAS 2.0 reserved the ``--midasdb_name newdb`` for building custome MIDASDB, and the new MIDASDB will be built at ``--midasdb_dir``.
+MIDAS2 reserved the ``--midasdb_name newdb`` for building custome MIDASDB, and the new MIDASDB will be built at ``--midasdb_dir``.
 
 Rep-genome
 ----------
@@ -168,7 +168,7 @@ Build Your Own Genome Index
 ***************************
 
 
-MIDAS 2.0 builds sample-specific rep-genome or pan-genome index for species in the restricted species profile.
+MIDAS2 builds sample-specific rep-genome or pan-genome index for species in the restricted species profile.
 However, we recognize the needs of using one comprehensive list of species across samples in the same study.
 And in this section, we will go over the steps of building one genome index a list of customized species across a given panel of samples.
 

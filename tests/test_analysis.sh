@@ -32,7 +32,7 @@ rm -rf ${pool_fp}
 
 ls "${testdir}/reads" | awk -F '_' '{print $1}' > ${samples_fp}
 
-echo "MIDAS 2.0 Unit Testing Start"
+echo "MIDAS2 Unit Testing Start"
 
 echo -e "sample_name\tmidas_outdir" > ${pool_fp}
 cat ${samples_fp} | awk -v OFS='\t' -v dir=$midas_outdir '{print $1, dir}' >> ${pool_fp}
@@ -91,4 +91,4 @@ midas2 merge_genes --samples_list ${pool_fp} --midasdb_name ${midas_dbname} --mi
      &> ${logs_dir}/merge_genes_${num_cores}.log
 
 
-echo "MIDAS 2.0 Unit Testing SUCCESS"
+echo "MIDAS2 Unit Testing SUCCESS"
