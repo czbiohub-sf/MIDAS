@@ -33,7 +33,8 @@ can install from source (dependencies installed with Conda).
   $ conda activate midas2
   $ cpanm Bio::SearchIO::hmmer --force # Temporary fix for Prokka
 
-  $ pip install .
+  $ pip install midas2
+
 
 .. tip::
 

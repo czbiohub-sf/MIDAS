@@ -31,7 +31,7 @@ Install MIDAS2.
 
 .. code-block:: shell
 
-  $ pip install .
+  $ pip install midas2
 
 
 Alternative installation procedures are also :ref:`described elsewhere<installation>`.
