@@ -270,20 +270,6 @@ Users can adjust post-alignment filters via the following command-line options (
 - ``--fragment_length 5000``: maximum fragment length for paired-end alignment. Incorrect fragment length would affect the number of proper-aligned read pairs
 
 
-.. code-block:: shell
-
-    midas2 run_snps
-      --sample_name sample1 \
-      -1 reads/sample1_R1.fastq.gz \
-      --midasdb_name uhgg \
-      --midasdb_dir my_midasdb_uhgg \
-      --select_by median_marker_coverage,unique_fraction_covered \
-      --select_threshold=2,0.5 \
-      --fragment_length 3000 --paired_only \
-      --num_cores 8 \
-      midas2_output
-
-
 Single-Sample Advanced SNV Calling
 ----------------------------------
 
