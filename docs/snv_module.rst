@@ -261,7 +261,7 @@ Single-Sample Post-alignment Filter
 
 Users can adjust post-alignment filters via the following command-line options (default values indicated):
 
-- ``--mapq >= 20``: discard read alignment with alignment quality < 20
+- ``--mapq >= 10``: discard read alignment with alignment quality < 10
 - ``--mapid >= 0.94``: discard read alignment with alignment identity < 0.94
 - ``--aln_readq >= 20``: discard read alignment with mean quality < 20
 - ``--aln_cov >= 0.75``: discard read alignment with alignment coverage < 0.75
