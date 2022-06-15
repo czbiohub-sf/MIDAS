@@ -33,7 +33,7 @@ def aws_batch_submit(args):
     assert_have_aegea()
     # Replace anything that's not alphanumeric in batch_command with '_'
     name = str.join('', (c if c.isalnum() else '_' for c in args.batch_command))
-    cmd = f"""aegea batch submit --name {name} --ecs-image {args.batch_ecr_image} --memory {args.batch_memory} --vcpus {args.batch_vcpus} --queue {args.batch_queue} --privileged --command="pip3 install 'git+https://github.com/czbiohub/MIDAS2.0.git@{args.batch_branch}' --upgrade ; midas2 --version ; aws s3 cp s3://microbiome-pollardlab/uhgg_v1/README.TXT - ; midas2 aws_batch_init ; cd /mnt/nvme ; {args.batch_command} ; echo DONE" """
+    cmd = f"""aegea batch submit --name {name} --ecs-image {args.batch_ecr_image} --memory {args.batch_memory} --vcpus {args.batch_vcpus} --queue {args.batch_queue} --privileged --command="pip3 install 'git+https://github.com/czbiohub/MIDAS2.git@{args.batch_branch}' --upgrade ; midas2 --version ; aws s3 cp s3://microbiome-pollardlab/uhgg_v1/README.TXT - ; midas2 aws_batch_init ; cd /mnt/nvme ; {args.batch_command} ; echo DONE" """
     tsprint(f"Submitting to AWS Batch queue {args.batch_queue}:  {args.batch_command}")
     aegea_output_json = backtick(cmd)
     ao = json.loads(aegea_output_json)

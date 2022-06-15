@@ -4,8 +4,8 @@ from midas2 import version
 
 setup(name='midas2',
       version=version,
-      description='https://github.com/czbiohub/MIDAS2.0/wiki/3.-MIDAS-2.0',
-      url='https://github.com/czbiohub/MIDAS2.0',
+      description='https://midas2.readthedocs.io/en/latest/',
+      url='https://github.com/czbiohub/MIDAS2',
       author='Chunyu Zhao and Boris Dimitrov',
       author_email='chunyu.zhao@czbiohub.org',
       license='MIT',

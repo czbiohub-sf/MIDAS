@@ -9,7 +9,7 @@ Glossary
 
 -   **Reference database**: The upstream UHGG, GTDB, something user supplies, etc. that is then pre-processed to make a specific...
 
--   **MIDASDB**: The pre-processed reference data in a format to be consumed by the MIDAS 2.0 modules, including marker genes, reference genomes, pangenomes, etc.
+-   **MIDASDB**: The pre-processed reference data in a format to be consumed by the MIDAS2 modules, including marker genes, reference genomes, pangenomes, etc.
 
 -   **genome Index**: Rather than bowtie2 database or some other ambiguous term
 

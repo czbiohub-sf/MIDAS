@@ -1,5 +1,5 @@
 {% set name = "midas2" %}
-{% set version = "0.9.9" %}
+{% set version = "1.0.0" %}
 
 package:
   name: {{ name }}
@@ -47,4 +47,4 @@ about:
   home: "https://github.com/czbiohub/MIDAS2.0"
   license: MIT License
   license_family: MIT
-  summary: "Metagenomic Intra-Species Diversity Analysis 2.0"
+  summary: "Metagenomic Intra-Species Diversity Analysis 2"

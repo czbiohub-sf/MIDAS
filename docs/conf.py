@@ -17,12 +17,12 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'MIDAS2.0'
+project = 'MIDAS2'
 copyright = '2022, Chunyu Zhao'
 author = 'Chunyu Zhao'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3.2'
+release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------

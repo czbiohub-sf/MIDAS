@@ -72,7 +72,7 @@ for more information about the ``--select_by`` and ``--select_threshold`` flags.
 
 .. note::
 
-  In MIDAS 2.0 ``run_genes`` can automatically download
+  In MIDAS2 ``run_genes`` can automatically download
   gene collections for the selected species.
 
 .. warning::

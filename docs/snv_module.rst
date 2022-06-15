@@ -34,7 +34,7 @@ Conceptually, a typical invocation of the ``run_snps`` command proceeds by
 #.  outputting a read mapping summary and pileup result for each representative
     genome (i.e. each species).
 
-MIDAS 2.0 purposely **holds off any filtering** or identification of variant
+MIDAS2 purposely **holds off any filtering** or identification of variant
 positions until the subsequent cross-sample analysis.
 
 (In this document, we continue to use the :ref:`data<example_data>` from the
@@ -62,7 +62,7 @@ for more information about the ``--select_by`` and ``--select_threshold`` flags.
 
 .. note::
 
-  In MIDAS 2.0, ``run_snps`` can automatically download
+  In MIDAS2, ``run_snps`` can automatically download
   the reference genomes for the selected species.
 
 .. warning::
