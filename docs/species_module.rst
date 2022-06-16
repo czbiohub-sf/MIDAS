@@ -5,13 +5,15 @@ Module: Species Selection
 #########################
 
 Reference-based metagenotyping depends crucially on the choice of reference sequences.
-Microbiome data usually contains hundreds of species in one sample,
+Microbiome data may contain hundreds of species in one sample,
 and an ideal reference database is both representative and
 comprehensive in terms of the abundant species in the sample. A badly chosen reference may suffer
-both from ambiguous mapping of reads to two or more sequences or spurious cross-mapping to
-incorrect sequences. Therefore, a typical MIDAS2 workflow starts with a species selection step,
-which filters the MIDASDB to sufficiently abundant species in each particular
-sample.
+both from ambiguous mapping of reads to two or more sequences (which may lead to reads being filtered
+out post-alignment due to low uniqueness) or spurious cross-mapping to
+incorrect sequences (which leads to metagenotype errors). 
+Therefore, a typical MIDAS2 workflow starts with a species selection step,
+which customizes the MIDASDB to only include the genomes of sufficiently abundant species 
+in each sample.
 
 
 .. contents::
@@ -21,8 +23,8 @@ sample.
 Single-Sample Analysis
 ======================
 
-MIDAS2 estimates species coverage by profiling the coverage of universal,
-single copy, taxonomic marker genes (SCGs, 15 per species), to quickly
+MIDAS2 estimates species coverage by profiling the coverage of 15 universal,
+single copy, marker genes (SCGs, 15 per species), to quickly
 determine which species are abundant in the sample.
 
 
@@ -87,7 +89,8 @@ Key Outputs
 Single-Sample
 -------------
 
-For each sample, the primary output of the ``run_species`` command is (e.g.)
+For each sample, the primary output of the ``run_species`` command is a file
+containing information about species detected in the reads (e.g.)
 ``midas2_output/sample1/species/species_profile.tsv``
 This file describes the
 coverage of each species' marker genes in the sample.
