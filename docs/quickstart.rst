@@ -8,24 +8,26 @@ Setup
 Install MIDAS2
 -----------------
 
-On a Linux machine, download a copy of MIDAS2 from our GitHub repository, and
-install the dependencies. We do not currently support non-Linux environments.
+The fastest way to install all the dependencies MIDAS2 needed is install from
+YAML file (``midas2.yaml``) using Conda.
 
-
-..
-    Confirmed that this is the best install method? Seems like the most complicated one...
-    I guess part of the goal here is to get all of the test reads which are saved to
-    github...
-
+On a Linux machine, download a copy of the test data from our GitHub repository release.
 
 .. code-block:: shell
 
-  $ git clone https://github.com/czbiohub/MIDAS2.git
-  $ cd MIDAS2
+  $ wget https://github.com/czbiohub/MIDAS2/releases/download/v1.0.0/tests.tar.gz
+  $ tar -zxf tests.tar.gz
+  $ cd tests
+
+
+Install the dependencies.
+
+.. code-block:: shell
 
   $ conda env create -n midas2 -f midas2.yml
   $ conda activate midas2
   $ cpanm Bio::SearchIO::hmmer --force # Temporary fix for Prokka
+
 
 Install MIDAS2.
 
@@ -42,9 +44,9 @@ Alternative installation procedures are also :ref:`described elsewhere<installat
 Example Data
 ------------
 
-Assuming you're in the ``MIDAS2.0/`` directory you just ``cd``-ed to,
-two single-end gzipped FASTQ files are in the folder ``tests/reads``.
-Navigate to the ``tests`` directory ::
+Assuming you're in the ``tests/`` directory you just ``cd``-ed to,
+two single-end gzipped FASTQ files are in the folder ``tests/reads``. If not,
+navigate to the ``tests`` directory ::
 
   $ cd tests
 
@@ -66,6 +68,7 @@ Download the universal single copy genes for MIDAS Reference Database (MIDAS DB)
 to a new subfolder called ``my_midasdb_uhgg`` ::
 
   $ midas2 database --init --midasdb_name uhgg --midasdb_dir my_midasdb_uhgg
+
 
 ..
     TODO: If I'm not mistaken, this will install the MIDASDB to MIDAS2.0/tests/my_midasdb_uhgg
