@@ -28,10 +28,10 @@ For the purposes of this documentation we'll generally assume that we're working
 with the prebuilt ``uhgg`` MIDASDB and that the local mirror is in a subdirectory
 ``my_midasdb_uhgg``.
 
-Automatic database downloading is built in to MIDAS analysis commands (e.g., ``run_snps`` and ``run_genes``).
-Specifically, MIDAS will download a fraction of the full
-database; this subset is determined by which species identified to be at high
-coverage in the TODO module.
+Automatic database downloading is built into MIDAS2 analysis commands (e.g., ``run_snps`` and ``run_genes``).
+Specifically, MIDAS2 will download a fraction of the full
+database; this subset is determined by which species are identified to be at high
+coverage. 
 
 However, when parallelizing computation across samples
 multiple commands might try to download the same database components simultaneously,
