@@ -18,11 +18,19 @@ you have not already. Users can install MIDAS2 and its dependencies with conda p
   conda install -c zhaoc1 -c anaconda -c bioconda -c conda-forge -c defaults midas2
 
 
+If this installation takes a long time to solve dependencies conflicts, we suggest
+following the conda install from YAML file approach in the next section.
+
+
 From Source
 ++++++++++++
 
 Alternatively, users who want the most up-to-date version of the MIDAS code
 can install from source (dependencies installed with Conda).
+
+On a Linux machins, download a copy of MIDAS2 from our GitHub repository,
+and install the dependencies.
+We do not currently support non-Linux environments.
 
 .. code-block:: shell
 
@@ -33,7 +41,7 @@ can install from source (dependencies installed with Conda).
   $ conda activate midas2
   $ cpanm Bio::SearchIO::hmmer --force # Temporary fix for Prokka
 
-  $ pip install midas2
+  $ pip install .
 
 
 .. tip::
