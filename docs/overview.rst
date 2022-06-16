@@ -27,27 +27,27 @@ MIDAS Reference Database
 ========================
 
 MIDAS2, as any reference-based strain-level genomic variation analysis
-pipeline, also presuppose a reference database construction step has already
-taken place.
-The MIDAS Reference Database (MIDASDB) refers to a set of custom files needed
-for the strain-level metagenomic analysis.
+pipeline, presupposes a reference database construction step has already
+taken place. 
+The MIDAS Reference Database (MIDASDB) refers to a set of custom files with
+database information needed to run MIDAS2.
 
 The original MIDAS provided a default bacterial reference databases
 (see `Figure 1 <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5088602/>`_):
 `MIDAS DB v1.2 <http://lighthouse.ucsf.edu/MIDAS/midas_db_v1.2.tar.gz>`_
-was constructed from a collection of 5952 bacterial species clusters
-representing 31,007 high-quality bacterial genome.
+was constructed from a collection of 5,952 bacterial species clusters
+representing 31,007 high-quality bacterial genomes.
 
-However, in the past few years, the number of sequenced microbial genomes have
-increased vastly, in particular with the addition of metagenome-assembled
+However, in the past few years, the number of sequenced microbial genomes has
+increased a lot, in particular with the addition of metagenome-assembled
 genomes (MAGs) sequenced from varied habitats.
-Therefore, it is necessary to update MIDAS2 reference database accordingly.
+Therefore, it was necessary to update MIDAS DBs in MIDAS2 accordingly.
 On the other hand, processing the large amount of available genome sequences
 poses a significant computational challenge.
 
 For MIDAS2, instead of generating the species clusters from scratch, we take
 advantage of two published collections of prokaryotic genome databases, and
-build the new MIDASDB for both.
+we build a MIDASDB for each one.
 
 More information about these genome collections can be found in
 :doc:`Download MIDASDB <download_midasdb>`.
