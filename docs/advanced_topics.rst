@@ -21,7 +21,7 @@ Important Concepts
 
     To be specific, a given <species, sample> pair will only be kept (by default) if it has more than 40% horizontal genome coverage (``genome_coverage``)
     and 5X vertical genome coverage (``genome_depth``).
-    Furthermore, only "sufficiently prevalent" species with "sufficiently many" (``sample_counts``) would be included for the population SNV analysis.
+    Furthermore, only "sufficiently prevalent" species with "sufficiently many" samples (``sample_counts``) would be included for the population SNV analysis.
     Therefore, different species may have different lists of relevant samples.
 
 #.  **<site, relevant samples> selection**
@@ -30,7 +30,7 @@ Important Concepts
     arguments ``site_depth`` and ```site_ratio * mean_genome_coverage``; otherwise it is ignored for the across-samples SNV compute.
 
     Therefore, different genomic sites from the same species may have different panels of "relevant samples".
-    And genomic site prevalence can be computed as the ratio of the number of relevant samples for the given site over the total number of relevant samples for the given species.
+    Genomic site prevalence can be computed as the ratio of the number of relevant samples for the given site over the total number of relevant samples for the given species.
 
 #.  **relevant site**
 
@@ -43,7 +43,7 @@ Important Concepts
 Population SNV Computation
 --------------------------
 
-There are three main steps to compute and report population SNV in MIDAS2.
+There are three main steps to compute and report population SNVs in MIDAS2.
 
 First, for each relevant genomic site, MIDAS2 determines the set of alleles present across all relevant samples.
 Specifically, for each allele (A, C, G, T), ``merge_snps`` command
@@ -59,8 +59,8 @@ Specifically, for each allele (A, C, G, T), ``merge_snps`` command
 
 Second, population major and minor alleles for a single site can be computed based on the
 accumulated read counts or sample counts across all relevant samples.
-The population major allele refers to the most abundant/prevalent allele, and
-the population minor allele refers to the second most prevalent/abundant allele.
+The population major allele refers to the most abundant (read count) or prevalent (sample count) allele, and
+the population minor allele refers to the second most abundant or prevalent allele.
 
 For example, the population major allele of the site ``gnl|Prokka|UHGG000587_14|34360|A`` in the above example is ``A`` defined
 by accumulated read counts and ``C`` defined by accumulated sample counts.
@@ -74,7 +74,7 @@ Chunkified Pileup Implementation
 --------------------------------
 
 Both single-sample and across-samples pileup are parallelized on the unit of chunk of sites, which is indexed by <species_id, chunk_id>.
-Only when all chunks from the same species finished processing, chunk-level pileup results will merged into species-level pileup result.
+When all chunks from the same species finish processing, then chunk-level pileup results will merged into species-level pileup result.
 
 This implementation makes population SNV analysis across thousands of samples possible.
 To compute the population SNV for one chunk, all the pileup results of corresponding sites across all the samples need to be read into memory.
@@ -96,8 +96,8 @@ The target layout of MIDASDB can be found at :ref:`MIDASDB Layout<db_layout>`.
 This section is focused specifically on the database construction commands.
 
 
-Table of Content
-----------------
+Table of Content (TOC)
+----------------------
 
 To start with, users need to organize the genomes in a specific format and produce the TOC ``genomes.tsv`` as described in the MIDASDB Layout.
 
@@ -110,7 +110,7 @@ There are two command-line parameters that users need to pass:
 Six-digit numeric species ids are randomly assigned and can be stored in the corresponding metadata file (``metadata.tsv``)
 
 
-MIDAS2 reserved the ``--midasdb_name newdb`` for building custome MIDASDB, and the new MIDASDB will be built at ``--midasdb_dir``.
+MIDAS2 reserves ``--midasdb_name newdb`` for building a custom MIDASDB, and the new MIDASDB will be built at ``--midasdb_dir``.
 
 Rep-genome
 ----------
@@ -169,16 +169,17 @@ Build Your Own Genome Index
 
 
 MIDAS2 builds sample-specific rep-genome or pan-genome index for species in the restricted species profile.
-However, we recognize the needs of using one comprehensive list of species across samples in the same study.
-And in this section, we will go over the steps of building one genome index a list of customized species across a given panel of samples.
+However, we recognize the need of using one comprehensive list of species across samples in the same study.
+In this section, we will go over the steps of building one genome index containing a customized list of 
+species across a set of samples.
 
 We presuppose users have already completed the :ref:`across-samples species profiling<species_module>`
-and have ``midas2_output/merge/species/species_prevalence.tsv`` ready for the given panel of samples.
+and have ``midas2_output/merge/species/species_prevalence.tsv`` ready for the set of samples.
 
 Species Selection
 -----------------
 
-Users can select species based on the prevalence from the ``species_prevalence.tsv`` file, e.g. the list of speices that is present in at least one sample,
+Users can select species based on the prevalence from the ``species_prevalence.tsv`` file, e.g. the list of speices that are present in at least one sample,
 by customizing the ``--select_by`` and ``--selectd_threshold`` to the ``build_bowtie2db`` command.
 
 Build Genome Index
@@ -201,7 +202,7 @@ And users can locate the generated rep-genome database at ``one_bt2_indexes/repg
 Use Prebuilt Genome Index
 -------------------------
 
-If taking this approach, for the single-sample SNV or CNV analysis, users can pass the pre-built rep-genome to ``run_snps`` analysis (pan-genome for ``run_genes``), as following:
+If taking this approach, for the single-sample SNV or CNV analysis, users can pass the pre-built rep-genome to ``run_snps`` analysis (pan-genome for ``run_genes``), as follows:
 
 .. code-block:: shell
 
