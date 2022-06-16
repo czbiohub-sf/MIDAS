@@ -12,10 +12,10 @@ Single-Sample Results Layout
 ============================
 
 MIDAS2 analysis usually starts with species selection which selects sufficiently abundant species in each sample (command ``run_species``).
-After completing this step, users can run either of two strain-level analysis: ``run_snps`` for single-sample read pileup (SNV module) or
-``run_genes`` for pan-gene profiling (CNV module).
+After completing this step, users can run the SNV module with ``run_snps`` or the CNV module with
+``run_genes``.
 
-Here is an example of the results layout of all single-sample analysis in the local filesystem.
+Here is an example of output from a single-sample analysis in whch the species, SNV, and CNV modules were run, as it would appear in the local filesystem.
 
 .. code-block:: shell
 
@@ -47,7 +47,7 @@ Here is an example of the results layout of all single-sample analysis in the lo
 Across-Samples Results Layout
 =============================
 
-For a collection of samples, population SNV and pan-genome CNV can be estimated using subcommands ``merge_snps`` and ``merge_genes``.
+For a collection of samples, population SNVs and CNVs can be estimated using the subcommands ``merge_snps`` and ``merge_genes``. This is what the output looks like in the local filesystem. 
 
 .. code-block:: shell
 
@@ -77,7 +77,7 @@ For a collection of samples, population SNV and pan-genome CNV can be estimated 
 MIDAS Reference Database Layout
 ===============================
 
-To meet the challenge of increased number of available genome sequences,
+To meet the challenge of increasing numbers of available genome sequences,
 MIDAS2 implemented a new database infrastructure, geared to run on `AWS Batch <https://aws.amazon.com/batch/>`_
 and `S3 <https://aws.amazon.com/s3/>`_, to achieve `elastic scaling <https://github.com/czbiohub/pairani/wiki>`_
 for building MIDAS2 reference databases.
@@ -104,8 +104,8 @@ for the corresponding ``species``. Only one ``representative`` per ``species``.
     GUT_GENOME269084,104351,GUT_GENOME269084,1
 
 By default, MIDAS2 inherits the representative genome assignments from published prokaryotic genome databases.
-Inspired by the importance of selecting proper reference genome for accurate template-based SNP calling,
-this new infrastructure empowers user the flexibility to dynamically re-assign the representative genomes,
+Inspired by the importance of selecting proper reference genome for accurate SNV calling,
+this new infrastructure empowers users to dynamically re-assign the representative genomes,
 simply by modifying the ``genomes.tsv`` file accordingly.
 
 
@@ -125,7 +125,7 @@ Genome Taxonomy Database (GTDB)
 +++++++++++++++++++++++++++++++++
 
 `GTDB R06-RS202 <https://gtdb.ecogenomic.org/stats/r202>`_ contains 45,555 bacterial and 2,339 archaeal species clusters
-spanning 258,406 genomes, released on April 27th, 2021. The genome members for each species cluster is
+spanning 258,406 genomes, released on April 27th, 2021. The genome members for each species cluster are
 specified in the `sp_clusters_r202.tsv <https://data.ace.uq.edu.au/public/gtdb/data/releases/release202/202.0/auxillary_files/sp_clusters_r202.tsv>`_,
 upon which order six-digit numeric species ids are assigned.
 GTDB only provided the sequences of the representative genomes, and we downloaded all the genomes from
@@ -135,8 +135,8 @@ NCBI genomes repository using `genome_updater <https://github.com/pirovc/genome_
 Target Layout and Construction
 ------------------------------
 
-MIDAS2 reference database (MIDASDB) primarily consist of three parts: rep-genome databases, pan-genome databases, and universal single copy genes (SGC) marker database.
-The target layout of any MIDASDB follow the same relative structure, based on the root directory of the database.
+A MIDAS2 reference database (MIDASDB) consists of three primary parts: rep-genome database, pan-genome database, and universal single copy genes (SGC) marker database.
+The target layout of any MIDASDB follows the same relative structure, based on the root directory of the database.
 The following toy example demonstrates the major steps to construct the MIDASDB and the target layout using
 a collection of two genomes (``genome1`` and ``genome2``) from one species cluster ``species1``.
 
@@ -145,8 +145,8 @@ a collection of two genomes (``genome1`` and ``genome2``) from one species clust
 Inputs
 ++++++
 
-The input collection of genomes need to be organized in the format as ``cleaned_genomes/<species>/<genome>/<genome>.fna``.
-And the table of content ``genomes.tsv`` file needs to be generated accordingly,
+The input collection of genomes needs to be organized in the format ``cleaned_genomes/<species>/<genome>/<genome>.fna``.
+And the table of contents file ``genomes.tsv`` needs to be generated accordingly,
 with randomly assigned six-digit ``species_id``, to replace the species name.
 The ``genome`` name can be kept as it is.
 
@@ -161,9 +161,9 @@ The ``genome`` name can be kept as it is.
 Rep-Genome Database
 +++++++++++++++++++
 
-The genome annotation for all the genomes were done by `Prokka <https://github.com/tseemann/prokka>`_,
-and the annotated genes were kept under the directory of ``genes_annotations/<species>/<genome>``.
-The rep-genome databases for the SNPs module analysis only included the gene annotations and sequences for the representative genomes, as specified in the TOC.
+Genome annotation is performed using `Prokka <https://github.com/tseemann/prokka>`_,
+and the annotated genes are kept under the directory of ``genes_annotations/<species>/<genome>``.
+The rep-genome database (for the SNV module) only includes the gene annotations and sequences for the representative genomes, as specified in the table of contents file.
 
 .. code-block:: shell
 
@@ -184,7 +184,7 @@ The pre-computed HMM model of this set of 15 single copy genes (SCGs) are availa
   s3://microbiome-pollardlab/uhgg_v1/marker_gene_models/phyeco/marker_genes.hmm.lz4
   s3://microbiome-pollardlab/uhgg_v1/marker_gene_models/phyeco/marker_genes.mapping_cutoffs.lz4
 
-For each annotated genome, the homologs of 15 SCGs were identified with ``hmmsearch``,
+For each annotated genome, the homologs of 15 SCGs are identified with ``hmmsearch``,
 as well as the mapping of gene id to corresponding marker gene id,
 under the directory of ``marker_genes/phyeco/temp/<species>/<genome>``.
 
@@ -193,8 +193,8 @@ under the directory of ``marker_genes/phyeco/temp/<species>/<genome>``.
     marker_genes/phyeco/temp/100001/genome2/genome2.markers.fa
     marker_genes/phyeco/temp/100001/genome2/genome2.markers.map
 
-For all the representative genomes, the identified marker genes were concatenated into monolithic ``marker_genes.fa``,
-from which ``hs-blastn`` index would be constructed. The indexed ``marker_genes.fa`` serves as the SCG marker databases.
+For all the representative genomes, the identified marker genes are concatenated into monolithic ``marker_genes.fa``,
+from which a ``hs-blastn`` index is constructed. The indexed ``marker_genes.fa`` serves as the SCG marker databases.
 
 .. code-block:: shell
 
@@ -209,15 +209,15 @@ Pan-Genome Database
 
 Species-level pan-genome refers to the set of non-redundant genes that represent the genetic diversity within one species cluster.
 
-In order to construct the pan-genome database for each species, the first step if to concatenate the annotated genes
-from its all genome members into ``pangenomes/100001/genes.ffn``.
+In order to construct the pan-genome database for each species, the first step is to concatenate the annotated genes
+from all genomes within the species cluster into ``pangenomes/100001/genes.ffn``.
 The second step, which is also the most time-consuming step, is to cluster the concatenated genes based on 99% percent identity (PID)
 using `vsearch <https://github.com/torognes/vsearch>`_.
-Each cluster was represented by the gene at its center - centroid gene (``centroids.99.ffn``).
-The ``centroid.99`` genes were further on clustered to 95, 90, ..., PID, respectively, and the mapping relationships were listed in ``centroid_info.txt``.
-The top level ``centroids.ffn`` file represents the 99 percent identity clusters, and serves as the species pan-genome databases.
+Each cluster is represented by the gene at its center - centroid gene (``centroids.99.ffn``).
+The ``centroid.99`` genes are further on clustered to 95, 90, ..., PID, respectively, and the mapping relationships are listed in ``centroid_info.txt``.
+The top level ``centroids.ffn`` file represents the 99 percent identity clusters, and it serves as the species pan-genome databases.
 
-Reads are aligned to the pan-genome databases to determine the gene content of strains in a sample (``run_genes`` command),
+Reads are aligned to the pan-genome database to determine the gene content and average copy number of strains in a sample (``run_genes`` command),
 and reads can optionally aggregated into gene clusters at any of the lower clustering thresholds across samples (``merge_genes`` command).
 
 .. code-block:: shell
