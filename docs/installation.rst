@@ -18,7 +18,8 @@ you have not already. Users can install MIDAS2 and its dependencies with conda p
   conda install -c zhaoc1 -c anaconda -c bioconda -c conda-forge -c defaults midas2
 
 
-If this installation takes a long time to solve dependcies conflicts,
+If this installation takes a long time to solve dependcies conflicts, we suggest
+following the conda install from YAML file approach in the next section.
 
 
 From Source
