@@ -1,9 +1,9 @@
 Glossary
 ========
 
--   **Module**: i.e. one of Species, SNPs, Genes (or maybe also MIDASDB building?)
+-   **Module**: An major component of MIDAS2, including Species, SNVs, CNVs and MIDASDB building.
 
--   **Analysis**: Either the single-sample alignment-based tallying of reads belonging to species, SNVs, or genes (depending on which module) OR the merging, filtering, and summarization of these results across samples.
+-   **Analysis**: Either the single-sample alignment-based tallying of reads mapped to SCGs (species), a representative genome (SNVs), or genes in a pangenome (CNVs) depending on which module is run OR the merging, filtering, and summarization of these results across samples.
 
 -   **Workflow**: The overall conceptual order of events from an implicit database and pre-requisite shotgun metagenomic samples through species selection and SNPs/genes modules, to results that will go into some sort of downstream analysis.
 
