@@ -133,7 +133,7 @@ and pileup results for each of the abundant species determined in the previous
 step.
 By default, species are selected based on the filter:
 ``median_marker_coverage > 2``. More details about abundant species selection can
-be referred :ref:`here<abundant_species_selection>`.
+be found :ref:`here<abundant_species_selection>`.
 
 
 Compute Population SNVs across multiple samples
@@ -146,7 +146,7 @@ In order to compute population SNV from multiple single-sample pileup results, w
 need to construct a tab-separated **sample manifest file**: ``list_of_samples.tsv``.
 
 This file has a column for the ``sample_name`` and another for
-``midas_output``, and is required for multi-sample analyses.
+``midas_output``, and it is required for multi-sample analyses.
 
 .. code-block:: shell
 
@@ -202,13 +202,13 @@ Other output files and the full output directory structure can be found at
 :doc:`output`.
 
 
-Copy-number Variant Analysis
+Gene Copy-Number Variant Analysis
 **********************************
 
 Identify CNVs in Each Sample
 ----------------------------
 
-Since building bowtie2 indexes for the species pangenomes takes much longer time, we
+Since building bowtie2 indexes for the species pangenomes takes a long time, we
 first build the bowtie2 indexes for one species (102454) to a new subfolder ``bt2_indexes/``:
 
 .. code-block:: shell
@@ -221,7 +221,7 @@ first build the bowtie2 indexes for one species (102454) to a new subfolder ``bt
     --num_cores 4
 
 More information about building your own bowtie2 indexes for either representative genome (repgenome)
-or pangenome can referred :ref:`here<build_custom_genome_index>`.
+or pangenome can found :ref:`here<build_custom_genome_index>`.
 
 
 Now we can run the single-sample CNV analysis for each sample with the existing bowtie2 indexes.
