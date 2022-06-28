@@ -174,14 +174,15 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
                 _fetched_files = [_fetch_file_from_s3(args_list[0])]
 
             fetched_files = dict(zip(list_of_species, _fetched_files))
-            for species_id in list_of_species:
-                fetched_filenames = tarball_mapping[filename]
-                for _filename in fetched_filenames:
-                    genome_id = self.get_repgenome_id(species_id)
-                    _fetched_file = self.get_target_layout(_filename, False, species_id, genome_id)
-                    md5_fetched = file_md5sum(_fetched_file)
-                    md5_lookup = self.md5sum[filename][species_id][_filename]
-                    assert md5_fetched == md5_lookup, f"Error for downloading {_fetched_file} from {filename}. Please delete the folder and redownload."
+            if self.has_md5sum:
+                for species_id in list_of_species:
+                    fetched_filenames = tarball_mapping[filename]
+                    for _filename in fetched_filenames:
+                        genome_id = self.get_repgenome_id(species_id)
+                        _fetched_file = self.get_target_layout(_filename, False, species_id, genome_id)
+                        md5_fetched = file_md5sum(_fetched_file)
+                        md5_lookup = self.md5sum[filename][species_id][_filename]
+                        assert md5_fetched == md5_lookup, f"Error for downloading {_fetched_file} from {filename}. Please delete the folder and redownload."
             return fetched_files
 
         # Single Copy Marker Genes DB
@@ -189,33 +190,36 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
             fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
             fetched_files = self.get_target_layout("marker_db", False)
             fetched_files = dict(zip(MARKER_FILE_EXTS, fetched_files))
-            for _ in MARKER_FILE_EXTS:
-                _fetched_file = fetched_files[_]
-                md5_fetched = file_md5sum(_fetched_file)
-                md5_lookup = self.md5sum[filename][_]
-                assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            if self.has_md5sum:
+                for _ in MARKER_FILE_EXTS:
+                    _fetched_file = fetched_files[_]
+                    md5_fetched = file_md5sum(_fetched_file)
+                    md5_lookup = self.md5sum[filename][_]
+                    assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
             return {filename: fetched_dir}
 
         if filename == "markerdb_models":
             fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
-            for _ in tarball_mapping[filename]:
-                _fetched_file = self.get_target_layout(f"marker_db_{_}", False)
-                md5_fetched = file_md5sum(_fetched_file)
-                md5_lookup = self.md5sum[filename][_]
-                assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            if self.has_md5sum:
+                for _ in tarball_mapping[filename]:
+                    _fetched_file = self.get_target_layout(f"marker_db_{_}", False)
+                    md5_fetched = file_md5sum(_fetched_file)
+                    md5_lookup = self.md5sum[filename][_]
+                    assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
             return {filename: fetched_dir}
 
         # Chunks
         if filename == "chunks":
             fetched_dir = _fetch_file_from_s3(self.construct_file_tuple(filename))
-            fetched_filenames = tarball_mapping[filename]
-            rep_genomes = self.uhgg.representatives
-            for sid, gid in rep_genomes.items():
-                for i, ct in enumerate(fetched_filenames):
-                    _fetched_file = self.get_target_layout(ct, False, sid, gid, DEFAULT_CHUNKS[i])
-                    md5_fetched = file_md5sum(_fetched_file)
-                    md5_lookup = self.md5sum[filename][sid][ct]
-                    assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
+            if self.has_md5sum:
+                fetched_filenames = tarball_mapping[filename]
+                rep_genomes = self.uhgg.representatives
+                for sid, gid in rep_genomes.items():
+                    for i, ct in enumerate(fetched_filenames):
+                        _fetched_file = self.get_target_layout(ct, False, sid, gid, DEFAULT_CHUNKS[i])
+                        md5_fetched = file_md5sum(_fetched_file)
+                        md5_lookup = self.md5sum[filename][sid][ct]
+                        assert md5_fetched == md5_lookup, f"Error for downloadding {_fetched_file} from {filename}. Please delete the folder and redownload."
             return {filename: fetched_dir}
 
         # Single File: key of the tarball layout
