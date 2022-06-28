@@ -89,7 +89,7 @@ def build_bowtie2db(args):
 
         if args.bt2_indexes_name == "repgenomes":
             tsprint(f"MIDAS2::build_bowtie2_repgenomes_indexes::start")
-            midas_db.fetch_files("repgenome", species_ids_of_interest)
+            midas_db.fetch_files("representative_genome", species_ids_of_interest)
             contigs_files = midas_db.fetch_files("representative_genome", species_ids_of_interest)
             tsprint(contigs_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, contigs_files, args.num_cores)
