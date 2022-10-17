@@ -189,7 +189,7 @@ Species Selection in Downstream Modules
 In a standard SNV/CNV workflow, only sufficiently abundant species in the
 restricted species profile will be included to build representative genome
 (rep-genome) or pan-genome index and further to be genotyped. By default,
-both the ``run_snv`` and ``run_cnv`` commands perform a species selection step.
+both the ``run_snps`` and ``run_genes`` commands perform a species selection step.
 Both commands therefore assume that ``run_species`` has already been
 carried out for each sample.
 
