@@ -21,10 +21,15 @@ Chan Zuckerberg Biohub.
 MIDAS2 expands on the original MIDAS developed by
 `Stephen Nayfach <snayfach@gmail.com>`_.
 
+For MIDAS2, we have already built two MIDASDBs from large, public, microbial genome databases:
+`UHGG 1.0 <https://www.nature.com/articles/s41587-020-0603-3>`_ and
+`GTDB r202 <https://gtdb.ecogenomic.org/>`_.
+
 
 Source code is `available on GitHub
 <https://github.com/czbiohub/MIDAS2.0.git>`_.
 
+Publication is available in `Bioinformatics <https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btac713/6793850>`_.
 
 Contents
 --------
@@ -41,5 +46,6 @@ Contents
     download_midasdb
     output
     advanced_topics
+    example_questions
     glossary
     acknowledgements
