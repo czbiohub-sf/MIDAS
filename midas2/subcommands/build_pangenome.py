@@ -23,6 +23,9 @@ CONCURRENT_SPECIES_BUILDS = Semaphore(3)
 def destpath(midas_db, species_id, filename):
     return midas_db.get_target_layout("pangenome_file", True, species_id, "", filename)
 
+def localpath(midas_db, species_id, filename):
+    return midas_db.get_target_layout("pangenome_file", False, species_id, "", filename)
+
 
 @retry
 def find_files_with_retry(f):
@@ -158,7 +161,7 @@ def build_pangenome_master(args):
         # The species build will upload this file last, after everything else is successfully uploaded.
         # Therefore, if this file exists in s3, there is no need to redo the species build.
         dest_file = destpath(midas_db, species_id, "gene_info.txt")
-        local_file = midas_db.get_target_layout("pangenome_genes_info", False, species_id)
+        local_file = localpath(midas_db, species_id, "gene_info.txt")
         msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
 
         if args.upload and find_files_with_retry(dest_file):
@@ -207,8 +210,13 @@ def build_pangenome_master(args):
 
 def build_pangenome_worker(args):
     """
-    Input spec:  https://github.com/czbiohub/MIDAS2/wiki/MIDAS-DB#gene-annotations
-    Output spec: https://github.com/czbiohub/MIDAS2/wiki/MIDAS-DB#pan-genomes
+    Input:
+        - prokka gene annotation for all genomes of the given species
+    Output:
+        - genes.ffn
+        - genes.len
+        - gene_info.txt
+        - centroid.xx.ffn
     """
 
     violation = "Please do not call build_pangenome_worker directly.  Violation"
