@@ -140,6 +140,7 @@ def generate_cluster_info_master(args):
 
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
     species = midas_db.uhgg.species
+    num_threads = args.num_threads
 
     def species_work(species_id):
         assert species_id in species, f"Species {species_id} is not in the database."
@@ -149,7 +150,7 @@ def generate_cluster_info_master(args):
         local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
         msg = f"Computing cluster_info for species {species_id} with {len(species_genomes)} total genomes."
 
-        if find_files_with_retry(dest_file):
+        if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
                 return
@@ -160,7 +161,7 @@ def generate_cluster_info_master(args):
                 return
             msg = msg.replace("Computing", "Recomputing")
 
-        with CONCURRENT_BUILDS:
+        with Semaphore(num_threads):
             tsprint(msg)
 
             last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
@@ -173,7 +174,7 @@ def generate_cluster_info_master(args):
                 command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb -t {num_threads} --generate_cluster_info --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -187,7 +188,7 @@ def generate_cluster_info_master(args):
                     command(f"rm -rf {worker_subdir}", check=False)
 
     species_id_list = decode_species_arg(args, species)
-    multithreading_map(species_work, species_id_list, num_physical_cores)
+    multithreading_map(species_work, species_id_list, num_threads)
 
 
 def generate_cluster_info_worker(args):
@@ -196,13 +197,13 @@ def generate_cluster_info_worker(args):
     assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
 
     species_id = args.species
-    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name)
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, num_cores=args.num_threads)
     species = midas_db.uhgg.species
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     # Collect mapfile from all genomes of species_id
     mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], rep_only=False)
-    species_mapfile = f"mapfile"
+    species_mapfile = midas_db.get_target_layout("marker_map_by_species", False, species_id)
     cat_files(mapfiles_by_genomes.values(), species_mapfile, 20)
 
     # <gene_id, marker_id>
@@ -222,18 +223,24 @@ def generate_cluster_info_worker(args):
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
         for r in dict_of_centroids.values():
             centroid_99 = r["centroid_99"]
-
             marker_id = dict_of_markers[centroid_99] if centroid_99 in dict_of_markers else ""
             gene_len = dict_of_gene_length[centroid_99]
-
             val = list(r.values()) + [gene_len, marker_id]
             stream.write("\t".join(map(str, val)) + "\n")
 
     if args.upload:
+        dest_file = midas_db.get_target_layout("pangenome_cluster_info", True, species_id)
+        local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
         command(f"aws s3 rm {dest_file}")
         upload(local_file, dest_file, check=False)
 
-    command("rm -f genes.len gene_info.txt mapfile")
+        dest_file = midas_db.get_target_layout("marker_map_by_species", True, species_id)
+        local_file = midas_db.get_target_layout("marker_map_by_species", False, species_id)
+        command(f"aws s3 rm {dest_file}")
+        upload(local_file, dest_file, check=False)
+
+    if not args.debug:
+        command("rm -f genes.len gene_info.txt mapfile")
 
 
 def build_markerdb(args):
@@ -331,6 +338,12 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='Upload built files to AWS S3')
+    subparser.add_argument('-t',
+                           '--num_threads',
+                           dest='num_threads',
+                           type=int,
+                           default=num_physical_cores,
+                           help="Number of threads")
     return main_func
 
 
