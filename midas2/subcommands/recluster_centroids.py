@@ -5,7 +5,7 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, command, multithreading_hashmap, multithreading_map, select_from_tsv, pythonpath, num_physical_cores
+from midas2.common.utils import tsprint, InputStream, OutputStream, command, hashmap, multithreading_hashmap, multithreading_map, select_from_tsv, pythonpath, num_physical_cores
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
