@@ -41,12 +41,14 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
 
         "genes_info_cdhit":              f"pangenomes_filtered/{species_id}/temp/gene_info_cdhit.tsv",
         "centroids_cdhit":               f"pangenomes_filtered/{species_id}/temp/centroids.99.ffn",
+        "recluster_log":                 f"pangenomes_filtered/{species_id}/temp/recluster_centroids.log",
+        "cluster_info_log":              f"pangenomes_filtered/{species_id}/temp/cluster_info.log",
         "pangenome_centroids":           f"pangenomes_filtered/{species_id}/centroids.ffn",
-        "pangenome_cluster_info":        f"pangenomes_filtered/{species_id}/cluster_info.txt",
-        "recluster_log":                 f"pangenomes_filtered/{species_id}/recluster_centroids.log",
         "pangenome_genes_info":          f"pangenomes_filtered/{species_id}/gene_info.txt",
         "pangenome_genes_len":           f"pangenomes_filtered/{species_id}/genes.len",
-        "cluster_info_log":              f"pangenomes_filtered/{species_id}/cluster_info.log",
+        "pangenome_cluster_info":        f"pangenomes_filtered/{species_id}/cluster_info.txt",
+        "pangenome_filtered_file":       f"pangenomes_filtered/{species_id}/{component}",
+
 
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
         "marker_map_by_species":         f"markers/{marker_set}/temp/{species_id}/{species_id}.markers.map",
