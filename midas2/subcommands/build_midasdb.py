@@ -2,10 +2,12 @@
 import os
 import sys
 from multiprocessing import Semaphore
+from collections import defaultdict
 import gffutils
+import Bio.SeqIO
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, OutputStream, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
+from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
 from midas2.common.utilities import scan_mapfile, scan_gene_info, scan_gene_length
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg
 from midas2.models.midasdb import MIDAS_DB
@@ -314,6 +316,118 @@ def build_markerdb(args):
         upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
 
 
+def get_contig_length(fasta_file):
+    clen = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            clen[rec.id] = len(rec.seq)
+    return clen
+
+
+def compute_contig_length(args):
+    if args.zzz_worker_mode: #"zzz_worker_mode" in args and args.zzz_worker_mode:
+        compute_contig_length_worker(args)
+    else:
+        compute_contig_length_master(args)
+
+
+def compute_contig_length_master(args):
+
+    midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
+    species = midas_db.uhgg.species
+    num_threads = args.num_threads
+
+    def species_work(species_id):
+        assert species_id in species, f"Species {species_id} is not in the database."
+        species_genomes = species[species_id]
+
+        dest_file = midas_db.get_target_layout("pangenome_contigs_len", True, species_id)
+        local_file = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
+        msg = f"Computing contig_length for species {species_id} with {len(species_genomes)} total genomes."
+
+        if args.upload and find_files_with_retry(dest_file):
+            if not args.force:
+                tsprint(f"Destination {dest_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Computing", "Recomputing")
+        if not args.upload and os.path.exists(local_file):
+            if not args.force:
+                tsprint(f"Destination {local_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
+                return
+            msg = msg.replace("Computing", "Recomputing")
+
+        with Semaphore(num_threads):
+            tsprint(msg)
+
+            last_dest = midas_db.get_target_layout("contig_length_log", True, species_id)
+            worker_log = midas_db.get_target_layout("contig_length_log", False, species_id)
+            worker_subdir = os.path.dirname(worker_log)
+            # By default, this is MIDASDB sub-species temp directory
+            if not os.path.isdir(worker_subdir):
+                command(f"mkdir -p {worker_subdir}")
+
+            if args.scratch_dir != ".":
+                worker_subdir = f"{args.scratch_dir}"
+
+            if not args.debug:
+                command(f"rm -rf {worker_subdir}")
+            if not os.path.isdir(worker_subdir):
+                command(f"mkdir -p {worker_subdir}")
+
+            # Recurisve call via subcommand.  Use subdir, redirect logs.
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb -t {num_threads} --compute_contig_length --species {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir} &>> {worker_log}"
+
+            with open(f"{worker_log}", "w") as slog:
+                slog.write(msg + "\n")
+                slog.write(worker_cmd + "\n")
+
+            try:
+                command(worker_cmd)
+            finally:
+                if args.upload:
+                    upload(f"{worker_log}", last_dest, check=False)
+                if not args.debug:
+                    command(f"rm -rf {worker_subdir}", check=False)
+
+    species_id_list = decode_species_arg(args, species)
+    multithreading_map(species_work, species_id_list, num_threads)
+
+
+def compute_contig_length_worker(args):
+
+    violation = "Please do not call generate_cluster_info_worker directly.  Violation"
+    assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
+
+    species_id = args.species
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, num_cores=args.num_threads)
+    species = midas_db.uhgg.species
+    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
+
+    # Collect FASTA from all genomes of species_id
+    ffns_by_genomes = midas_db.fetch_files("annotation_fna", [species_id], False)
+    dict_contig_length = defaultdict(dict)
+    for genome_id, genomefna in ffns_by_genomes.items():
+        dict_contig_length[genome_id] = get_contig_length(genomefna)
+
+    # Write to contigs.length
+    with OutputStream("contigs.len") as stream:
+        stream.write("\t".join(["genome_id", "contig_id", "contig_length"]) + "\n")
+        for gid, r in dict_contig_length.items():
+            for cid, clen in r.items():
+                vals = [gid, cid, str(clen)]
+                stream.write("\t".join(vals) + "\n")
+
+    if args.upload:
+        dest_file = midas_db.get_target_layout("pangenome_contigs_len", True, species_id)
+        upload("contigs.len", dest_file, check=False)
+
+    dest_file = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
+    command(f"cp contigs.len {dest_file}")
+
+    if not args.debug:
+        command("rm -f contigs.len")
+
+
 def register_args(main_func):
     subparser = add_subcommand('build_midasdb', main_func, help='Generate variety of MIDAS DB related files desired by MIDAS')
     subparser.add_argument('--genomes',
@@ -347,6 +461,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
+    subparser.add_argument('--compute_contig_length',
+                           action='store_true',
+                           default=False,
+                           help=f"Compute contigs length for all the genomes given species.")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
@@ -374,3 +492,5 @@ def main(args):
         generate_cluster_info(args)
     if args.build_markerdb:
         build_markerdb(args)
+    if args.compute_contig_length:
+        compute_contig_length(args)
