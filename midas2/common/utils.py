@@ -586,6 +586,19 @@ def upload_star(srcdst):
     return upload(src, dst)
 
 
+def copy(src, dst):
+    assert os.path.isfile(src)
+    try:
+        command(f"cp {src} {dst}")
+    except:
+        raise
+
+
+def copy_star(srcdst):
+    src, dst = srcdst
+    return copy(src, dst)
+
+
 def pythonpath():
     # Path from which this program can be called with "python3 -m midas2"
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
