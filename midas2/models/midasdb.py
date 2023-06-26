@@ -43,10 +43,12 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "centroids_cdhit":               f"pangenomes_filtered/{species_id}/temp/centroids.99.ffn",
         "recluster_log":                 f"pangenomes_filtered/{species_id}/temp/recluster_centroids.log",
         "cluster_info_log":              f"pangenomes_filtered/{species_id}/temp/cluster_info.log",
+        "contig_length_log":             f"pangenomes_filtered/{species_id}/temp/contig_length.log",
         "pangenome_centroids":           f"pangenomes_filtered/{species_id}/centroids.ffn",
         "pangenome_genes_info":          f"pangenomes_filtered/{species_id}/gene_info.txt",
         "pangenome_genes_len":           f"pangenomes_filtered/{species_id}/genes.len",
         "pangenome_cluster_info":        f"pangenomes_filtered/{species_id}/cluster_info.txt",
+        "pangenome_contigs_len":         f"pangenomes_filtered/{species_id}/contigs.len",
         "pangenome_filtered_file":       f"pangenomes_filtered/{species_id}/{component}",
 
 
