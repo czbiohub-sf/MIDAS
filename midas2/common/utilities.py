@@ -4,7 +4,7 @@ from bisect import bisect
 from collections import defaultdict
 import Bio.SeqIO
 
-from midas2.common.utils import InputStream, retry, select_from_tsv, tsprint
+from midas2.common.utils import InputStream, retry, select_from_tsv, tsprint, command
 from midas2.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
 
 
@@ -303,3 +303,26 @@ def compute_gene_boundary(features):
         boundaries = tuple(gr + 1 if idx%2 == 1 else gr for idx, gr in enumerate(feature_ranges_flat))
         gene_boundaries[contig_id] = {"genes": list(feature_ranges_sorted.keys()), "boundaries": boundaries}
     return gene_boundaries
+
+
+def has_ambiguous_or_soft_masked_bases(sequence):
+    # Check if sequence contains lower-case letters, which usually indicate soft-masked bases
+    ambiguous_bases = ['N', 'X', 'n', 'x']
+    return any(base.islower() or base in ambiguous_bases for base in sequence)
+
+
+def check_worker_subdir(worker_subdir, scratch_dir, debug_mode):
+    # By default, we locate the sub worker dir by corresponding log file, which is
+    # usually midasdb's sub-species temp directory. Alternatively, users can provide
+    # a separate scratch dir to write all the temp files.
+    if not os.path.isdir(worker_subdir):
+        command(f"mkdir -p {worker_subdir}")
+    if scratch_dir != ".":
+        worker_subdir = scratch_dir
+
+    if not debug_mode:
+        command(f"rm -rf {worker_subdir}")
+    # We need both worker_subdir, if they differ.
+    if not os.path.isdir(worker_subdir):
+        command(f"mkdir -p {worker_subdir}")
+    return worker_subdir
