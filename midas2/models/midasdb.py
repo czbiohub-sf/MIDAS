@@ -40,7 +40,7 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
         "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
-
+        "pangenome_tempfile":            f"pangenomes/{species_id}/temp/{genome_id}/{component}",
 
         "genes_info_cdhit":              f"pangenomes_filtered/{species_id}/temp/gene_info_cdhit.tsv",
         "centroids_cdhit":               f"pangenomes_filtered/{species_id}/temp/centroids.99.ffn",

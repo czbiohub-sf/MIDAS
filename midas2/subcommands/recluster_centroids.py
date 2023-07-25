@@ -9,7 +9,7 @@ from midas2.common.utils import tsprint, InputStream, OutputStream, command, has
 from midas2.common.utilities import decode_species_arg, check_worker_subdir
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
-from midas2.subcommands.build_pangenome import vsearch, parse_uclust, CLUSTERING_PERCENTS, get_uclust_info, write_gene_info
+from midas2.subcommands.build_pangenome import vsearch, parse_uclust, CLUSTERING_PERCENTS, read_uclust_info, write_gene_info
 
 
 """
@@ -46,7 +46,7 @@ def xref(cluster_files, gene_info_file):
         if percent_id == max_percent_id:
             get_gene_info(centroid_info, uclust_file, percent_id)
         else:
-            get_uclust_info(centroid_info, uclust_file, percent_id)
+            read_uclust_info(centroid_info, uclust_file, percent_id)
 
     # Check for a problem that occurs with improper import of genomes (when contig names clash).
     for g in centroid_info:

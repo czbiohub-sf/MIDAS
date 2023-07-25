@@ -82,6 +82,7 @@ def annotate_genome_master(args):
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
+        
         try:
             command(worker_cmd)
         finally:
@@ -106,7 +107,12 @@ def annotate_genome_master(args):
 
 def annotate_genome_worker(args):
     """
-    https://github.com/czbiohub/midas2/wiki
+    Input:
+        - imported MAGs
+    Output:
+        - Prokka annotations:
+            f"{genome_id}.faa", f"{genome_id}.ffn", f"{genome_id}.fna",
+            f"{genome_id}.gff", f"{genome_id}.tsv"
     """
 
     violation = "Please do not call annotate_genome_worker directly.  Violation"
