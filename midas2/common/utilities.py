@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 from bisect import bisect
 from collections import defaultdict
 import Bio.SeqIO
@@ -47,7 +48,7 @@ def decode_genomes_arg(args, genomes):
                     n = int(n)
                     assert 0 <= i < n, f"Genome class and modulus make no sense: {i}, {n}"
                     for gid in genomes:
-                        gid_int = int(gid.replace("GUT_GENOME", ""))
+                        gid_int = int(re.search(r'\d+$', gid).group())
                         if gid_int % n == i:
                             selected_genomes.add(gid)
     except:

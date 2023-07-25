@@ -6,7 +6,7 @@ from multiprocessing import Semaphore
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, OutputStream, command, hashmap, multithreading_hashmap, multithreading_map, select_from_tsv, pythonpath, num_physical_cores, copy, copy_star
-from midas2.common.utilities import decode_species_arg
+from midas2.common.utilities import decode_species_arg, check_worker_subdir
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 from midas2.subcommands.build_pangenome import vsearch, parse_uclust, CLUSTERING_PERCENTS, get_uclust_info, write_gene_info
@@ -98,25 +98,16 @@ def recluster_centroid_master(args):
             tsprint(msg)
             worker_log = midas_db.get_target_layout("recluster_log", False, species_id)
             worker_subdir = os.path.dirname(worker_log)
-            # By default, this is the MIDASDB sub-species temp directory
-            if not os.path.isdir(worker_subdir):
-                command(f"mkdir -p {worker_subdir}")
-
-            if args.scratch_dir != ".":
-                worker_subdir = f"{args.scratch_dir}"
-
-            if not args.debug:
-                command(f"rm -rf {worker_subdir}")
-            if not os.path.isdir(worker_subdir):
-                command(f"mkdir -p {worker_subdir}")
+            worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 recluster_centroids -s {species_id} -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
+            ## TODO: check the threads thing.....
+            subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 recluster_centroids -s {species_id} -t {num_threads} {subcmd_str} &>> {worker_log}"
 
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
-
             try:
                 command(worker_cmd)
             finally:
@@ -126,7 +117,8 @@ def recluster_centroid_master(args):
     # Check for destination presence in s3 with up to 8-way concurrency.
     # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
     species_id_list = decode_species_arg(args, species)
-    multithreading_map(species_work, species_id_list, num_threads=4) #<----
+    CONCURRENT_RUNS = int(args.num_threads / 8)
+    multithreading_map(species_work, species_id_list, num_threads=CONCURRENT_RUNS)
 
 
 def recluster_centroid_worker(args):
@@ -170,12 +162,12 @@ def register_args(main_func):
                            type=str,
                            default="uhgg",
                            choices=MIDASDB_NAMES,
-                           help=f"MIDAS Database name.")
+                           help="MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Path to local MIDAS Database.")
+                           help="Path to local MIDAS Database.")
     subparser.add_argument('-t',
                            '--num_threads',
                            dest='num_threads',
@@ -185,12 +177,12 @@ def register_args(main_func):
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
-                           help='Upload built files to AWS S3')
+                           help="Upload built files to AWS S3.")
     subparser.add_argument('--scratch_dir',
                            dest='scratch_dir',
                            type=str,
                            default=".",
-                           help=f"Path to fast I/O scratch_dir.")
+                           help="Path to fast I/O scratch_dir.")
     return main_func
 
 
