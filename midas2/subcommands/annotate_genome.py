@@ -82,7 +82,7 @@ def annotate_genome_master(args):
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
-        
+
         try:
             command(worker_cmd)
         finally:

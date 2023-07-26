@@ -66,6 +66,23 @@ def clean_genes(packed_ids):
     return output_genes, output_len
 
 
+def clean_centroids(percent_id, centroids_fp):
+    # Check ambiguous centroids.99, and write to separate files if exist.
+    output_ambiguous = f"centroids.{percent_id}.ambiguous.ffn"
+    output_clean = f"centroids.{percent_id}.clean.ffn"
+    with open(output_ambiguous, 'w') as o_ambiguous, \
+         open(output_clean, 'w') as o_clean, \
+         InputStream(centroids_fp, check_path=False) as centroids:  # check_path=False because for flat directory structure it's slow
+        for rec in Bio.SeqIO.parse(centroids, 'fasta'):
+            c_id = rec.id
+            c_seq = str(rec.seq).upper()
+            if has_ambiguous_bases(c_seq):
+                o_ambiguous.write(f">{c_id}\n{c_seq}\n")
+            else:
+                o_clean.write(f">{c_id}\n{c_seq}\n")
+    return output_ambiguous, output_clean
+
+
 def vsearch(percent_id, genes, num_threads=num_vcpu):
     centroids = f"centroids.{percent_id}.ffn"
     uclust = f"uclust.{percent_id}.txt"
@@ -168,6 +185,7 @@ def build_pangenome_master(args):
     # This will be read separately by each species build subcommand, so we make a local copy.
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
     species = midas_db.uhgg.species
+    num_threads = args.num_threads
 
     def species_work(species_id):
         assert species_id in species, f"Species {species_id} is not in the database."
@@ -204,7 +222,7 @@ def build_pangenome_master(args):
             command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+            subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
             worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} {subcmd_str} {'--recluster' if args.recluster else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
@@ -223,7 +241,7 @@ def build_pangenome_master(args):
     # Check for destination presence in s3 with up to 10-way concurrency.
     # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
     species_id_list = decode_species_arg(args, species)
-    multithreading_map(species_work, species_id_list, num_threads=args.num_threads)
+    multithreading_map(species_work, species_id_list, num_threads=num_threads)
 
 
 def build_pangenome_worker(args):
@@ -241,7 +259,7 @@ def build_pangenome_worker(args):
     assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
 
     species_id = args.species
-    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, 10) #<---- 10-way download
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, args.num_threads) #<----
 
     species = midas_db.uhgg.species
     assert species_id in species, f"build_pangenome_worker::Species {species_id} is not in the database."
@@ -260,6 +278,9 @@ def build_pangenome_worker(args):
     # The initial clustering to max_percent takes longest.
     max_percent, lower_percents = CLUSTERING_PERCENTS[0], CLUSTERING_PERCENTS[1:]
     cluster_files = {max_percent: vsearch(max_percent, "genes.ffn")}
+
+    # Check ambiguous bases of centroids.99
+    c99_ambigous, c99_clean = clean_centroids(max_percent, cluster_files[max_percent][0])
 
     # TODO: we only implement recluster on HPC
     if not args.recluster:
@@ -291,12 +312,14 @@ def build_pangenome_worker(args):
         copy_tasks = [
             ("genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
             ("genes.len", localpath(midas_db, species_id, "genes.len")),
-            ("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt"))
+            ("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt")),
+            (c99_ambigous, localtemp(midas_db, species_id, "vsearch", c99_ambigous)),
+            (c99_clean, localtemp(midas_db, species_id, "vsearch", c99_clean))
         ]
 
         for src in flatten(cluster_files.values()):
             copy_tasks.append((src, localtemp(midas_db, species_id, "vsearch", src)))
-        multithreading_map(copy_star, copy_tasks)
+        multithreading_map(copy_star, copy_tasks, args.num_threads)
 
     if not args.debug:
         # Clean up temporary files
