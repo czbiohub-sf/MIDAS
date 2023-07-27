@@ -10,12 +10,18 @@ MIDASDB_DICT = {
     "newdb": f"{server}/newdb", # reserved for building new MIDASDB locally
     "s3db": f"{igg}/testdb", # reserved for building new MIDASDB and upload to S3
 }
+MIDASDB_NAMES = list(MIDASDB_DICT.keys())
+
 
 MIDASDB_VERSION = {
     "uhgg": f"version 1.0",
     "gtdb": f"version r202",
 }
-MIDASDB_NAMES = list(MIDASDB_DICT.keys())
+
+MIDASDB_STATS = {
+    "uhgg": {"species":4644, "genomes":286997, "version":f"version 1.0"},
+    "gtdb": {"species":47893, "genomes":258405, "version":f"version r202"}
+}
 
 
 MD5SUM_JSON = {

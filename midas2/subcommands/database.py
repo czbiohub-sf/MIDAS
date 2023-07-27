@@ -6,15 +6,15 @@ from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, command, multithreading_map, num_physical_cores, pythonpath, InputStream
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
-from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_VERSION
+from midas2.params.inputs import MIDASDB_NAMES, MIDASDB_STATS
 
 
 def list_midasdb(args):
-    for dbname in MIDASDB_VERSION.keys():
-        midasdb = MIDAS_DB(os.path.join(args.midasdb_dir, f"midasdb_{dbname}"), dbname, 1)
-        nspecies = len(midasdb.uhgg.species)
-        ngenomes = len(midasdb.uhgg.genomes)
-        dbversion = MIDASDB_VERSION[dbname]
+    for dbname in MIDASDB_STATS.keys():
+        dbdict = MIDASDB_STATS[dbname]
+        nspecies = dbdict["species"]
+        ngenomes = dbdict["genomes"]
+        dbversion = dbdict["version"]
         print(f"{dbname} {ngenomes} genomes from {nspecies} species {dbversion}")
 
 

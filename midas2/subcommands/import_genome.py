@@ -1,12 +1,16 @@
-#!/usr/bin/env python3
 import os
 import sys
 from itertools import chain
+from hashlib import md5
+import Bio.SeqIO
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores, copy, copy_star
+from midas2.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, num_physical_cores
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg, check_worker_subdir
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
+
+
+CONCURRENT_GENOME_IMPORTS = 20
 
 
 @retry
@@ -14,39 +18,37 @@ def find_files_with_retry(f):
     return find_files(f)
 
 
-def run_prokka(genome_id, cleaned_genome):
-    # Prokka will crash if installed <6 months ago.  It's a feature.  See tbl2asn.
-
-    #rename_genome(genome_id, cleaned_genome)
-
-    subdir = f"prokka_dir_{genome_id}"
-    command(f"rm -rf {subdir}")
-
-    output_files = [
-        f"{genome_id}.faa",
-        f"{genome_id}.ffn",
-        f"{genome_id}.fna",
-        f"{genome_id}.gff",
-        f"{genome_id}.tsv"
-    ]
-
-    command(f"prokka --kingdom Bacteria --metagenome --outdir {subdir} --cpus 8 --prefix {genome_id} --locustag {genome_id} --compliant {cleaned_genome}")
-
-    for o in output_files:
-        command(f"mv {subdir}/{o} .")
-    command(f"rm -r {subdir}")
-    return output_files
+# 1. Occasional failures in aws s3 cp require a retry.
+# 2. In future, for really large numbers of genomes, we may prefer a separate wave of retries for all first-attempt failures.
+# 3. The Bio.SeqIO.parse() code is CPU-bound and thus it's best to run this function in a separate process for every genome.
+@retry
+def clean_genome(genome_id, raw_genome_fp):
+    output_genome = f"{genome_id}.fasta"
+    with open(output_genome, 'w') as o_genome, \
+         InputStream(raw_genome_fp, check_path=False) as genome:
+        for sn, rec in enumerate(Bio.SeqIO.parse(genome, 'fasta')):
+            contig_seq = str(rec.seq).upper()
+            contig_len = len(contig_seq)
+            # We no longer include contigs shorter than 1000 bps into MIDASDB
+            if contig_len < 1000:
+                continue
+            contig_hash = md5(contig_seq.encode('utf-8')).hexdigest()[-6:]
+            new_contig_id = f"{genome_id}_C{sn}_L{contig_len/1000.0:3.1f}k_H{contig_hash}"
+            o_genome.write(f">{new_contig_id}\n{contig_seq}\n")
+    return output_genome
 
 
-def annotate_genome(args):
+def import_genome(args):
     if args.zzz_worker_mode:
-        annotate_genome_worker(args)
+        import_genome_worker(args)
     else:
-        annotate_genome_master(args)
+        import_genome_master(args)
 
 
-def annotate_genome_master(args):
+def import_genome_master(args):
 
+    # Fetch table of contents from s3.
+    # This will be read separately by each species build subcommand, so we make a local copy.
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
     species_for_genome = midas_db.uhgg.genomes
 
@@ -54,10 +56,10 @@ def annotate_genome_master(args):
         assert genome_id in species_for_genome, f"Genome {genome_id} is not in the database."
         species_id = species_for_genome[genome_id]
 
-        dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
-        local_file = midas_db.get_target_layout("annotation_file", False, species_id, genome_id, "fna")
+        dest_file = midas_db.get_target_layout("imported_genome", True, species_id, genome_id, "fasta")
+        local_file = midas_db.get_target_layout("imported_genome", False, species_id, genome_id, "fasta")
 
-        msg = f"Annotating genome {genome_id} from species {species_id}."
+        msg = f"Importing genome {genome_id} from species {species_id}."
         if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for genome {genome_id} annotations already exists.  Specify --force to overwrite.")
@@ -71,14 +73,14 @@ def annotate_genome_master(args):
             msg = msg.replace("Importing", "Reimporting")
 
         tsprint(msg)
-        last_dest = midas_db.get_target_layout("annotation_log", True, species_id, genome_id)
-        worker_log = midas_db.get_target_layout("annotation_log", False, species_id, genome_id)
+        last_dest = midas_db.get_target_layout("import_log", True, species_id, genome_id)
+        worker_log = midas_db.get_target_layout("import_log", False, species_id, genome_id)
         worker_subdir = os.path.dirname(worker_log)
         worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 annotate_genome --genome {genome_id} {subcmd_str} &>> {worker_log}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 import_genome --genome {genome_id} {subcmd_str} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
@@ -100,16 +102,12 @@ def annotate_genome_master(args):
         species_id_list = decode_species_arg(args, species)
         genome_id_list = list(chain.from_iterable([list(species[spid].keys()) for spid in species_id_list]))
 
-    CONCURRENT_PROKKA_RUNS = int(args.num_threads / 8)
-    multithreading_map(genome_work, genome_id_list, num_threads=CONCURRENT_PROKKA_RUNS)
+    multithreading_map(genome_work, genome_id_list, num_threads=args.num_threads)
 
 
-def annotate_genome_worker(args):
-    """
-    https://github.com/czbiohub/midas2/wiki
-    """
+def import_genome_worker(args):
 
-    violation = "Please do not call annotate_genome_worker directly.  Violation"
+    violation = "Please do not call import_genome_worker directly.  Violation"
     assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
 
     midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name)
@@ -118,36 +116,19 @@ def annotate_genome_worker(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fasta")
-    output_files = run_prokka(genome_id, cleaned_genome_fp)
-
+    raw_genome_fp = midas_db.fetch_file("raw_genome", species_id, genome_id, "fa")
+    cleaned = clean_genome(genome_id, raw_genome_fp)
+    
     if args.upload:
-        dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
-        last_output = drop_lz4(os.path.basename(dest_file))
-        upload_asks = []
-        for o in output_files:
-            otype = o.rsplit(".")[-1]
-            if o != last_output:
-                upload_tasks.append((o, midas_db.get_target_layout("annotation_file", True, species_id, genome_id, otype)))
-        command(f"aws s3 rm --recursive {dest_file.rsplit('/', 1)[0]}")
-        multithreading_map(upload_star, upload_tasks)
-        # Upload this last because it indicates all other work has succeeded.
-        upload(last_output, dest_file)
-
-    if args.scratch_dir != ".":
-        copy_tasks = []
-        for o in output_files:
-            otype = o.rsplit(".")[-1]
-            copy_tasks.append((o, midas_db.get_target_layout("annotation_file", False, species_id, genome_id, otype)))
-        multithreading_map(copy_star, copy_tasks)
+        upload(cleaned, midas_db.get_target_layout("imported_genome", True, species_id, genome_id, "fasta"))
 
 
 def register_args(main_func):
-    subparser = add_subcommand('annotate_genome', main_func, help='Genome annotation for specified genomes using Prokka with all cores')
+    subparser = add_subcommand('import_genome', main_func, help='import selected genomes from UHGG')
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
-                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning annotate genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
+                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning import genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
     subparser.add_argument('--species',
                            dest='species',
                            required=False,
@@ -172,7 +153,7 @@ def register_args(main_func):
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
-                           help='Upload built files to AWS S3')
+                           help="Upload built files to AWS S3")
     subparser.add_argument('--scratch_dir',
                            dest='scratch_dir',
                            type=str,
@@ -183,5 +164,5 @@ def register_args(main_func):
 
 @register_args
 def main(args):
-    tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.")
-    annotate_genome(args)
+    tsprint(f"Executing midas2 subcommand {args.subcommand} with args {vars(args)}.")
+    import_genome(args)

@@ -18,7 +18,9 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
         # Input: table of content and collections of genomes
         "table_of_contents":             f"genomes.tsv",
+        "raw_genome":                    f"mags/{species_id}/{genome_id}.{component}",
         "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
+        "import_log":                    f"cleaned_imports/{species_id}/{genome_id}/import_genome.log",
 
         "annotation_file":               f"gene_annotations/{species_id}/{genome_id}/{genome_id}.{component}",
         "representative_genome":         f"gene_annotations/{species_id}/{genome_id}/{genome_id}.fna",
@@ -38,6 +40,7 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
         "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
+
 
         "genes_info_cdhit":              f"pangenomes_filtered/{species_id}/temp/gene_info_cdhit.tsv",
         "centroids_cdhit":               f"pangenomes_filtered/{species_id}/temp/centroids.99.ffn",
