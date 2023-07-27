@@ -118,7 +118,7 @@ def import_genome_worker(args):
 
     raw_genome_fp = midas_db.fetch_file("raw_genome", species_id, genome_id, "fa")
     cleaned = clean_genome(genome_id, raw_genome_fp)
-    
+
     if args.upload:
         upload(cleaned, midas_db.get_target_layout("imported_genome", True, species_id, genome_id, "fasta"))
 

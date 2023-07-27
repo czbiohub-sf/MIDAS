@@ -306,10 +306,10 @@ def compute_gene_boundary(features):
     return gene_boundaries
 
 
-def has_ambiguous_or_soft_masked_bases(sequence):
+def has_ambiguous_bases(sequence):
     # Check if sequence contains lower-case letters, which usually indicate soft-masked bases
     ambiguous_bases = ['N', 'X', 'n', 'x']
-    return any(base.islower() or base in ambiguous_bases for base in sequence)
+    return any(base in ambiguous_bases for base in sequence)
 
 
 def check_worker_subdir(worker_subdir, scratch_dir, debug_mode):

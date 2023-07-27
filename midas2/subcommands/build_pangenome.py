@@ -6,8 +6,8 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath
-from midas2.common.utilities import decode_species_arg
+from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath, num_physical_cores, copy, copy_star
+from midas2.common.utilities import decode_species_arg, check_worker_subdir, has_ambiguous_bases
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -26,6 +26,9 @@ def destpath(midas_db, species_id, filename):
 def localpath(midas_db, species_id, filename):
     return midas_db.get_target_layout("pangenome_file", False, species_id, "", filename)
 
+def localtemp(midas_db, species_id, step, filename):
+    return midas_db.get_target_layout("pangenome_tempfile", False, species_id, step, filename)
+
 
 @retry
 def find_files_with_retry(f):
@@ -41,6 +44,8 @@ def clean_genes(packed_ids):
     1. extra newlines have been removed from the gene sequences, so that each gene sequence occupies a single line below the gene header
     2. DNA letters have been converted to uppercase, and
     3. degenerate genes (with empty sequences or headers containing "|") have been excluded
+    4. Remove genes with ambiguous bases
+    5. remove short genes (<= 200 bps)
     """
     genome_id, genes_ffn = packed_ids
 
@@ -53,7 +58,7 @@ def clean_genes(packed_ids):
             gene_id = rec.id
             gene_seq = str(rec.seq).upper()
             gene_len = len(gene_seq)
-            if gene_len == 0 or gene_id == '' or gene_id == '|':
+            if gene_len <= 200 or has_ambiguous_bases(gene_seq) or gene_id == '' or gene_id == '|':
                 pass
             else:
                 o_genes.write(f">{gene_id}\n{gene_seq}\n")
@@ -61,32 +66,21 @@ def clean_genes(packed_ids):
     return output_genes, output_len
 
 
-def write_gene_info(centroid_info, percents, gene_info_file):
-    # Write centroid_info[gene][percent_id] to gene_info_file
-    with OutputStream(gene_info_file) as gene_info:
-        header = ['gene_id'] + [f"centroid_{pid}" for pid in percents]
-        gene_info.write('\t'.join(header) + '\n')
-        genes = centroid_info.keys()
-        for gene_id in sorted(genes):
-            gene_info.write(gene_id)
-            for centroid in centroid_info[gene_id].values():
-                gene_info.write('\t')
-                gene_info.write(centroid)
-            gene_info.write('\n')
-
-
-def get_uclust_info(centroid_info, uclust_file, percent_id):
-    # Get centroid_info from uclust
-    for r_type, r_gene, r_centroid in parse_uclust(uclust_file, ['type', 'gene_id', 'centroid_id']):
-        if r_type == 'S':
-            # r itself is the centroid of its cluster
-            centroid_info[r_gene][percent_id] = r_gene
-        elif r_type == 'H':
-            # r is not itself a centroid
-            centroid_info[r_gene][percent_id] = r_centroid
-        else:
-            # ignore all other r types
-            pass
+def clean_centroids(percent_id, centroids_fp):
+    # Check ambiguous centroids.99, and write to separate files if exist.
+    output_ambiguous = f"centroids.{percent_id}.ambiguous.ffn"
+    output_clean = f"centroids.{percent_id}.clean.ffn"
+    with open(output_ambiguous, 'w') as o_ambiguous, \
+         open(output_clean, 'w') as o_clean, \
+         InputStream(centroids_fp, check_path=False) as centroids:  # check_path=False because for flat directory structure it's slow
+        for rec in Bio.SeqIO.parse(centroids, 'fasta'):
+            c_id = rec.id
+            c_seq = str(rec.seq).upper()
+            if has_ambiguous_bases(c_seq):
+                o_ambiguous.write(f">{c_id}\n{c_seq}\n")
+            else:
+                o_clean.write(f">{c_id}\n{c_seq}\n")
+    return output_ambiguous, output_clean
 
 
 def vsearch(percent_id, genes, num_threads=num_vcpu):
@@ -113,6 +107,34 @@ def parse_uclust(uclust_file, select_columns):
             yield r
 
 
+def read_uclust_info(centroid_info, uclust_file, percent_id):
+    # Get centroid_info from uclust
+    for r_type, r_gene, r_centroid in parse_uclust(uclust_file, ['type', 'gene_id', 'centroid_id']):
+        if r_type == 'S':
+            # r itself is the centroid of its cluster
+            centroid_info[r_gene][percent_id] = r_gene
+        elif r_type == 'H':
+            # r is not itself a centroid
+            centroid_info[r_gene][percent_id] = r_centroid
+        else:
+            # ignore all other r types
+            pass
+
+
+def write_gene_info(centroid_info, percents, gene_info_file):
+    # Write centroid_info[gene][percent_id] to gene_info_file
+    with OutputStream(gene_info_file) as gene_info:
+        header = ['gene_id'] + [f"centroid_{pid}" for pid in percents]
+        gene_info.write('\t'.join(header) + '\n')
+        genes = centroid_info.keys()
+        for gene_id in sorted(genes):
+            gene_info.write(gene_id)
+            for centroid in centroid_info[gene_id].values():
+                gene_info.write('\t')
+                gene_info.write(centroid)
+            gene_info.write('\n')
+
+
 def xref(cluster_files, gene_info_file):
     """
     Produce the per-species gene_info.txt file
@@ -125,7 +147,7 @@ def xref(cluster_files, gene_info_file):
     # generated by the annotation tool Prokka.
     centroid_info = defaultdict(dict)
     for percent_id, (_, uclust_file) in cluster_files.items():
-        get_uclust_info(centroid_info, uclust_file, percent_id)
+        read_uclust_info(centroid_info, uclust_file, percent_id)
 
     # Check for a problem that occurs with improper import of genomes (when contig names clash).
     percents = cluster_files.keys()
@@ -163,6 +185,7 @@ def build_pangenome_master(args):
     # This will be read separately by each species build subcommand, so we make a local copy.
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
     species = midas_db.uhgg.species
+    num_threads = args.num_threads
 
     def species_work(species_id):
         assert species_id in species, f"Species {species_id} is not in the database."
@@ -172,8 +195,8 @@ def build_pangenome_master(args):
         # Therefore, if this file exists in s3, there is no need to redo the species build.
         dest_file = destpath(midas_db, species_id, "gene_info.txt")
         local_file = localpath(midas_db, species_id, "gene_info.txt")
-        msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
 
+        msg = f"Building pangenome for species {species_id} with {len(species_genomes)} total genomes."
         if args.upload and find_files_with_retry(dest_file):
             if not args.force:
                 tsprint(f"Destination {dest_file} for species {species_id} pangenome already exists.  Specify --force to overwrite.")
@@ -190,14 +213,17 @@ def build_pangenome_master(args):
             last_dest = midas_db.get_target_layout("pangenome_log", True, species_id)
             worker_log = midas_db.get_target_layout("pangenome_log", False, species_id)
             worker_subdir = os.path.dirname(worker_log)
+            command(f"mkdir -p {worker_subdir}/temp/vsearch")
 
-            if not args.debug:
-                command(f"rm -rf {worker_subdir}")
-            if not os.path.isdir(worker_subdir):
-                command(f"mkdir -p {worker_subdir}")
+            worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
+
+            # Either pangenome/{species} or scartch dir
+            worker_subdir = f"{worker_subdir}/temp/vsearch"
+            command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_log}"
+            subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_pangenome -s {species_id} {subcmd_str} {'--recluster' if args.recluster else ''} &>> {worker_log}"
             with open(f"{worker_log}", "w") as slog:
                 slog.write(msg + "\n")
                 slog.write(worker_cmd + "\n")
@@ -215,13 +241,13 @@ def build_pangenome_master(args):
     # Check for destination presence in s3 with up to 10-way concurrency.
     # If destination is absent, commence build with up to 3-way concurrency as constrained by CONCURRENT_SPECIES_BUILDS.
     species_id_list = decode_species_arg(args, species)
-    multithreading_map(species_work, species_id_list, num_threads=10)
+    multithreading_map(species_work, species_id_list, num_threads=num_threads)
 
 
 def build_pangenome_worker(args):
     """
     Input:
-        - prokka gene annotation for all genomes of the given species
+        - Cleaned Prokka annotations of all the genomes for given species
     Output:
         - genes.ffn
         - genes.len
@@ -231,36 +257,38 @@ def build_pangenome_worker(args):
 
     violation = "Please do not call build_pangenome_worker directly.  Violation"
     assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
-    assert os.path.basename(os.getcwd()) == args.species, f"{violation}: {os.path.basename(os.getcwd())} != {args.species}"
 
     species_id = args.species
-    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, 10) #<---- 10-way download
+    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, args.num_threads) #<----
 
     species = midas_db.uhgg.species
-    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
+    assert species_id in species, f"build_pangenome_worker::Species {species_id} is not in the database."
 
     ffns_by_genomes = midas_db.fetch_files("annotation_ffn", [species_id], False)
-    cleaned = multiprocessing_map(clean_genes, ((genome_id, geneffn) for genome_id, geneffn in ffns_by_genomes.items()))
+    cleaned = multiprocessing_map(clean_genes, ((genome_id, geneffn) for genome_id, geneffn in ffns_by_genomes.items()), args.num_threads)
 
     command("rm -f genes.ffn genes.len")
     for temp_files in split(cleaned, 20):  # keep "cat" commands short
         ffn_files, len_files = transpose(temp_files)
         command("cat " + " ".join(ffn_files) + " >> genes.ffn")
         command("cat " + " ".join(len_files) + " >> genes.len")
-        if not args.upload:
-            command("rm " + " ".join(ffn_files))
-            command("rm " + " ".join(len_files))
+        command("rm " + " ".join(ffn_files))
+        command("rm " + " ".join(len_files))
 
     # The initial clustering to max_percent takes longest.
     max_percent, lower_percents = CLUSTERING_PERCENTS[0], CLUSTERING_PERCENTS[1:]
     cluster_files = {max_percent: vsearch(max_percent, "genes.ffn")}
 
-    # Reclustering of the max_percent centroids is usually quick, and can proceed in prallel.
-    recluster = lambda percent_id: vsearch(percent_id, cluster_files[max_percent][0])
-    cluster_files.update(multithreading_hashmap(recluster, lower_percents))
+    # Check ambiguous bases of centroids.99
+    c99_ambigous, c99_clean = clean_centroids(max_percent, cluster_files[max_percent][0])
+
+    # TODO: we only implement recluster on HPC
+    if not args.recluster:
+        # Reclustering of the max_percent centroids is usually quick, and can proceed in prallel.
+        recluster = lambda percent_id: vsearch(percent_id, cluster_files[max_percent][0])
+        cluster_files.update(multithreading_hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
-    command(f"cp centroids.{max_percent}.ffn centroids.ffn")
 
     if args.upload:
         # Create list of (source, dest) pairs for uploading.
@@ -270,22 +298,34 @@ def build_pangenome_worker(args):
             ("genes.len", destpath(midas_db, species_id, "genes.len")),
             (f"centroids.{max_percent}.ffn", destpath(midas_db, species_id, "centroids.ffn"))
         ]
-
         for src in flatten(cluster_files.values()):
-            upload_tasks.append((src, destpath(midas_db, species_id, f"temp/{src}")))
-
-        # Upload in parallel.
-        last_output = "gene_info.txt"
-        last_dest_file = destpath(midas_db, species_id, last_output)
+            upload_tasks.append((src, destpath(midas_db, species_id, f"temp/{src}"))) #<---
         command(f"aws s3 rm --recursive {os.path.dirname(last_dest_file)}")
+        # Upload in parallel.
         multithreading_map(upload_star, upload_tasks)
         # Leave this upload for last, so the presence of this file in s3 would indicate the entire species build has succeeded.
+        last_output = "gene_info.txt"
+        last_dest_file = destpath(midas_db, species_id, last_output)
         upload(last_output, last_dest_file)
 
-    # Clean up temporary files
-    command("rm -f genes.ffn")
-    for src in flatten(cluster_files.values()):
-        command(f"rm -f {src}")
+    if args.scratch_dir != ".":
+        copy_tasks = [
+            ("genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
+            ("genes.len", localpath(midas_db, species_id, "genes.len")),
+            ("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt")),
+            (c99_ambigous, localtemp(midas_db, species_id, "vsearch", c99_ambigous)),
+            (c99_clean, localtemp(midas_db, species_id, "vsearch", c99_clean))
+        ]
+
+        for src in flatten(cluster_files.values()):
+            copy_tasks.append((src, localtemp(midas_db, species_id, "vsearch", src)))
+        multithreading_map(copy_star, copy_tasks, args.num_threads)
+
+    if not args.debug:
+        # Clean up temporary files
+        command("rm -f genes.ffn")
+        for src in flatten(cluster_files.values()):
+            command(f"rm -f {src}")
 
 
 def register_args(main_func):
@@ -306,10 +346,25 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Path to local MIDAS Database.")
+    subparser.add_argument('-t',
+                           '--num_threads',
+                           dest='num_threads',
+                           type=int,
+                           default=num_physical_cores,
+                           help="Number of threads")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
-                           help='Upload built files to AWS S3')
+                           help="Upload built files to AWS S3.")
+    subparser.add_argument('--scratch_dir',
+                           dest='scratch_dir',
+                           type=str,
+                           default=".",
+                           help="Path to fast I/O scratch_dir.")
+    subparser.add_argument('--recluster',
+                           action='store_true',
+                           default=False,
+                           help="Recluster centroids.99 via cd-hit.")
     return main_func
 
 
