@@ -327,3 +327,55 @@ def check_worker_subdir(worker_subdir, scratch_dir, debug_mode):
     if not os.path.isdir(worker_subdir):
         command(f"mkdir -p {worker_subdir}")
     return worker_subdir
+
+
+def write_cluster_info(dict_of_centroids, dict_of_markers, dict_of_gene_length, cluster_info_fp):
+    with OutputStream(cluster_info_fp) as stream:
+        stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
+        for r in dict_of_centroids.values():
+            centroid_99 = r["centroid_99"]
+            marker_id = dict_of_markers[centroid_99] if centroid_99 in dict_of_markers else ""
+            gene_len = dict_of_gene_length[centroid_99]
+            val = list(r.values()) + [gene_len, marker_id]
+            stream.write("\t".join(map(str, val)) + "\n")
+
+
+def parse_gff_to_tsv(gff3_file, genes_file):
+    """ Convert GFF3 features format into genes.feature """
+    command(f"rm -f {genes_file}")
+    command(f"rm -f {gff3_file}.db")
+    db = gffutils.create_db(gff3_file, f"{gff3_file}.db")
+    with OutputStream(genes_file) as stream:
+        stream.write("\t".join(["gene_id", "contig_id", "start", "end", "strand", "gene_type"]) + "\n")
+        for feature in db.all_features():
+            if feature.source == "prokka":
+                continue
+            if "ID" not in feature.attributes: #CRISPR
+                continue
+            seqid = feature.seqid
+            start = feature.start
+            stop = feature.stop
+            strand = feature.strand
+            gene_id = feature.attributes['ID'][0]
+            locus_tag = feature.attributes['locus_tag'][0]
+            assert gene_id == locus_tag
+            gene_type = feature.featuretype
+            stream.write("\t".join([gene_id, seqid, str(start), str(stop), strand, gene_type]) + "\n")
+    return True
+
+
+def get_contig_length(fasta_file):
+    clen = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            clen[rec.id] = len(rec.seq)
+    return clen
+
+
+def write_contig_length(dict_of_contig_length, contig_length_fp):
+    with OutputStream(contig_length_fp) as stream:
+        stream.write("\t".join(["genome_id", "contig_id", "contig_length"]) + "\n")
+        for gid, r in dict_of_contig_length.items():
+            for cid, clen in r.items():
+                vals = [gid, cid, str(clen)]
+                stream.write("\t".join(vals) + "\n")

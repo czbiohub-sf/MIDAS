@@ -316,7 +316,6 @@ def build_pangenome_worker(args):
             (c99_ambigous, localtemp(midas_db, species_id, "vsearch", c99_ambigous)),
             (c99_clean, localtemp(midas_db, species_id, "vsearch", c99_clean))
         ]
-
         for src in flatten(cluster_files.values()):
             copy_tasks.append((src, localtemp(midas_db, species_id, "vsearch", src)))
         multithreading_map(copy_star, copy_tasks, args.num_threads)

@@ -8,9 +8,6 @@ from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import hmmsearch_max_evalue, hmmsearch_min_cov, MIDASDB_NAMES
 
 
-CONCURRENT_INFER_MARKERS = num_physical_cores
-
-
 @retry
 def find_files_with_retry(f):
     return find_files(f)
@@ -142,6 +139,7 @@ def infer_markers_master(args):
                 command(f"rm -rf {worker_subdir}", check=False)
 
     genome_id_list = decode_genomes_arg(args, species_for_genome)
+    CONCURRENT_INFER_MARKERS = int(args.num_threads)
     multithreading_map(genome_work, genome_id_list, num_threads=CONCURRENT_INFER_MARKERS)
 
 
@@ -200,6 +198,12 @@ def register_args(main_func):
                            type=str,
                            default=".",
                            help=f"Path to local MIDAS Database.")
+    subparser.add_argument('-t',
+                           '--num_threads',
+                           dest='num_threads',
+                           type=int,
+                           default=num_physical_cores,
+                           help="Number of threads")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
