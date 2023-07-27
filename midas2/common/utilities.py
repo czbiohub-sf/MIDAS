@@ -3,9 +3,10 @@ import os
 import re
 from bisect import bisect
 from collections import defaultdict
+import gffutils
 import Bio.SeqIO
 
-from midas2.common.utils import InputStream, retry, select_from_tsv, tsprint, command
+from midas2.common.utils import InputStream, OutputStream, retry, select_from_tsv, tsprint, command
 from midas2.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
 
 

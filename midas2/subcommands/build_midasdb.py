@@ -3,7 +3,6 @@ import os
 import sys
 from multiprocessing import Semaphore
 from collections import defaultdict
-import gffutils
 import Bio.SeqIO
 
 from midas2.common.argparser import add_subcommand
@@ -143,10 +142,10 @@ def generate_cluster_info_master(args):
         worker_subdir = os.path.dirname(worker_log)
 
         worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
-
+        
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} &>> {worker_log}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} {subcmd_str} &>> {worker_log}"
 
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
@@ -171,20 +170,19 @@ def generate_cluster_info_worker(args):
 
     species_id = args.species
     midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, num_cores=args.num_threads)
+
     species = midas_db.uhgg.species
     assert species_id in species, f"{violation}: Species {species_id} is not in the database."
 
     # Collect mapfile from all genomes of species_id
     mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], rep_only=False)
     cat_files(mapfiles_by_genomes.values(), "mapfile", 20)
-
-    # <gene_id, marker_id>
-    dict_of_markers = scan_mapfile("mapfile")
+    dict_of_markers = scan_mapfile("mapfile") # <gene_id, marker_id>
 
     if args.scratch_dir != ".":
-        gene_info_fp = "gene_info.txt"
-        gene_length_fp ="genes.len"
-        assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Provided {args.scratch_dir} does't have the gene_info.txt and genes.len."
+        gene_info_fp = "temp/gene_info.txt"
+        gene_length_fp ="temp/cdhit/genes.len"
+        assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Recluster_centroids outputs are no in the provided {args.scratch_dir}."
     else:
         gene_info_fp = midas_db.fetch_file("pangenome_genes_info", species_id)
         gene_length_fp = midas_db.fetch_file("pangenome_genes_len", species_id)
@@ -275,15 +273,6 @@ def build_markerdb(args):
         upload_tasks = list(zip(midas_db.get_target_layout("marker_db", False), midas_db.get_target_layout("marker_db", True)))
         multithreading_map(upload_star, upload_tasks, 4)
         upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
-
-
-def compute_contig_length_worker(args):
-
-    dest_file = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
-    command(f"cp contigs.len {dest_file}")
-
-    if not args.debug:
-        command("rm -f contigs.len")
 
 
 def register_args(main_func):
