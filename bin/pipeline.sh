@@ -155,7 +155,7 @@ if [[ ! -e ${gene_info_cdhit} ]]; then
 fi
 
 
-is_success="${species_dir}/temp/PIPELINE_SUCCESS"
+is_success="${out_dir}/PIPELINE_SUCCESS"
 if [[ ! -e ${is_success} ]]; then
   awk '{ if ($0 ~ /^>/) {print $0} else {print toupper($0)}}' ${cdhit_centroids_ffn} > ${out_dir}/centroids.99.ffn
   seqkit grep -w 0 -f ${info_dir}/list_of_cdhit_genes ${genes_ffn} > ${out_dir}/genes.ffn
