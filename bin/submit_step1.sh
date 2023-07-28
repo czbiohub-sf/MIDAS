@@ -11,9 +11,9 @@
 #$ -l mem_free=5G                   #-- submits on nodes with enough free memory (required)
 #$ -l arch=lx-amd64                 #-- SGE resources (CPU type)
 #$ -l scratch=20G                   #-- SGE resources (home and scratch disks)
-#$ -l h_rt=00:30:00                #-- runtime limit (see above; this requests 24 hours)
-#$ -t 1-2                        #-- Array job: submit XX jobs to the job queues at once.
-#$ -tc 2                         #-- specify the maximum number of concurrent tasks
+#$ -l h_rt=24:00:00                #-- runtime limit (see above; this requests 24 hours)
+#$ -t 1-10000                        #-- Array job: submit XX jobs to the job queues at once.
+#$ -tc 10000                         #-- specify the maximum number of concurrent tasks
 
 
 module load Sali anaconda
@@ -24,12 +24,12 @@ JB_LAB=batch_${SGE_TASK_ID}
 TREADS=${NSLOTS:-1}
 
 GNUTIME="/wynton/home/pollard/czhao/local/bin/time-1.9/bin/time"
-#MIDASDB_DIR="/pollard/data/midas2-db/midas2db-wis-2023"
-MIDASDB_DIR="/pollard/data/midas2-db/toy_wis"
+MIDASDB_DIR="/pollard/data/midas2-db/midas2db-wis-2023"
+#MIDASDB_DIR="/pollard/data/midas2-db/toy_wis"
 
 CWDIR="/wynton/home/pollard/czhao/midasdb_wis"
-#GB_IN="${CWDIR}/sge_jobs/step1_annotate/${JB_LAB}"
-GB_IN="${CWDIR}/sge_jobs/${JB_LAB}"
+GB_IN="${CWDIR}/sge_jobs/step1_annotate/${JB_LAB}"
+#GB_IN="${CWDIR}/sge_jobs/${JB_LAB}"
 
 #### global scratch for outputs
 GB_OUT="/wynton/scratch/czhao/midasdb_wis/step1_annotate/${JB_LAB}"

@@ -49,7 +49,7 @@ do
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
     --scratch_dir ${SPECIES_DIR} \
-    --debug --recluster --force &> ${TEMP_DIR}/build_pangenome_time.log
+    --debug --recluster &> ${TEMP_DIR}/build_pangenome_time.log
 
   ${GNUTIME} -v bash ${SCRIPTDIR}/pipeline.sh ${species_id} \
       ${SPECIES_DIR} ${TREADS} 32000 \
@@ -59,7 +59,13 @@ do
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
     --scratch_dir ${SPECIES_DIR} \
-    --debug --force &> ${TEMP_DIR}/recluster_time.log
+    --debug &> ${TEMP_DIR}/recluster_time.log
+
+  ${GNUTIME} -v midas2 build_midasdb --generate_cluster_info \
+    --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
+    --species ${species_id} --num_threads ${TREADS} \
+    --scratch_dir ${SPECIES_DIR} \
+    --debug &> ${TEMP_DIR}/cluster_info_time.log
 
   cp -r ${TEMP_DIR}/cdhit ${MIDASDB_DIR}/pangenomes/${species_id}/temp
   cp ${TEMP_DIR}/*.log ${MIDASDB_DIR}/pangenomes/${species_id}/temp
