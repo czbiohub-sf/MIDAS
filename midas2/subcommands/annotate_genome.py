@@ -124,8 +124,10 @@ def annotate_genome_worker(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fasta")
-    output_files = run_prokka(genome_id, cleaned_genome_fp)
+    if not os.path.exists(f"{genome_id}.fasta"):
+        cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fasta")
+    command(f"cp {cleaned_genome_fp} {genome_id}.fasta")
+    output_files = run_prokka(genome_id, f"{genome_id}.fasta")
 
     if args.upload:
         dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
