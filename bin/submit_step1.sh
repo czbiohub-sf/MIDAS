@@ -39,7 +39,7 @@ mkdir -p $GB_OUT
 while IFS= read -r genome_id
 do
   GENOME_DIR="${GB_OUT}/${genome_id}"
-  TEMP_DIR=$SPECIES_DIR/temp
+  TEMP_DIR=$GENOME_DIR/temp
   if [ ! -d $GENOME_DIR/temp ]; then
     mkdir -p $GENOME_DIR/temp
   fi
