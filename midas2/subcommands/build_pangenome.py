@@ -308,17 +308,23 @@ def build_pangenome_worker(args):
         last_dest_file = destpath(midas_db, species_id, last_output)
         upload(last_output, last_dest_file)
 
+
+    copy_tasks = [
+        ("genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
+        ("genes.len", localpath(midas_db, species_id, "genes.len")),
+        ("centroids.99.ffn", localpath(midas_db, species_id, "centroids.ffn"))
+    ]
+    if args.recluster:
+        copy_tasks.append(("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt")))
+    else:
+        copy_tasks.append(("gene_info.txt", localpath(midas_db, species_id, "gene_info.txt")))
+
     if args.scratch_dir != ".":
-        copy_tasks = [
-            ("genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
-            ("genes.len", localpath(midas_db, species_id, "genes.len")),
-            ("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt")),
-            (c99_ambigous, localtemp(midas_db, species_id, "vsearch", c99_ambigous)),
-            (c99_clean, localtemp(midas_db, species_id, "vsearch", c99_clean))
-        ]
+        copy_tasks.append((c99_ambigous, localtemp(midas_db, species_id, "vsearch", c99_ambigous)))
+        copy_tasks.append((c99_clean, localtemp(midas_db, species_id, "vsearch", c99_clean)))
         for src in flatten(cluster_files.values()):
             copy_tasks.append((src, localtemp(midas_db, species_id, "vsearch", src)))
-        multithreading_map(copy_star, copy_tasks, args.num_threads)
+    multithreading_map(copy_star, copy_tasks, args.num_threads)
 
     if not args.debug:
         # Clean up temporary files
