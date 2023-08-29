@@ -48,8 +48,8 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
 
         "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
         "pangenome_contigs_len":         f"pangenomes/{species_id}/contigs.len",
-        "cluster_info_log":              f"pangenomes/{species_id}/temp/cluster_info.log",
-        "contig_length_log":             f"pangenomes/{species_id}/temp/contig_length.log",
+        "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
+        "contig_length_log":             f"pangenomes/{species_id}/contig_length.log",
 
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
         "marker_map_by_species":         f"markers/{marker_set}/temp/{species_id}/{species_id}.markers.map",

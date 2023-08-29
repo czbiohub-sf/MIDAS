@@ -1,8 +1,8 @@
 #!/bin/bash                         #-- what is the language of this shell
 #                                   #-- Any line that starts with #$ is an instruction to SGE
 #$ -S /bin/bash                     #-- the shell for the job
-#$ -o /wynton/group/pollard/czhao/pangenome/pipeline_out                       #-- output directory (fill in)
-#$ -e /wynton/group/pollard/czhao/pangenome/pipeline_err                       #-- error directory (fill in)
+#$ -o /wynton/group/pollard/czhao/midasdb_wis/pipeline_out                       #-- output directory (fill in)
+#$ -e /wynton/group/pollard/czhao/midasdb_wis/pipeline_err                       #-- error directory (fill in)
 #$ -V                               #-- pass all environment variables
 #$ -cwd                             #-- tell the job that it should start in your working directory
 ##$ -r y                            #-- tell the system that if a job crashes, it should be restarted
@@ -10,14 +10,14 @@
 #$ -pe smp 8
 #$ -l mem_free=4G                   #-- submits on nodes with enough free memory (required)
 #$ -l arch=lx-amd64                 #-- SGE resources (CPU type)
-#$ -l scratch=20G                   #-- SGE resources (home and scratch disks)
-#$ -l h_rt=00:36:00                #-- runtime limit (see above; this requests 24 hours)
+#$ -l scratch=10G                   #-- SGE resources (home and scratch disks)
+#$ -l h_rt=00:30:00                #-- runtime limit (see above; this requests 24 hours)
 #$ -t 1-2                        #-- Array job: submit XX jobs to the job queues at once.
 #$ -tc 2                         #-- specify the maximum number of concurrent tasks
 
 
 module load Sali anaconda
-conda activate midas2v1.06
+conda activate midas2v1.07
 
 echo "Hello world, I’m running on node ${HOSTNAME}"
 JB_LAB=species_${SGE_TASK_ID}
@@ -27,12 +27,12 @@ GNUTIME="/wynton/home/pollard/czhao/local/bin/time-1.9/bin/time"
 MIDASDB_DIR="/pollard/data/midas2-db/toy_wis" #midas2db-wis-2023
 
 CWDIR="/wynton/home/pollard/czhao/midasdb_wis"
-#GB_IN="${CWDIR}/sge_jobs/step2_pangenome/${JB_LAB}"
+SCRIPTDIR="${CWDIR}/MIDAS2/bin"
 GB_IN="${CWDIR}/sge_jobs/${JB_LAB}"
 
 
 #### global scratch for outputs
-GB_OUT="/wynton/scratch/czhao/midasdb_wis/step2_pangenome/${JB_LAB}"
+GB_OUT="/wynton/scratch/czhao/midasdb_wis/step2_pangenome/toy/${JB_LAB}"
 rm -rf ${GB_OUT}
 mkdir -p $GB_OUT
 
@@ -41,27 +41,34 @@ while IFS= read -r species_id
 do
   SPECIES_DIR="${GB_OUT}/${species_id}"
   TEMP_DIR=$SPECIES_DIR/temp
-  if [ ! -d TEMP_DIR ]; then
-    mkdir -p TEMP_DIR
+  if [ ! -d $TEMP_DIR ]; then
+    mkdir -p $TEMP_DIR
   fi
 
   ${GNUTIME} -v midas2 build_pangenome \
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
     --scratch_dir ${SPECIES_DIR} \
-    --debug --recluster --force &> ${TEMP_DIR}/build_pangenome_time.log
+    --debug --recluster &> ${TEMP_DIR}/build_pangenome_time.log
 
-  ${GNUTIME} -v bash ${CWDIR}/bin/pipeline.sh ${species_id} \
-    ${SPECIES_DIR} ${TREADS} 32000 \
-    &> ${LOG_DIR}/pipeline_time.log
+  ${GNUTIME} -v bash ${SCRIPTDIR}/pipeline.sh ${species_id} \
+      ${SPECIES_DIR} ${TREADS} 32000 \
+    &> ${TEMP_DIR}/pipeline_time.log
 
   ${GNUTIME} -v midas2 recluster_centroids \
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
     --scratch_dir ${SPECIES_DIR} \
-    --debug --force &> ${TEMP_DIR}/recluster_time.log
+    --debug &> ${TEMP_DIR}/recluster_time.log
 
-  cp -r ${TEMP_DIR}/cdhit ${MIDASDB_DIR}/${species_id}/temp
+  ${GNUTIME} -v midas2 build_midasdb --generate_cluster_info \
+    --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
+    --species ${species_id} --num_threads ${TREADS} \
+    --scratch_dir ${SPECIES_DIR} \
+    --debug &> ${TEMP_DIR}/cluster_info_time.log
+
+  cp -r ${TEMP_DIR}/cdhit ${MIDASDB_DIR}/pangenomes/${species_id}/temp
+  cp ${TEMP_DIR}/*.log ${MIDASDB_DIR}/pangenomes/${species_id}/temp
 
 done < $GB_IN
 

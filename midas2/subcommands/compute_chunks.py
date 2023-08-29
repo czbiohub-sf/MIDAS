@@ -12,9 +12,6 @@ from midas2.models.species import design_genes_chunks, design_run_snps_chunks, d
 from midas2.params.inputs import MIDASDB_NAMES
 
 
-# Up to this many concurrent species builds.
-CONCURRENT_BUILDS = Semaphore(num_physical_cores)
-
 DEFAULT_CHUNK_SIZE = 100000
 
 
@@ -70,31 +67,31 @@ def compute_chunks_master(args):
                 return
             msg = msg.replace("Designing", "Redesigning")
 
-        with CONCURRENT_BUILDS:
-            tsprint(msg)
-            local_file = midas_db.get_target_layout(dest_filename, False, species_id, genome_id, args.chunk_size)
+        tsprint(msg)
+        local_file = midas_db.get_target_layout(dest_filename, False, species_id, genome_id, args.chunk_size)
 
-            worker_log = f"{species_id}_{dest_filename}.log"
-            worker_subdir = os.path.dirname(local_file)
+        worker_log = f"{species_id}_{dest_filename}.log"
+        worker_subdir = os.path.dirname(local_file)
 
+        if not args.debug:
+            command(f"rm -f {local_file}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
+
+        # Recurisve call via subcommand.  Use subdir, redirect logs.
+        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''}"
+        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 compute_chunks --species {species_id} --chunk_size {args.chunk_size} --chunk_type {args.chunk_type} {subcmd_str} &>> {worker_subdir}/{worker_log}"
+        with open(f"{worker_subdir}/{worker_log}", "w") as slog:
+            slog.write(msg + "\n")
+            slog.write(worker_cmd + "\n")
+        try:
+            command(worker_cmd)
+        finally:
             if not args.debug:
-                command(f"rm -f {local_file}")
-            if not os.path.isdir(worker_subdir):
-                command(f"mkdir -p {worker_subdir}")
-
-            # Recurisve call via subcommand.  Use subdir, redirect logs.
-            worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 compute_chunks --species {species_id} --chunk_size {args.chunk_size} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} --chunk_type {args.chunk_type} --zzz_worker_mode {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} &>> {worker_subdir}/{worker_log}"
-            with open(f"{worker_subdir}/{worker_log}", "w") as slog:
-                slog.write(msg + "\n")
-                slog.write(worker_cmd + "\n")
-            try:
-                command(worker_cmd)
-            finally:
-                if not args.debug:
-                    command(f"rm -rf {worker_subdir}/{worker_log} {local_file}", check=False)
+                command(f"rm -rf {worker_subdir}/{worker_log} {local_file}", check=False)
 
     species_id_list = decode_species_arg(args, repgenome_for_species)
-    multithreading_map(species_work, species_id_list, num_physical_cores)
+    multithreading_map(species_work, species_id_list, args.num_threads)
 
 
 def compute_chunks_worker(args):
@@ -142,28 +139,34 @@ def register_args(main_func):
                            type=str,
                            default="uhgg",
                            choices=MIDASDB_NAMES,
-                           help=f"MIDAS Database name.")
+                           help="MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
                            default=".",
-                           help=f"Path to local MIDAS Database.")
+                           help="Path to local MIDAS Database.")
     subparser.add_argument('--chunk_type',
                            dest='chunk_type',
                            type=str,
                            default="run_snps",
                            choices=['run_snps', 'merge_snps', "genes"],
-                           help=f"chunk_type of chunks to compute.")
+                           help="chunk_type of chunks to compute.")
     subparser.add_argument('--chunk_size',
                            dest='chunk_size',
                            type=int,
                            metavar="INT",
                            default=DEFAULT_CHUNK_SIZE,
                            help=f"Number of genomic sites for the temporary chunk file  ({DEFAULT_CHUNK_SIZE})")
+    subparser.add_argument('-t',
+                           '--num_threads',
+                           dest='num_threads',
+                           type=int,
+                           default=num_physical_cores,
+                           help="Number of threads")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
-                           help='Upload built files to AWS S3')
+                           help="Upload built files to AWS S3")
     return main_func
 
 
