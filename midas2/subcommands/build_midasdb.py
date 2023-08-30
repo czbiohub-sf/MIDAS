@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 import os
 import sys
-from multiprocessing import Semaphore
 from collections import defaultdict
-import Bio.SeqIO
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
-from midas2.common.utilities import decode_species_arg, decode_genomes_arg, scan_mapfile, scan_gene_info, scan_gene_length, write_cluster_info, parse_gff_to_tsv, get_contig_length, check_worker_subdir, write_contig_length
+from midas2.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
+from midas2.common.utilities import decode_species_arg, decode_genomes_arg, scan_mapfile, scan_gene_info, scan_gene_length, write_cluster_info, parse_gff_to_tsv, get_contig_length, write_contig_length
 from midas2.models.midasdb import MIDAS_DB
-from midas2.params.schemas import CLUSTER_INFO_SCHEMA
 from midas2.params.inputs import MARKER_FILE_EXTS, MIDASDB_NAMES
 
 
@@ -60,7 +57,7 @@ def generate_gene_feature_master(args):
             command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''}"
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_gene_feature --genomes {genome_id} {subcmd_str} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
@@ -138,11 +135,19 @@ def generate_cluster_info_master(args):
 
         tsprint(msg)
         last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
-        worker_log = midas_db.get_target_layout("cluster_info_log", False, species_id)
-        worker_subdir = os.path.dirname(worker_log)
+        local_dest = midas_db.get_target_layout("cluster_info_log", False, species_id)
+        local_dir = os.path.dirname(local_dest)
+        command(f"mkdir -p {local_dir}")
 
-        worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
-        
+        worker_log = os.path.basename(local_dest)
+        worker_subdir = os.path.dirname(local_dest) if args.scratch_dir == "." else f"{args.scratch_dir}/buildpan/{species_id}"
+        worker_log = f"{worker_subdir}/{worker_log}"
+
+        if not args.debug:
+            command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
+
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} {subcmd_str} &>> {worker_log}"
@@ -156,6 +161,8 @@ def generate_cluster_info_master(args):
         finally:
             if args.upload:
                 upload(f"{worker_log}", last_dest, check=False)
+            if args.scratch_dir != ".":
+                command(f"cp -r {worker_log} {local_dest}")
             if not args.debug:
                 command(f"rm -rf {worker_subdir}", check=False)
 
@@ -179,13 +186,14 @@ def generate_cluster_info_worker(args):
     cat_files(mapfiles_by_genomes.values(), "mapfile", 20)
     dict_of_markers = scan_mapfile("mapfile") # <gene_id, marker_id>
 
-    if args.scratch_dir != ".":
+    if args.scratch_dir != "." and os.path.isfile("temp/cdhit/genes.len"):
+        # Recluster centroids using cd-hit
         gene_info_fp = "temp/gene_info.txt"
-        gene_length_fp ="temp/cdhit/genes.len"
-        assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Recluster_centroids outputs are no in the provided {args.scratch_dir}."
+        gene_length_fp = "temp/cdhit/genes.len"
     else:
         gene_info_fp = midas_db.fetch_file("pangenome_genes_info", species_id)
         gene_length_fp = midas_db.fetch_file("pangenome_genes_len", species_id)
+    assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Build pangenome outputs are missing."
 
     dict_of_centroids = scan_gene_info(gene_info_fp) # <centroid_99> as the key
     dict_of_gene_length = scan_gene_length(gene_length_fp) # <gene_id:gene_length>
@@ -235,7 +243,7 @@ def build_markerdb(args):
     msg = f"Collating marker genes sequences."
     if args.upload and find_files_with_retry(last_dest):
         if not args.force:
-            tsprint(f"Destination {build_markerdb_log_s3} already exists.  Specify --force to overwrite.")
+            tsprint(f"Destination {last_dest} already exists.  Specify --force to overwrite.")
             return
         msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
     if not args.upload and os.path.exists(build_markerdb_log):
@@ -272,7 +280,7 @@ def build_markerdb(args):
     if args.upload:
         upload_tasks = list(zip(midas_db.get_target_layout("marker_db", False), midas_db.get_target_layout("marker_db", True)))
         multithreading_map(upload_star, upload_tasks, 4)
-        upload(build_markerdb_log, build_markerdb_log_s3, check=False) # Upload LOG file last as a checkout point
+        upload(build_markerdb_log, last_dest, check=False) # Upload LOG file last as a checkout point
 
 
 def register_args(main_func):
@@ -326,7 +334,7 @@ def register_args(main_func):
                            dest='scratch_dir',
                            type=str,
                            default=".",
-                           help="Path to fast I/O scratch_dir.")
+                           help="Absolute path to scratch directory for fast I/O.")
     return main_func
 
 

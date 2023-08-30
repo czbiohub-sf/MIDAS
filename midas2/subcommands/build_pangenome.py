@@ -6,8 +6,8 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 import Bio.SeqIO
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, split, multiprocessing_map, multithreading_hashmap, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath, num_physical_cores, copy, copy_star
-from midas2.common.utilities import decode_species_arg, check_worker_subdir, has_ambiguous_bases
+from midas2.common.utils import tsprint, InputStream, OutputStream, retry, command, hashmap, split, multiprocessing_map, multithreading_map, num_vcpu, select_from_tsv, transpose, find_files, upload, upload_star, flatten, pythonpath, num_physical_cores, copy_star
+from midas2.common.utilities import decode_species_arg, has_ambiguous_bases
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -211,15 +211,19 @@ def build_pangenome_master(args):
         with CONCURRENT_SPECIES_BUILDS:
             tsprint(msg)
             last_dest = midas_db.get_target_layout("pangenome_log", True, species_id)
-            worker_log = midas_db.get_target_layout("pangenome_log", False, species_id)
-            worker_subdir = os.path.dirname(worker_log)
-            command(f"mkdir -p {worker_subdir}/temp/vsearch")
+            local_dest = midas_db.get_target_layout("pangenome_log", False, species_id)
+            local_dir = os.path.dirname(local_dest)
+            command(f"mkdir -p {local_dir}/temp/vsearch")
 
-            worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
+            worker_log = os.path.basename(local_dest)
+            worker_subdir = os.path.dirname(local_dest) if args.scratch_dir == "." else f"{args.scratch_dir}/buildpan/{species_id}"
+            worker_log = f"{worker_subdir}/{worker_log}"
+            if not args.debug:
+                command(f"rm -rf {worker_subdir}")
 
-            # Either pangenome/{species} or scartch dir
             worker_subdir = f"{worker_subdir}/temp/vsearch"
-            command(f"mkdir -p {worker_subdir}")
+            if not os.path.isdir(worker_subdir):
+                command(f"mkdir -p {worker_subdir}")
 
             # Recurisve call via subcommand.  Use subdir, redirect logs.
             subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
@@ -235,6 +239,8 @@ def build_pangenome_master(args):
                 # prior exceptions that may be more informative.  Hence check=False.
                 if args.upload:
                     upload(f"{worker_log}", last_dest, check=False)
+                if args.scratch_dir != ".":
+                    command(f"cp -r {worker_log} {local_dest}")
                 if not args.debug:
                     command(f"rm -rf {worker_subdir}", check=False)
 
@@ -286,7 +292,7 @@ def build_pangenome_worker(args):
     if not args.recluster:
         # Reclustering of the max_percent centroids is usually quick, and can proceed in prallel.
         recluster = lambda percent_id: vsearch(percent_id, cluster_files[max_percent][0])
-        cluster_files.update(multithreading_hashmap(recluster, lower_percents))
+        cluster_files.update(hashmap(recluster, lower_percents))
 
     xref(cluster_files, "gene_info.txt")
 
@@ -308,12 +314,12 @@ def build_pangenome_worker(args):
         last_dest_file = destpath(midas_db, species_id, last_output)
         upload(last_output, last_dest_file)
 
-
     copy_tasks = [
         ("genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
         ("genes.len", localpath(midas_db, species_id, "genes.len")),
         ("centroids.99.ffn", localpath(midas_db, species_id, "centroids.ffn"))
     ]
+
     if args.recluster:
         copy_tasks.append(("gene_info.txt", localtemp(midas_db, species_id, "vsearch", "gene_info.txt")))
     else:
@@ -365,7 +371,7 @@ def register_args(main_func):
                            dest='scratch_dir',
                            type=str,
                            default=".",
-                           help="Path to fast I/O scratch_dir.")
+                           help="Absolute path to scratch directory for fast I/O.")
     subparser.add_argument('--recluster',
                            action='store_true',
                            default=False,

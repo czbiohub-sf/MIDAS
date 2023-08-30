@@ -3,8 +3,8 @@ import os
 import sys
 from itertools import chain
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores, copy, copy_star
-from midas2.common.utilities import decode_species_arg, decode_genomes_arg, check_worker_subdir
+from midas2.common.utils import tsprint, retry, command, multithreading_map, drop_lz4, find_files, upload, pythonpath, upload_star, num_physical_cores
+from midas2.common.utilities import decode_species_arg, decode_genomes_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -16,8 +16,6 @@ def find_files_with_retry(f):
 
 def run_prokka(genome_id, cleaned_genome):
     # Prokka will crash if installed <6 months ago.  It's a feature.  See tbl2asn.
-
-    #rename_genome(genome_id, cleaned_genome)
 
     subdir = f"prokka_dir_{genome_id}"
     command(f"rm -rf {subdir}")
@@ -69,15 +67,25 @@ def annotate_genome_master(args):
                 tsprint(f"Destination {local_file} for genome {genome_id} annotations already exists.  Specify --force to overwrite.")
                 return
             msg = msg.replace("Importing", "Reimporting")
-
         tsprint(msg)
+
         last_dest = midas_db.get_target_layout("annotation_log", True, species_id, genome_id)
-        worker_log = midas_db.get_target_layout("annotation_log", False, species_id, genome_id)
-        worker_subdir = os.path.dirname(worker_log)
-        worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
+        local_dest = midas_db.get_target_layout("annotation_log", False, species_id, genome_id)
+        local_dir = os.path.dirname(os.path.dirname(local_dest))
+        command(f"mkdir -p {local_dir}")
+
+        worker_log = os.path.basename(local_dest)
+        worker_subdir = os.path.dirname(local_dest) if args.scratch_dir == "." else f"{args.scratch_dir}/annotate/{genome_id}"
+        worker_log = f"{worker_subdir}/{worker_log}"
+
+        if not args.debug:
+            command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+        # Output files are generated inside worker_subdir
+        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''}"
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 annotate_genome --genome {genome_id} {subcmd_str} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
@@ -90,6 +98,8 @@ def annotate_genome_master(args):
             # prior exceptions that may be more informative.  Hence check=False.
             if args.upload:
                 upload(f"{worker_log}", last_dest, check=False)
+            if args.scratch_dir != ".":
+                command(f"cp -r {worker_subdir} {local_dir}")
             if not args.debug:
                 command(f"rm -rf {worker_subdir}", check=False)
 
@@ -111,8 +121,11 @@ def annotate_genome_worker(args):
         - imported MAGs
     Output:
         - Prokka annotations:
-            f"{genome_id}.faa", f"{genome_id}.ffn", f"{genome_id}.fna",
-            f"{genome_id}.gff", f"{genome_id}.tsv"
+            f"{genome_id}.faa"
+            f"{genome_id}.ffn"
+            f"{genome_id}.fna",
+            f"{genome_id}.gff",
+            f"{genome_id}.tsv"
     """
 
     violation = "Please do not call annotate_genome_worker directly.  Violation"
@@ -124,15 +137,13 @@ def annotate_genome_worker(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    if not os.path.exists(f"{genome_id}.fasta"):
-        cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fasta")
-    command(f"cp {cleaned_genome_fp} {genome_id}.fasta")
-    output_files = run_prokka(genome_id, f"{genome_id}.fasta")
+    cleaned_genome_fp = midas_db.fetch_file("imported_genome", species_id, genome_id, "fasta")
+    output_files = run_prokka(genome_id, cleaned_genome_fp)
 
     if args.upload:
         dest_file = midas_db.get_target_layout("annotation_file", True, species_id, genome_id, "fna")
         last_output = drop_lz4(os.path.basename(dest_file))
-        upload_asks = []
+        upload_tasks = []
         for o in output_files:
             otype = o.rsplit(".")[-1]
             if o != last_output:
@@ -141,13 +152,6 @@ def annotate_genome_worker(args):
         multithreading_map(upload_star, upload_tasks)
         # Upload this last because it indicates all other work has succeeded.
         upload(last_output, dest_file)
-
-    if args.scratch_dir != ".":
-        copy_tasks = []
-        for o in output_files:
-            otype = o.rsplit(".")[-1]
-            copy_tasks.append((o, midas_db.get_target_layout("annotation_file", False, species_id, genome_id, otype)))
-        multithreading_map(copy_star, copy_tasks)
 
 
 def register_args(main_func):
@@ -185,7 +189,7 @@ def register_args(main_func):
                            dest='scratch_dir',
                            type=str,
                            default=".",
-                           help="Path to fast I/O scratch_dir.")
+                           help="Absolute path to scratch directory for fast I/O.")
     return main_func
 
 

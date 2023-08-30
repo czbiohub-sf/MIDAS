@@ -5,7 +5,7 @@ from hashlib import md5
 import Bio.SeqIO
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, retry, command, multithreading_map, find_files, upload, pythonpath, num_physical_cores
-from midas2.common.utilities import decode_species_arg, decode_genomes_arg, check_worker_subdir
+from midas2.common.utilities import decode_species_arg, decode_genomes_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -74,16 +74,26 @@ def import_genome_master(args):
 
         tsprint(msg)
         last_dest = midas_db.get_target_layout("import_log", True, species_id, genome_id)
-        worker_log = midas_db.get_target_layout("import_log", False, species_id, genome_id)
-        worker_subdir = os.path.dirname(worker_log)
-        worker_subdir = check_worker_subdir(worker_subdir, args.scratch_dir, args.debug)
+        local_dest = midas_db.get_target_layout("import_log", False, species_id, genome_id)
+        local_dir = os.path.dirname(os.path.dirname(local_dest))
+        command(f"mkdir -p {local_dir}")
+
+        worker_log = os.path.basename(local_dest)
+        worker_subdir = os.path.dirname(local_dest) if args.scratch_dir == "." else f"{args.scratch_dir}/import/{genome_id}"
+        worker_log = f"{worker_subdir}/{worker_log}"
+
+        if not args.debug:
+            command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
 
         # Recurisve call via subcommand.  Use subdir, redirect logs.
-        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
+        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''}"
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 import_genome --genome {genome_id} {subcmd_str} &>> {worker_log}"
         with open(f"{worker_log}", "w") as slog:
             slog.write(msg + "\n")
             slog.write(worker_cmd + "\n")
+
         try:
             command(worker_cmd)
         finally:
@@ -91,6 +101,8 @@ def import_genome_master(args):
             # prior exceptions that may be more informative.  Hence check=False.
             if args.upload:
                 upload(f"{worker_log}", last_dest, check=False)
+            if args.scratch_dir != ".":
+                command(f"cp -r {worker_subdir} {local_dir}")
             if not args.debug:
                 command(f"rm -rf {worker_subdir}", check=False)
 
@@ -158,7 +170,7 @@ def register_args(main_func):
                            dest='scratch_dir',
                            type=str,
                            default=".",
-                           help="Path to fast I/O scratch_dir.")
+                           help="Absolute path to scratch directory for fast I/O.")
     return main_func
 
 
