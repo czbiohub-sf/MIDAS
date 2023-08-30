@@ -4,7 +4,7 @@
 # awk
 
 #! /usr/bin/bash
-set -x
+#set -x
 
 if [ $# -ne 4 ]; then
     echo "Usage: $0 SPECIES SPECIEDIR THREADS MEM"
@@ -21,7 +21,7 @@ vsearch_jobs=$((total_threads / vsearch_threads))
 thread2=$((total_threads / 2))
 
 #######
-script_dir="/wynton/home/pollard/czhao/pangenome/bin" #<----
+script_dir="/pollard/data/projects/czhao/2023-07-21-build-midasdb-wis/MIDAS2/bin" #/wynton/home/pollard/czhao/pangenome/bin" #<----
 
 ####### INPUTS: global scratch directory
 vsearch_dir="${species_dir}/temp/vsearch"
