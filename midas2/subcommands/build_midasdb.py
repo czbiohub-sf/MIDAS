@@ -186,14 +186,15 @@ def generate_cluster_info_worker(args):
     cat_files(mapfiles_by_genomes.values(), "mapfile", 20)
     dict_of_markers = scan_mapfile("mapfile") # <gene_id, marker_id>
 
-    if args.scratch_dir != ".":
+    if args.scratch_dir != "." and os.path.isfile("temp/cdhit/genes.len"):
+        # Recluster centroids using cd-hit
         gene_info_fp = "temp/gene_info.txt"
-        gene_length_fp ="temp/cdhit/genes.len"
-        assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Recluster_centroids outputs are no in the provided {args.scratch_dir}."
+        gene_length_fp = "temp/cdhit/genes.len"
     else:
         gene_info_fp = midas_db.fetch_file("pangenome_genes_info", species_id)
         gene_length_fp = midas_db.fetch_file("pangenome_genes_len", species_id)
-
+    assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Build pangenome outputs are missing."
+    
     dict_of_centroids = scan_gene_info(gene_info_fp) # <centroid_99> as the key
     dict_of_gene_length = scan_gene_length(gene_length_fp) # <gene_id:gene_length>
     write_cluster_info(dict_of_centroids, dict_of_markers, dict_of_gene_length, "cluster_info.txt")

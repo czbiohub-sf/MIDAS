@@ -42,15 +42,15 @@ if [ ! -d $GENOME_DIR/temp ]; then
   mkdir -p $GENOME_DIR/temp
 fi
 
-${GNUTIME} -v midas2 annotate_genome --genomes ${SGE_TASK_ID}:10000 \
+${GNUTIME} -v python -m midas2 annotate_genome --genomes ${SGE_TASK_ID}:10000 \
   --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
   --scratch_dir ${SCRATCH_DIR} --num_threads ${TREADS} --debug &> ${TEMP_DIR}/annotate_time.log
 
-${GNUTIME} -v midas2 infer_markers --genomes ${SGE_TASK_ID}:10000 \
+${GNUTIME} -v python -m midas2 infer_markers --genomes ${SGE_TASK_ID}:10000 \
   --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
   --debug --num_threads ${TREADS} &> ${TEMP_DIR}/infer_time.log
 
-${GNUTIME} -v midas2 build_midasdb --generate_gene_feature --genomes ${SGE_TASK_ID}:10000 \
+${GNUTIME} -v python -m midas2 build_midasdb --generate_gene_feature --genomes ${SGE_TASK_ID}:10000 \
   --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
   --debug --num_threads ${TREADS} &> ${TEMP_DIR}/gene_feature_time.log
 
