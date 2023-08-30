@@ -8,7 +8,7 @@
 ##$ -r y                            #-- tell the system that if a job crashes, it should be restarted
 ##$ -j y                            #-- tell the system that the STDERR and STDOUT should be joined
 #$ -pe smp 8
-#$ -l mem_free=10G                   #-- submits on nodes with enough free memory (required)
+#$ -l mem_free=8G                   #-- submits on nodes with enough free memory (required)
 #$ -l arch=lx-amd64                 #-- SGE resources (CPU type)
 #$ -l scratch=40G                   #-- SGE resources (home and scratch disks)
 #$ -l h_rt=24:00:00                #-- runtime limit (see above; this requests 24 hours)
@@ -28,10 +28,10 @@ MIDASDB_DIR="/wynton/scratch/czhao/midas2db-wis-2023"
 
 CWDIR="/wynton/home/pollard/czhao/midasdb_wis"
 SCRIPTDIR="${CWDIR}/MIDAS2/bin"
-GB_IN="${CWDIR}/sge_jobs/${JB_LAB}"
+GB_IN="${CWDIR}/sge_jobs/step2_pangenome/small/${JB_LAB}"
 
 # local scratch disk as output directory
-OUTDIR="/scratch/czhao/step1_annotate/${JB_LAB}"
+OUTDIR="/scratch/czhao/step2_pangenome/${JB_LAB}"
 if [ ! -d $OUTDIR ]; then
   mkdir -p $OUTDIR
 fi
@@ -48,36 +48,30 @@ fi
 
 while IFS= read -r species_id
 do
-  SPECIES_DIR="${GB_OUT}/${species_id}"
-  TEMP_DIR=$SPECIES_DIR/temp
-  if [ ! -d $TEMP_DIR ]; then
-    mkdir -p $TEMP_DIR
-  fi
-
   ${GNUTIME} -v python -m midas2 build_pangenome \
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
-    --scratch_dir ${SPECIES_DIR} \
-    --debug --recluster &> ${TEMP_DIR}/build_pangenome_time.log
+    --scratch_dir ${SCRATCH_DIR} \
+    --debug --recluster &> ${LOGDIR}/${species_id}/pangenome_time.log
 
   ${GNUTIME} -v bash ${SCRIPTDIR}/pipeline.sh ${species_id} \
-      ${SPECIES_DIR} ${TREADS} 32000 \
-    &> ${TEMP_DIR}/pipeline_time.log
+      ${SPECIES_DIR} ${TREADS} 64000 \
+    &> ${LOGDIR}/${species_id}/pipeline_time.log
 
   ${GNUTIME} -v python -m midas2 recluster_centroids \
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
-    --scratch_dir ${SPECIES_DIR} \
-    --debug &> ${TEMP_DIR}/recluster_time.log
+    --scratch_dir ${SCRATCH_DIR} \
+    --debug &> ${LOGDIR}/${species_id}/recluster_time.log
 
   ${GNUTIME} -v python -m midas2 build_midasdb --generate_cluster_info \
     --midasdb_name newdb --midasdb_dir ${MIDASDB_DIR} \
     --species ${species_id} --num_threads ${TREADS} \
-    --scratch_dir ${SPECIES_DIR} \
-    --debug &> ${TEMP_DIR}/cluster_info_time.log
+    --scratch_dir ${SCRATCH_DIR} \
+    --debug &> ${LOGDIR}/${species_id}/cluster_info_time.log
 
-  cp -r ${TEMP_DIR}/cdhit ${MIDASDB_DIR}/pangenomes/${species_id}/temp
-  cp ${TEMP_DIR}/*.log ${MIDASDB_DIR}/pangenomes/${species_id}/temp
+  cp -r ${SCRATCH_DIR}/buildpan/${species_id}/temp/cdhit ${MIDASDB_DIR}/pangenomes/${species_id}/temp
+  cp ${LOGDIR}/${species_id}/*.log ${MIDASDB_DIR}/pangenomes/${species_id}/temp
 
 done < $GB_IN
 
