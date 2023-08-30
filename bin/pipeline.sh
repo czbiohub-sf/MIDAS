@@ -11,7 +11,7 @@ if [ $# -ne 4 ]; then
 fi
 
 #######
-script_dir="/wynton/home/pollard/czhao/pangenome/bin" #<----
+script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
 
 species_id="$1"
 species_dir="$2"
