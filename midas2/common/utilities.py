@@ -313,23 +313,6 @@ def has_ambiguous_bases(sequence):
     return any(base in ambiguous_bases for base in sequence)
 
 
-def check_worker_subdir(worker_subdir, scratch_dir, debug_mode):
-    # By default, we locate the sub worker dir by corresponding log file, which is
-    # usually midasdb's sub-species temp directory. Alternatively, users can provide
-    # a separate scratch dir to write all the temp files.
-    if not os.path.isdir(worker_subdir):
-        command(f"mkdir -p {worker_subdir}")
-    if scratch_dir != ".":
-        worker_subdir = scratch_dir
-
-    if not debug_mode:
-        command(f"rm -rf {worker_subdir}")
-    # We need both worker_subdir, if they differ.
-    if not os.path.isdir(worker_subdir):
-        command(f"mkdir -p {worker_subdir}")
-    return worker_subdir
-
-
 def write_cluster_info(dict_of_centroids, dict_of_markers, dict_of_gene_length, cluster_info_fp):
     with OutputStream(cluster_info_fp) as stream:
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
