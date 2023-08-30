@@ -21,7 +21,7 @@ vsearch_jobs=$((total_threads / vsearch_threads))
 thread2=$((total_threads / 2))
 
 #######
-script_dir="/pollard/data/projects/czhao/2023-07-21-build-midasdb-wis/MIDAS2/bin" #/wynton/home/pollard/czhao/pangenome/bin" #<----
+script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
 
 ####### INPUTS: global scratch directory
 vsearch_dir="${species_dir}/temp/vsearch"
