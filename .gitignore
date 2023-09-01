@@ -17,20 +17,9 @@ sdist/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
-conda env export --no-builds | grep -v "^prefix:" > updated.yml*.egg
-build/
 
-Screenshot 2023-08-06 at 2.26.45 PM.png
-Screenshot 2023-08-09 at 10.41.52 AM.png
-Screenshot 2023-08-10 at 1.29.28 PM.png
-Screenshot 2023-08-23 at 9.37.35 AM.png
-Screenshot 2023-08-23 at 9.52.53 AM.png
-Screenshot 2023-08-25 at 1.40.24 PM.png
-Screenshot 2023-08-25 at 5.49.54 PM.png
-Screenshot 2023-08-27 at 10.56.50 AM.png
-Screenshot 2023-08-28 at 9.54.25 AM.png
-Screenshot 2023-08-30 at 8.37.01 AM.png
-Screenshot 2023-08-31 at 4.18.03 PM.pngdist/
+build/
+dist/
 
 # Installer logs
 pip-log.txt
