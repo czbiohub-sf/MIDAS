@@ -1,15 +1,15 @@
 {% set name = "midas2" %}
-{% set version = "1.0.0" %}
+{% set version = "1.0.9" %}
 
 package:
   name: {{ name }}
   version: {{ version }}
 
 source:
-  url: https://files.pythonhosted.org/packages/97/cd/085779ffeb1c1340b82ca8d265c3037c409b0ab9953c11ca54c0f5377217/midas2-1.0.1.tar.gz
-  sha256: bf9c69940d30c2fb70a3f1882716431b
+  url: https://files.pythonhosted.org/packages/4c/13/84a388b413f7e0de83bbcb742092f19c5a5045604b6285db65627dd82da7/midas2-1.0.9.tar.gz
+  sha256: acb699dab20d8e07fe5252a30607cea05a5a12d803699e2f9bb09773eb09524a
   #git_url: https://github.com/czbiohub/MIDAS2.0.git
-  #git_rev: v0.91
+  #git_rev: v1.0.9
 
 build:
   noarch: python
@@ -17,24 +17,26 @@ build:
 
 requirements:
   host:
-    - python >=3.7,<3.8
+    - python >=3.9,<3.10
     - pip
     - setuptools
   run:
-    - python >=3.7,<3.8
-    - tbb ==2020.2
-    - numpy >=1.19.1
-    - biopython >=1.79
-    - gffutils >=0.10.1
-    - bowtie2 >=2.4.5
-    - samtools >=1.13
-    - pysam >=0.18.0
+    - python >=3.9,<3.10
+    - tbb ==2021.10.0
+    - numpy >=1.25.2
+    - biopython >=1.81
+    - gffutils >=0.12
+    - bowtie2 >=2.5.1
+    - samtools >=1.17
+    - pysam >=0.21.0
     - hs-blastn ==0.0.5
-    - blast >=2.12.0
+    - blast >=2.14.0
     - awscli
     - lz4
     - prokka >=1.14.6
-    - vsearch >=2.21.1
+    - vsearch >=2.23.0
+    - seqkit >=2.5.1
+    - cd-hit >=4.8.1
 
 test:
   imports:
