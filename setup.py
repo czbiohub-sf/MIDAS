@@ -1,7 +1,6 @@
 from setuptools import setup
 from midas2 import version
 
-
 setup(name='midas2',
       version=version,
       description='https://midas2.readthedocs.io/en/latest/',
@@ -11,10 +10,10 @@ setup(name='midas2',
       license='MIT',
       packages=['midas2', 'midas2/subcommands', 'midas2/common', 'midas2/params', 'midas2/models'],
       install_requires=[
-        'biopython <= 1.79',
+        'biopython <= 1.81',
         'numpy',
-        'pysam >= 0.18.0',
-        'gffutils >= 0.10.1'
+        'pysam >= 0.21.0',
+        'gffutils >= 0.12'
       ],
       dependency_links=[],
       entry_points={

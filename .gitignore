@@ -17,7 +17,7 @@ sdist/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
-*.egg
+
 build/
 dist/
 
@@ -47,5 +47,5 @@ dmypy.json
 \*.DS_Store
 
 tests/midas2_output/
-genomes.tsv
 tests/midasdb_newdb/
+*scratch/
