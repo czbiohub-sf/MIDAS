@@ -31,7 +31,8 @@ DEFAULT_ALN_BASEQ = 30
 DEFAULT_ALN_TRIM = 0
 
 DEFAULT_CHUNK_SIZE = 1000000
-DEFAULT_MAX_FRAGLEN = 5000
+DEFAULT_MAX_FRAGLEN = 1000
+DEFAULT_MAX_FRAGRATIO = 3
 DEFAULT_NUM_CORES = 8
 
 DEFAULT_SITE_DEPTH = 2
@@ -121,7 +122,13 @@ def register_args(main_func):
                            dest='fragment_length',
                            metavar='FLOAT',
                            default=DEFAULT_MAX_FRAGLEN,
-                           help=f"Maximum fragment length for paired reads ({DEFAULT_MAX_FRAGLEN}).")
+                           help=f"Fragment length for paired reads alignment ({DEFAULT_MAX_FRAGLEN}).")
+    subparser.add_argument('--fragment_ratio',
+                           type=float,
+                           dest='fragment_ratio',
+                           metavar='FLOAT',
+                           default=DEFAULT_MAX_FRAGRATIO,
+                           help=f"Maximum allowed paired reads template size is fragment_ratio * fragment_length. ({DEFAULT_MAX_FRAGRATIO}x).")
     subparser.add_argument('--max_reads',
                            dest='max_reads',
                            type=int,
@@ -134,7 +141,7 @@ def register_args(main_func):
                            type=float,
                            metavar="FLOAT",
                            default=DEFAULT_ALN_MAPID,
-                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted.  ({DEFAULT_ALN_MAPID})")
+                           help=f"Discard reads with alignment identity < MAPID.  Values between 0-100 accepted. ({DEFAULT_ALN_MAPID})")
     subparser.add_argument('--aln_mapq',
                            dest='aln_mapq',
                            type=int,
@@ -384,7 +391,7 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
 
                 # Template length: number of bases from the left most mapped base to the rightmost mapped base on the reference
                 fragment_length = abs(alns["fwd"].template_length)
-                if fragment_length >= global_args.fragment_length:
+                if fragment_length > global_args.fragment_length * global_args.fragment_ratio:
                     continue
 
                 # I think the alignment coverage should not be affected by overlap.
@@ -417,7 +424,6 @@ def filter_bam_by_proper_pair(species_id, repbamfile, filtered_bamfile):
                     # Only keep aligned pairs indicating from the same DNA fragment
                     if abs(nm_in_fwd - nm_in_rev) > 1:
                         continue #<-----------
-
 
                     mismatches = dict(alns["fwd"].tags)['NM'] + nm_out_rev
                     align_len = alns["rev"].query_alignment_length + alns["fwd"].query_alignment_length - reads_overlap
