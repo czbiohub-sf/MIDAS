@@ -62,6 +62,22 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "chunks_sites_run":              f"chunks/sites/run/chunksize.{component}/{species_id}/{genome_id}.json",
         "chunks_sites_merge":            f"chunks/sites/merge/chunksize.{component}/{species_id}/{genome_id}.json",
         "chunks_contig_lists":           f"temp/chunksize.{component}/{species_id}/cid.{genome_id}_list_of_contigs",
+
+        ## 2023-10-17 Raw Functional Annotations
+        "eggnog_results":                f"eggnog_results/{species_id}/{species_id}.emapper.annotations",
+        "genomad_virus_genes":           f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_genes.tsv",
+        "genomad_virus_summary":         f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_summary.tsv",
+        "genomad_plasmid_genes":         f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_genes.tsv",
+        "genomad_plasmid_summary":       f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_summary.tsv",
+        "mefinder_results":              f"functional_annotation/{species_id}/{genome_id}/mefinder_output/mefinder.csv",
+        "resfinder_results":             f"functional_annotation/{species_id}/{genome_id}/resfinder_output/ResFinder_results_tab.txt",
+        ## Parsed Functional Anntations
+        "funcannot_tempfile":            f"functional_annotation/{species_id}/temp/{component}/{genome_id}",
+        "pangenome_genomad_virus":       f"pangenomes/{species_id}/genomad_virus.tsv",
+        "pangenome_genomad_plasmid":     f"pangenomes/{species_id}/genomad_plasmid.tsv",
+        "pangenome_mefinder":            f"pangenomes/{species_id}/mefinder.tsv",
+        "pangenome_resfinder":           f"pangenomes/{species_id}/resfinder.tsv",
+        "pangenome_eggnog":              f"pangenomes/{species_id}/eggnog.tsv",
     }
 
 
