@@ -120,6 +120,10 @@ def merge_annot_with_genes(df, genes_99):
     bed1 = BedTool.from_dataframe(genes_99)
     bed2 = BedTool.from_dataframe(df)
     overlaps = bed1.intersect(bed2, wa=True, wb=True)
+
+    if len(overlaps) == 0:
+        return pd.DataFrame()
+
     overlapping_df = pd.read_table(overlaps.fn, header=None)
     overlapping_df.columns = list(genes_99.columns) + list(df.columns)
     # Drop duplicated column aka contig_id
@@ -134,7 +138,10 @@ def write_genome_temp(df, genes_99, local_dest):
         command(f"touch {local_dest}")
     else:
         df = merge_annot_with_genes(df, genes_99)
-        df.to_csv(local_dest, sep='\t', index=False, header=False)
+        if df.empty:
+            command(f"touch {local_dest}")
+        else:
+            df.to_csv(local_dest, sep='\t', index=False, header=False)
 
 
 def funannot_parser(args):
