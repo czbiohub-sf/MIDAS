@@ -1,5 +1,6 @@
 name: midas2v1.1.0
 channels:
+  - zhaoc1
   - conda-forge
   - bioconda
   - anaconda
