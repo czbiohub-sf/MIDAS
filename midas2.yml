@@ -1,6 +1,5 @@
 name: midas2v1.1.0
 channels:
-  - zhaoc1
   - conda-forge
   - bioconda
   - anaconda
@@ -101,7 +100,6 @@ dependencies:
   - lz4=4.3.2
   - lz4-c=1.9.4
   - mafft=7.520
-  - midas2=1.1.0
   - minced=0.4.2
   - muscle=5.1
   - ncurses=6.4
