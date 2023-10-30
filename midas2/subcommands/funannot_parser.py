@@ -3,6 +3,7 @@ import os
 import sys
 from itertools import chain
 import pandas as pd
+from io import StringIO
 from pybedtools import BedTool
 
 from midas2.common.argparser import add_subcommand
@@ -142,6 +143,14 @@ def write_genome_temp(df, genes_99, local_dest):
             command(f"touch {local_dest}")
         else:
             df.to_csv(local_dest, sep='\t', index=False, header=False)
+
+def read_eggnog_csv(filename):
+    # Read the file line-by-line and exclude lines starting with '##'
+    with open(filename, 'r') as file:
+        lines = [line for line in file if not line.startswith('##')]
+    # Convert the filtered lines into a DataFrame
+    df = pd.read_csv(StringIO('\n'.join(lines)), sep='\t')
+    return df
 
 
 def funannot_parser(args):
@@ -288,7 +297,7 @@ def funannot_parser_worker(args):
     write_genome_temp(df, genes_99, local_dest)
 
     # EggNOG
-    df = pd.read_csv(midas_db.get_target_layout("eggnog_results", False, species_id), sep='\t')
+    df = read_eggnog_csv(midas_db.get_target_layout("eggnog_results", False, species_id))
     local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "eggnog")
     merged_df = df.merge(genes_99, left_on='#query', right_on='centroid_99', how='inner')
     merged_df = merged_df.drop(columns=['centroid_99'])
