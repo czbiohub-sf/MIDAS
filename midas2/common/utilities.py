@@ -206,13 +206,29 @@ def scan_mapfile(mapfile):
 
 
 @retry
-def scan_gene_info(gene_info_fp):
+def scan_gene_info(gene_info_fp, dict_of_filtered_c99s):
     """ Extract <centroid_99, ...> from the gene_info file """
     dict_of_centroids = dict()
     with InputStream(gene_info_fp) as stream:
         for r in select_from_tsv(stream, selected_columns=list(PAN_GENE_INFO_SCHEMA.keys())[1:], result_structure=dict):
-            if r["centroid_99"] not in dict_of_centroids:
-                dict_of_centroids[r["centroid_99"]] = r
+            c99_id = r["centroid_99"]
+            if c99_id in dict_of_filtered_c99s and c99_id not in dict_of_centroids:
+                dict_of_centroids[c99_id] = r
+    return dict_of_centroids
+
+
+@retry
+def scan_gene_info_list(gene_info_fp, colk="centroid_99", colv="gene_id"):
+    """ Extract <colk, [colvs]> from the gene_info file """
+    dict_of_centroids = defaultdict(list)
+    with InputStream(gene_info_fp) as stream:
+        for r in select_from_tsv(stream, selected_columns=list(PAN_GENE_INFO_SCHEMA.keys())[:3], result_structure=dict):
+            if r[colk] not in dict_of_centroids:
+                dict_of_centroids[r[colk]] = [r[colv]]
+            elif r[colv] not in dict_of_centroids[r[colk]]:
+                dict_of_centroids[r[colk]].append(r[colv])
+            else:
+                continue
     return dict_of_centroids
 
 
@@ -250,24 +266,23 @@ def scan_gene_feature(features_file):
     features = defaultdict(dict)
     with InputStream(features_file) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
-            #if r['gene_type'] == "CDS": #<---
             features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
     return features
 
 
-def fetch_genes_are_markers(cluster_info_fp):
+def fetch_c99s_are_markers(cluster_info_fp):
     assert os.path.exists(cluster_info_fp), f"{cluster_info_fp} doesn't exit"
 
     list_of_markers = []
-    dict_of_genes_are_markers = defaultdict(dict)
+    dict_of_c99s_are_markers = defaultdict(dict)
 
     filter_cmd = f"awk \'$8 != \"\"\'"
     with InputStream(cluster_info_fp, filter_cmd) as stream:
         for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
-            dict_of_genes_are_markers[r["centroid_99"]] = r
-            if r["marker_id"] not in dict_of_genes_are_markers:
+            dict_of_c99s_are_markers[r["centroid_99"]] = r
+            if r["marker_id"] not in dict_of_c99s_are_markers:
                 list_of_markers.append(r["marker_id"])
-    return dict_of_genes_are_markers, list_of_markers
+    return dict_of_c99s_are_markers, list_of_markers
 
 
 def compute_gene_boundary(features):
@@ -313,12 +328,20 @@ def has_ambiguous_bases(sequence):
     return any(base in ambiguous_bases for base in sequence)
 
 
-def write_cluster_info(dict_of_centroids, dict_of_markers, dict_of_gene_length, cluster_info_fp):
+def write_cluster_info(dict_of_centroids_list, dict_of_centroids, dict_of_markers, dict_of_gene_length, cluster_info_fp):
     with OutputStream(cluster_info_fp) as stream:
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
         for r in dict_of_centroids.values():
             centroid_99 = r["centroid_99"]
-            marker_id = dict_of_markers[centroid_99] if centroid_99 in dict_of_markers else ""
+            # Marker transitivity: if member of a centroids_99 is a marker, so be the centroids_99!
+            marker_id = ""
+            if centroid_99 in dict_of_markers:
+                marker_id = dict_of_markers[centroid_99]
+            else:
+                gene_list = dict_of_centroids_list[centroid_99]
+                member_markers = [dict_of_markers[g] for g in gene_list if g in dict_of_markers]
+                if member_markers:
+                    marker_id = member_markers[0]
             gene_len = dict_of_gene_length[centroid_99]
             val = list(r.values()) + [gene_len, marker_id]
             stream.write("\t".join(map(str, val)) + "\n")
@@ -363,3 +386,26 @@ def write_contig_length(dict_of_contig_length, contig_length_fp):
             for cid, clen in r.items():
                 vals = [gid, cid, str(clen)]
                 stream.write("\t".join(vals) + "\n")
+
+
+def exclude_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, cutoff=0.4):
+    """ Rmove c99s shorter than 40% of the corresponding c95 """
+    dict_of_c99s = dict()
+    for c95, list_of_c99s in dict_of_c95_per_c99.items():
+        c95_length = dict_of_gene_length[c95]
+        filtered_c99 = [c99 for c99 in list_of_c99s if dict_of_gene_length[c99] >= cutoff * c95_length]
+        for _ in filtered_c99:
+            dict_of_c99s[_] = c95
+    return dict_of_c99s
+
+
+def extract_filtered_c99s(dict_of_filtered_c99s, local_ffn, local_c99_ffn):
+    # local_ffn: the originally generated centroids.ffn. TODO: write to temp/centroids.99 directly!
+    # local_c99_ffn: overwrite centroids.ffn
+    with open(local_ffn, 'w') as ostream, \
+         InputStream(local_c99_ffn, check_path=False) as istream:
+        for rec in Bio.SeqIO.parse(istream, 'fasta'):
+            gid = rec.id
+            if gid in dict_of_filtered_c99s:
+                gseq = str(rec.seq).upper()
+                ostream.write(f">{gid}\n{gseq}\n")
