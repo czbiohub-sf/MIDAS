@@ -170,23 +170,11 @@ genes_summary_schema = {
     "pangenome_size": int,
     "covered_genes": int,
     "fraction_covered": float,
-    "mean_coverage": float,
     "aligned_reads": int,
     "mapped_reads": int,
+    "mean_coverage": float,
     "marker_coverage": float,
 }
-
-
-genes_chunk_summary_schema = {
-    "species_id": str,
-    "chunk_id": str,
-    "chunk_genome_size": int,
-    "chunk_num_covered_genes": int,
-    "chunk_coverage": float,
-    "chunk_aligned_reads": float,
-    "chunk_mapped_reads": int,
-}
-
 
 
 genes_info_schema = {
@@ -202,16 +190,17 @@ genes_coverage_schema = {
     "gene_length": int,
     "aligned_reads": int,
     "mapped_reads": int,
+    "read_depth": int,
     "mean_coverage": float,
-    "fraction_covered": float,
     "copy_number": float,
 }
 
 
 genes_are_markers_schema = {
-    "centroid_99": str,
+    "centroid_95": str,
     "marker_id": str,
-    "gene_coverage": float,
+    "marker_length": int,
+    "read_depth": float,
 }
 
 
@@ -250,4 +239,19 @@ md5sum_schema = {
     "file_name": str,
     "species_id": str,
     "md5sum": str,
+}
+
+
+species_marker_profile_schema = {
+    "species_id": str,
+    "marker_id": str,
+    "marker_length": int,
+    "gene_id": str,
+    "total_reads": int,
+    "total_alnbps": int,
+    "coverage": float,
+    "uniq_reads": int,
+    "ambi_reads": int,
+    "uniq_alnbps": int,
+    "ambi_alnbps": int,
 }

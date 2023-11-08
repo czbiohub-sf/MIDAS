@@ -109,6 +109,7 @@ dependencies:
   - packaging=23.1
   - paml=4.10.6
   - parallel=20230722
+  - pandas=2.1.1 
   - pcre=8.45
   - pcre2=10.40
   - perl=5.32.1
@@ -218,6 +219,7 @@ dependencies:
   - prokka=1.14.6
   - pthread-stubs=0.4
   - pyasn1=0.4.8
+  - pybedtools=0.9.1
   - pycparser=2.21
   - pyfaidx=0.7.2.1
   - pyopenssl=23.2.0

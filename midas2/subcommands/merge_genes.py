@@ -16,7 +16,7 @@ from midas2.params.inputs import MIDASDB_NAMES
 
 DEFAULT_GENOME_DEPTH = 1.0
 DEFAULT_SAMPLE_COUNTS = 1
-DEFAULT_CLUSTER_ID = '95'
+DEFAULT_CLUSTER_ID = '80'
 DEFAULT_MIN_COPY = 0.35
 DEFAULT_NUM_CORES = 4
 
@@ -75,7 +75,7 @@ def register_args(main_func):
                            dest='cluster_pid',
                            type=str,
                            default=DEFAULT_CLUSTER_ID,
-                           choices=['75', '80', '85', '90', '95', '99'],
+                           choices=['75', '80', '85', '90', '95'],
                            help=f"CLUSTER_PID allows you to quantify gene content for any of these sets of gene clusters ({DEFAULT_CLUSTER_ID})")
 
     subparser.add_argument('--num_cores',

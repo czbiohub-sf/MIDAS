@@ -5,9 +5,10 @@ from collections import defaultdict
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
-from midas2.common.utilities import decode_species_arg, decode_genomes_arg, scan_mapfile, scan_gene_info, scan_gene_length, write_cluster_info, parse_gff_to_tsv, get_contig_length, write_contig_length
+from midas2.common.utilities import decode_species_arg, decode_genomes_arg, scan_mapfile, scan_gene_info, scan_gene_length, write_cluster_info, parse_gff_to_tsv, get_contig_length, write_contig_length, scan_gene_info_list, exclude_short_c99s, extract_filtered_c99s
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MARKER_FILE_EXTS, MIDASDB_NAMES
+from midas2.subcommands.build_pangenome import localpath
 
 
 @retry
@@ -195,9 +196,23 @@ def generate_cluster_info_worker(args):
         gene_length_fp = midas_db.fetch_file("pangenome_genes_len", species_id)
     assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Build pangenome outputs are missing."
 
-    dict_of_centroids = scan_gene_info(gene_info_fp) # <centroid_99> as the key
+    # Remove centroids_99 shorter than 40% of the corresponding centroids_95
     dict_of_gene_length = scan_gene_length(gene_length_fp) # <gene_id:gene_length>
-    write_cluster_info(dict_of_centroids, dict_of_markers, dict_of_gene_length, "cluster_info.txt")
+    dict_of_c95_per_c99 = scan_gene_info_list(gene_info_fp, colk="centroid_95", colv="centroid_99")
+    dict_of_filtered_c99s = exclude_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, 0.4)
+
+    # For centroids_99 not showing in the filtered dictionary, they will be removed from the centroids.ffn as well.
+    local_ffn = midas_db.get_target_layout("pangenome_centroids", False, species_id)
+    local_c99_ffn = localpath(midas_db, species_id, "temp/centroids.99.ffn")
+    command(f"mv {local_ffn} {local_c99_ffn}")
+    extract_filtered_c99s(dict_of_filtered_c99s, local_ffn, local_c99_ffn)
+
+    # Fetch the full cluster information for filtered centroid_99
+    dict_of_centroids = scan_gene_info(gene_info_fp, dict_of_filtered_c99s) # <centroid_99, dict_of_cluster>
+    # Fetch the list_of_genes for all centroid_99
+    dict_of_centroids_list = scan_gene_info_list(gene_info_fp) # <centroids_99, list_of_genes>
+    # Write cluster_info.txt
+    write_cluster_info(dict_of_centroids_list, dict_of_centroids, dict_of_markers, dict_of_gene_length, "cluster_info.txt")
 
     ### Compute contigs length
     ffns_by_genomes = midas_db.fetch_files("annotation_fna", [species_id], False)
