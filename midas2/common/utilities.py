@@ -333,14 +333,14 @@ def write_cluster_info(dict_of_centroids_list, dict_of_centroids, dict_of_marker
         stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
         for r in dict_of_centroids.values():
             centroid_99 = r["centroid_99"]
-            # Marker transitivity: if member of a centroids_99 is a marker, so be the centroids_99!
+            # Marker transitivity: if more than 10% of the members of a given centroid_99 are labeled as marker, so be the centroid_99.
             marker_id = ""
             if centroid_99 in dict_of_markers:
                 marker_id = dict_of_markers[centroid_99]
             else:
-                gene_list = dict_of_centroids_list[centroid_99]
-                member_markers = [dict_of_markers[g] for g in gene_list if g in dict_of_markers]
-                if member_markers:
+                member_list = dict_of_centroids_list[centroid_99]
+                member_markers = [dict_of_markers[g] for g in member_list if g in dict_of_markers]
+                if len(member_markers) > 0.1 * len(member_list):
                     marker_id = member_markers[0]
             gene_len = dict_of_gene_length[centroid_99]
             val = list(r.values()) + [gene_len, marker_id]
