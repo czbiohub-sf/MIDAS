@@ -8,6 +8,7 @@ dependencies:
   - _libgcc_mutex=0.1
   - _openmp_mutex=4.5
   - bedtools=2.31.0
+  - biopython=1.81
   - bzip2=1.0.8
   - c-ares=1.21.0
   - ca-certificates=2023.7.22
