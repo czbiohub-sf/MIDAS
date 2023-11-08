@@ -44,8 +44,8 @@ def get_single_layout(sample_name, dbtype=""):
             "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
             "genes_chunk_summary":     f"{sample_name}/genes/chunks_summary.tsv",
             "genes_pangenomes_bam":    f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_coverage":          f"{sample_name}/temp/genes/{species_id}/genes_{chunk_id}.tsv.lz4",
-            "chunk_genes_are_markers": f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv.lz4",
+            "chunk_c95_coverage":      f"{sample_name}/temp/genes/{species_id}/c95_{chunk_id}.tsv.lz4",
+            "chunk_c95_are_markers":   f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv.lz4",
         }
     return per_species
 

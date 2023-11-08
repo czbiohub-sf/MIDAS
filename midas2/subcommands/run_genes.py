@@ -11,11 +11,11 @@ from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, command, multiprocessing_map, multithreading_map, cat_files, args_string
-from midas2.common.utilities import fetch_genes_are_markers
+from midas2.common.utilities import fetch_c99s_are_markers
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
-from midas2.models.species import Species, parse_species, load_chunks_cache
-from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_are_markers_schema
+from midas2.models.species import Species, parse_species, load_chunks_cache, scan_cluster_info
+from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6, genes_are_markers_schema, species_marker_profile_schema
 from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -24,11 +24,11 @@ DEFAULT_MARKER_DEPTH = 5.0
 DEFAULT_MARKER_MEDIAN_DEPTH = 2.0
 
 DEFAULT_ALN_MAPID = 94.0
-DEFAULT_ALN_MAPQ = 2
+DEFAULT_ALN_MAPQ = 0
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 
-DEFAULT_READ_DEPTH = 2
+DEFAULT_READ_DEPTH = 0
 
 DEFAULT_CHUNK_SIZE = 50000
 DEFAULT_MAX_FRAGLEN = 5000
@@ -237,14 +237,14 @@ def process_chunk_of_genes(packed_args):
 
         return ret
 
-    tsprint(f"  MIDAS2::process_chunk_of_genes::{species_id}-{chunk_id}::start compute_coverage_per_chunk")
-    ret = compute_coverage_per_chunk(species_id, chunk_id)
-    tsprint(f"  MIDAS2::process_chunk_of_genes::{species_id}-{chunk_id}::finish compute_coverage_per_chunk")
+    tsprint(f"  MIDAS2::process_chunk_of_genes::{species_id}-{chunk_id}::start collect_reads_per_chunk")
+    ret = collect_reads_per_chunk(species_id, chunk_id)
+    tsprint(f"  MIDAS2::process_chunk_of_genes::{species_id}-{chunk_id}::finish collect_reads_per_chunk")
     return ret
 
 
-def compute_coverage_per_chunk(species_id, chunk_id):
-    """ Count number of bp mapped to each pan-gene. """
+def collect_reads_per_chunk(species_id, chunk_id):
+    """ Collect total number of read depths over each covered position for centroids_99 """
 
     global global_args
     global semaphore_for_species
@@ -255,80 +255,79 @@ def compute_coverage_per_chunk(species_id, chunk_id):
         sp = dict_of_species[species_id]
 
         chunks_of_centroids = load_chunks_cache(sp.chunks_of_centroids_fp)
-        dict_of_genes_are_markers, _ = fetch_genes_are_markers(sp.cluster_info_fp)
+        dict_of_c99s_are_markers, _ = fetch_c99s_are_markers(sp.cluster_info_fp)
+        cluster_info = scan_cluster_info(sp.cluster_info_fp)
 
-        chunk_of_genes_length = chunks_of_centroids[chunk_id]
-        list_of_centroids_id = sorted(list(chunk_of_genes_length.keys()))
+        chunk_of_c99_length = chunks_of_centroids[chunk_id]
+        list_of_c99_ids = sorted(list(chunk_of_c99_length.keys()))
 
         pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
-        headerless_genes_coverage_path = sample.get_target_layout("chunk_coverage", species_id, chunk_id)
-        headerless_genes_are_marker = sample.get_target_layout("chunk_genes_are_markers", species_id, chunk_id)
+        headerless_c95_are_marker = sample.get_target_layout("chunk_c95_are_markers", species_id, chunk_id)
+        headerless_c95_coverage_path = sample.get_target_layout("chunk_c95_coverage", species_id, chunk_id)
 
-        # Statistics needed to be accmulated within each chunk
-        chunk_cov_stats = {
-            "species_id": species_id,
-            "chunk_id": chunk_id,
-            "chunk_genome_size": 0,
-            "chunk_num_covered_genes": 0,
-            "chunk_coverage": 0,
-            "chunk_aligned_reads": 0,
-            "chunk_mapped_reads": 0,
-        }
-
-        chunk_genes_are_marker = defaultdict(dict)
-        chunk_genes_values = defaultdict(list)
-
+        chunk_c95_values = defaultdict(dict)
+        chunk_c95_are_marker = defaultdict(dict)
         with AlignmentFile(pangenome_bamfile) as bamfile:
-            for gene_id in list_of_centroids_id: # compute Unit: Genes
-                gene_length = chunk_of_genes_length[gene_id]
-                aligned_reads = bamfile.count(gene_id)
+            # Competitive alignment is done on centroid_99 level, while coverage are computed on centroid_95 level.
+            for c99_id in list_of_c99_ids:
+                c95_id = cluster_info[c99_id]["centroid_95"]
 
-                chunk_cov_stats["chunk_genome_size"] += 1
-                chunk_cov_stats["chunk_aligned_reads"] += aligned_reads
+                # centroids_95 is subset of centroids_99
+                c99_length = cluster_info[c99_id]["centroid_99_length"]
+                c95_length = cluster_info[c95_id]["centroid_99_length"]
 
-                mapped_reads = bamfile.count(gene_id, read_callback=keep_read)
+                aligned_reads = bamfile.count(c99_id)
+                mapped_reads = bamfile.count(c99_id, read_callback=keep_read)
 
-                if mapped_reads < global_args.read_depth:
-                    continue
-
-                # Compute vertical coverage only for aligned gene region
-                gene_covered_bases = 0
-                gene_total_depth = 0
-                counts = bamfile.count_coverage(gene_id, read_callback=keep_read)
-                for within_chunk_index in range(0, gene_length):
+                # Compute total per-position depth for aligned gene region
+                c99_covered_bases = 0
+                c99_total_depth = 0
+                counts = bamfile.count_coverage(c99_id, read_callback=keep_read)
+                for within_chunk_index in range(0, c99_length):
+                    # Per-position depth
                     gene_depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
-                    gene_total_depth += gene_depth
+                    c99_total_depth += gene_depth
                     if gene_depth > 0:
-                        gene_covered_bases += 1
+                        c99_covered_bases += 1
 
-                gene_fraction_covered = gene_covered_bases / gene_length
-                gene_coverage = gene_total_depth / gene_covered_bases if gene_covered_bases > 0 else 0
-
-                if gene_coverage == 0: # Sparse by default.
+                if c99_total_depth == 0: # Sparse by default.
                     continue
 
-                chunk_cov_stats["chunk_num_covered_genes"] += 1
-                chunk_cov_stats["chunk_mapped_reads"] += mapped_reads
-                chunk_cov_stats["chunk_coverage"] += gene_coverage
+                if c95_id not in chunk_c95_values:
+                    chunk_c95_values[c95_id]["c95_id"] = c95_id
+                    chunk_c95_values[c95_id]["c95_length"] = c95_length
+                    chunk_c95_values[c95_id]["aligned_reads"] = aligned_reads
+                    chunk_c95_values[c95_id]["mapped_reads"] = mapped_reads
+                    chunk_c95_values[c95_id]["read_depth"] = c99_total_depth
+                    chunk_c95_values[c95_id]["mean_coverage"] = 0.0
+                    chunk_c95_values[c95_id]["copy_number"] = 0.0
+                else:
+                    chunk_c95_values[c95_id]["aligned_reads"] += aligned_reads
+                    chunk_c95_values[c95_id]["mapped_reads"] += mapped_reads
+                    chunk_c95_values[c95_id]["read_depth"] += c99_total_depth
 
-                chunk_genes_values[gene_id] = [gene_id, gene_length, aligned_reads, mapped_reads, gene_coverage, gene_fraction_covered, 0.0]
+                # Collect gene coverage for all centroids_95 that are markers, or member of the centroids_99 is marker
+                if c95_id in dict_of_c99s_are_markers and c95_id not in chunk_c95_are_marker:
+                    chunk_c95_are_marker[c95_id]["centroid_95"] = c95_id
+                    chunk_c95_are_marker[c95_id]["marker_id"] = dict_of_c99s_are_markers[c95_id]["marker_id"]
+                    chunk_c95_are_marker[c95_id]["marker_length"] = c95_length
+                    chunk_c95_are_marker[c95_id]["read_depth"] = c99_total_depth
+                elif c95_id in chunk_c95_are_marker:
+                    chunk_c95_are_marker[c95_id]["read_depth"] += c99_total_depth
 
-                # Collect gene coverage for all the centroids (genes) that are markers
-                if gene_id in dict_of_genes_are_markers:
-                    chunk_genes_are_marker[gene_id] = dict_of_genes_are_markers[gene_id]
-                    chunk_genes_are_marker[gene_id]["gene_coverage"] = gene_coverage
-
-        # Write chunk gene coverage results to file
-        with OutputStream(headerless_genes_coverage_path) as stream:
-            for vals in chunk_genes_values.values():
-                stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
-        # Write current chunk's genes_that_are_markers to file
-        with OutputStream(headerless_genes_are_marker) as stream2:
-            for rec in chunk_genes_are_marker.values():
+        # Write chunk centroids_95 that has at least one marker member to file
+        with OutputStream(headerless_c95_are_marker) as stream:
+            for rec in chunk_c95_are_marker.values():
                 vals = rec.values()
-                stream2.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
+                stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
 
-        return chunk_cov_stats
+        # Write chunk centroid_95 coverage to file
+        with OutputStream(headerless_c95_coverage_path) as stream:
+            for rec in chunk_c95_values.values():
+                vals = rec.values()
+                stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
+
+        return {"species_id": species_id, "chunk_id": chunk_id}
     finally:
         semaphore_for_species[species_id].release()
 
@@ -340,42 +339,42 @@ def compute_scg_coverage_across_chunks(species_id):
     sp = dict_of_species[species_id]
 
     number_of_chunks = sp.num_of_genes_chunks
-    _, list_of_markers = fetch_genes_are_markers(sp.cluster_info_fp)
+    _, list_of_markers = fetch_c99s_are_markers(sp.cluster_info_fp)
 
-    # Include ALL the marker centroids, not only the covered one
+    # Gene flow: ALL; Species flow: only covered markers.
+    list_of_chunks_marker = [sample.get_target_layout("chunk_c95_are_markers", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
     markers_coverage = dict(zip(list_of_markers, [0.0]*len(list_of_markers)))
-
-    list_of_chunk_files = [sample.get_target_layout("chunk_genes_are_markers", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
-    for chunk_file in list_of_chunk_files:
+    for chunk_file in list_of_chunks_marker:
         with InputStream(chunk_file) as stream:
             for r in select_from_tsv(stream, schema=genes_are_markers_schema, result_structure=dict):
                 if r["marker_id"] not in markers_coverage:
                     markers_coverage[r["marker_id"]] = 0.0
-                markers_coverage[r["marker_id"]] += r["gene_coverage"]
+                markers_coverage[r["marker_id"]] += r["read_depth"] / r["marker_length"] # alias for c95_length
 
     median_marker_coverage = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_coverage.values())))
-
     return median_marker_coverage
 
 
-def update_chunk_coverage(my_args):
+def compute_coverage_across_chunks(list_of_chunks_coverage, median_marker_coverage):
+    # Second round of across chunks compute: same centroid_95 would be present in differnet chunks.
+    # Therefore, have to be scanned sequentially.
+    c95_values = defaultdict(dict)
+    for chunk_file in list_of_chunks_coverage:
+        with InputStream(chunk_file) as stream:
+            for r in select_from_tsv(stream, schema=genes_coverage_schema, result_structure=dict):
+                if r["gene_id"] not in c95_values:
+                    c95_values[r["gene_id"]] = r
+                else:
+                    c95_values[r["gene_id"]]["aligned_reads"] += r["aligned_reads"]
+                    c95_values[r["gene_id"]]["mapped_reads"] += r["mapped_reads"]
+                    c95_values[r["gene_id"]]["read_depth"] += r["read_depth"]
 
-    chunk_coverage_path, median_marker_coverage = my_args
-
-    c_copynum = list(genes_coverage_schema.keys()).index("copy_number")
-    c_coverage = list(genes_coverage_schema.keys()).index("mean_coverage")
-
-    add_cn_to_write = []
-    with InputStream(chunk_coverage_path) as stream:
-        for line in stream:
-            vals = line.rstrip("\n").split("\t")
-            # Infer gene copy counts
-            vals[c_copynum] = float(vals[c_coverage]) / median_marker_coverage
-            add_cn_to_write.append(vals)
-
-    with OutputStream(chunk_coverage_path) as stream:
-        for vals in add_cn_to_write:
-            stream.write("\t".join(map(format_data, vals, repeat(DECIMALS6, len(vals)))) + "\n")
+    # Compute coverage and copy number
+    for c95_id, c95_cov in c95_values.items():
+        c95_cov["mean_coverage"] = float(c95_cov["read_depth"] / c95_cov["gene_length"])
+        if median_marker_coverage > 0:
+            c95_cov["copy_number"] = float(c95_cov["mean_coverage"] / median_marker_coverage)
+    return c95_values
 
 
 def merge_chunks_per_species(species_id):
@@ -393,68 +392,76 @@ def merge_chunks_per_species(species_id):
     median_marker_coverage = compute_scg_coverage_across_chunks(species_id)
     tsprint(f"      MIDAS2::merge_chunks_per_species::{species_id}::finish compute_scg_coverage_across_chunks")
 
-    # Overwrite the chunk_gene_coverage file with updated copy_number
-    list_of_chunks_coverage = [sample.get_target_layout("chunk_coverage", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
-    species_gene_coverage_path = sample.get_target_layout("genes_coverage", species_id)
+    # Compute centroid_95 coverage and copy number
+    tsprint(f"      MIDAS2::merge_chunks_per_species::{species_id}::start compute_coverage_across_chunks")
+    list_of_chunks_coverage = [sample.get_target_layout("chunk_c95_coverage", species_id, chunk_id) for chunk_id in range(0, number_of_chunks)]
+    c95_vals = compute_coverage_across_chunks(list_of_chunks_coverage, median_marker_coverage)
+    tsprint(f"      MIDAS2::merge_chunks_per_species::{species_id}::finish compute_coverage_across_chunks")
 
-    tsprint(f"      MIDAS2::merge_chunks_per_species::{species_id}::start update_chunk_coverage")
-    if median_marker_coverage > 0:
-        args = [(chunk_file, median_marker_coverage) for chunk_file in list_of_chunks_coverage]
-        multithreading_map(update_chunk_coverage, args, 4)
-    tsprint(f"      MIDAS2::merge_chunks_per_species::{species_id}::finish update_chunk_coverage")
+    species_cov_stats = {
+        "species_id": species_id,
+        "chunk_id": -1,
+        "covered_genes": 0,
+        "mean_coverage": 0,
+        "aligned_reads": 0,
+        "mapped_reads": 0,
+        "marker_coverage": median_marker_coverage
+    }
 
-    # Merge chunks results into per species genes coverage file
-    with OutputStream(species_gene_coverage_path) as stream:
+    # Write centroid_95 coverage to file.
+    species_gene_cov_path = sample.get_target_layout("genes_coverage", species_id)
+    with OutputStream(species_gene_cov_path) as stream:
         stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
-    cat_files(list_of_chunks_coverage, species_gene_coverage_path, 10)
+        for rec in c95_vals.values():
+            if rec["mapped_reads"] > global_args.read_depth:
+                species_cov_stats["covered_genes"] += 1
+                species_cov_stats["mean_coverage"] += rec["mean_coverage"]
+                species_cov_stats["aligned_reads"] += rec["aligned_reads"]
+                species_cov_stats["mapped_reads"] += rec["mapped_reads"]
+                stream.write("\t".join(map(format_data, rec.values(), repeat(DECIMALS6, len(rec)))) + "\n")
 
-    if not global_args.debug:
-        tsprint(f"Deleting temporary sliced coverage files for {species_id}.")
-        temp_species_dir = os.path.dirname(list_of_chunks_coverage[0])
-        command(f"rm -rf {temp_species_dir}", quiet=True)
+    # Remove chunk temporary file TODO remove this
+    tsprint(f"Deleting temporary chunk coverage files for {species_id}.")
+    temp_species_dir = os.path.dirname(list_of_chunks_coverage[0])
+    command(f"rm -rf {temp_species_dir}", quiet=True)
 
-    return {"species_id": species_id, "chunk_id": -1, "median_marker_coverage": median_marker_coverage}
+    return species_cov_stats
 
 
-def write_species_coverage_summary(chunks_gene_coverage, genes_stats_path):
-
-    # First pass
-    species_coverage_summary = defaultdict(dict)
+def write_species_coverage_summary(chunks_gene_coverage, genes_coverage_path):
+    genes_summary = defaultdict(dict)
     for rec in chunks_gene_coverage:
-        species_id = rec["species_id"]
-
-        # for the merge task, we return the marker genes coverage
         if rec["chunk_id"] == -1:
-            species_coverage_summary[species_id]["median_marker_coverage"] = rec["median_marker_coverage"]
-            continue
+            spid = rec["species_id"]
+            sp = dict_of_species[spid]
+            cluster_info = scan_cluster_info(sp.cluster_info_fp)
 
-        if species_id not in species_coverage_summary:
-            species_coverage_summary[species_id] = {
-                "species_id": species_id,
-                "pangenome_size": 0,
-                "num_covered_genes": 0,
-                "total_coverage": 0,
-                "aligned_reads": 0,
-                "mapped_reads": 0,
-                "median_marker_coverage": 0,
-            }
+            # Compute the number of unique centroid_95 across all chunks
+            c95_dict = dict()
+            for ci in cluster_info.values():
+                c95 = ci["centroid_95"]
+                if c95 not in c95_dict:
+                    c95_dict[c95] = 1
+                else:
+                    c95_dict[c95] += 1
+            pangenome_size = len(c95_dict)
 
-        species_coverage_summary[species_id]["pangenome_size"] += rec["chunk_genome_size"]
-        species_coverage_summary[species_id]["num_covered_genes"] += rec["chunk_num_covered_genes"]
-        species_coverage_summary[species_id]["aligned_reads"] += rec["chunk_aligned_reads"]
-        species_coverage_summary[species_id]["mapped_reads"] += rec["chunk_mapped_reads"]
-        species_coverage_summary[species_id]["total_coverage"] += rec["chunk_coverage"]
-
-    # Second pass: need to loop over all the chunks to calculate the average read coverage
-    with OutputStream(genes_stats_path) as stream:
+            genes_summary[spid]["species_id"] = spid
+            genes_summary[spid]["pangenome_size"] = pangenome_size
+            genes_summary[spid]["covered_genes"] = rec["covered_genes"]
+            genes_summary[spid]["fraction_covered"] = rec["covered_genes"] / pangenome_size
+            genes_summary[spid]["aligned_reads"] = rec["aligned_reads"]
+            genes_summary[spid]["mapped_reads"] = rec["mapped_reads"]
+            genes_summary[spid]["mean_coverage"] = rec["mean_coverage"] / rec["covered_genes"] if rec["covered_genes"] > 0 else 0
+            genes_summary[spid]["marker_coverage"] = rec["marker_coverage"]
+            break
+    
+    with OutputStream(genes_coverage_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
-        for rec in species_coverage_summary.values():
-            fraction_covered = rec["num_covered_genes"] / rec["pangenome_size"]
-            mean_coverage = rec["total_coverage"] / rec["num_covered_genes"] if rec["num_covered_genes"] > 0 else 0
-
-            vals = [rec["species_id"], rec["pangenome_size"], rec["num_covered_genes"], \
-                    fraction_covered, mean_coverage, rec["aligned_reads"], rec["mapped_reads"], rec["median_marker_coverage"]]
-            stream.write("\t".join(map(format_data, vals)) + "\n")
+        for _ in genes_summary.values():
+            #vals = [rec["species_id"], rec["pangenome_size"], rec["num_covered_genes"], \
+            #        fraction_covered, mean_coverage, rec["aligned_reads"], rec["mapped_reads"], rec["median_marker_coverage"]]
+            stream.write("\t".join(map(format_data, _.values())) + "\n")
 
 
 def run_genes(args):
