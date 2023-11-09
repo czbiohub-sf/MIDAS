@@ -454,7 +454,7 @@ def write_species_coverage_summary(chunks_gene_coverage, genes_coverage_path):
             genes_summary[spid]["mapped_reads"] = rec["mapped_reads"]
             genes_summary[spid]["mean_coverage"] = rec["mean_coverage"] / rec["covered_genes"] if rec["covered_genes"] > 0 else 0
             genes_summary[spid]["marker_coverage"] = rec["marker_coverage"]
-            break
+            continue
     
     with OutputStream(genes_coverage_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
