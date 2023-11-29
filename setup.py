@@ -13,7 +13,8 @@ setup(name='midas2',
         'biopython <= 1.81',
         'numpy',
         'pysam >= 0.21.0',
-        'gffutils >= 0.12'
+        'gffutils >= 0.12',
+        'pandas',
       ],
       dependency_links=[],
       entry_points={
