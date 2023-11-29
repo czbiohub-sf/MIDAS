@@ -6,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://files.pythonhosted.org/packages/b1/20/bd6283bb47921dee33a646879e53728aa7c7d8d51cfabba983e209a92a47/midas2-1.1.1.tar.gz
-  sha256: c9fae6f87a5914bce21b363065b39428433aac8a102a58aeb9ad9182604e28c4
+  url: https://files.pythonhosted.org/packages/ba/db/f874d4ab26feb119909591c30ab599bd185db44097e39b702b9279add2bc/midas2-1.1.2.tar.gz
+  sha256: 2f4fa3979c9f578fe4a17adf80100098ff6aadf351f0223d74e3416a35a78ee6
   #git_url: https://github.com/czbiohub/MIDAS2.0.git
   #git_rev: v1.1.0
 
