@@ -37,6 +37,7 @@ requirements:
     - vsearch >=2.23.0
     - seqkit >=2.5.1
     - cd-hit >=4.8.1
+    - pandas >= 2.1.1
 
 test:
   imports:
