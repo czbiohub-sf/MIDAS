@@ -7,7 +7,7 @@ from io import StringIO
 from pybedtools import BedTool
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, retry, command, OutputStream, multithreading_map, cat_files, pythonpath, num_physical_cores
+from midas2.common.utils import tsprint, retry, command, OutputStream, multithreading_map, cat_files, pythonpath, num_physical_cores, copy_star
 from midas2.common.utilities import decode_species_arg, decode_genomes_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
@@ -176,6 +176,7 @@ def funannot_parser_master(args):
         species_id = species_for_genome[genome_id]
 
         local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "genomad_virus")
+        local_dir = os.path.dirname(os.path.dirname(local_dest))
 
         msg = f"Parsing genome {genome_id} from species {species_id}."
         if os.path.exists(local_dest):
@@ -185,10 +186,20 @@ def funannot_parser_master(args):
             msg = msg.replace("Parsing", "Reparsing")
         tsprint(msg)
 
-        worker_subdir = os.path.dirname(os.path.dirname(local_dest))
+        if not args.debug:
+            command(f"rm -rf {local_dir}")
 
+        command(f"mkdir -p {local_dir}/resfinder")
+        command(f"mkdir -p {local_dir}/mefinder")
+        command(f"mkdir -p {local_dir}/genomad_virus")
+        command(f"mkdir -p {local_dir}/genomad_plasmid")
+        command(f"mkdir -p {local_dir}/eggnog")
+
+        worker_subdir = local_dir if args.scratch_dir == "." else f"{args.scratch_dir}/functional_annotation/{species_id}"
         if not args.debug:
             command(f"rm -rf {worker_subdir}")
+        if not os.path.isdir(worker_subdir):
+            command(f"mkdir -p {worker_subdir}")
 
         command(f"mkdir -p {worker_subdir}/resfinder")
         command(f"mkdir -p {worker_subdir}/mefinder")
@@ -199,7 +210,7 @@ def funannot_parser_master(args):
         # Recurisve call via subcommand.  Use subdir, redirect logs.
         # Output files are generated inside worker_subdir
         worker_log = f"{worker_subdir}/{genome_id}.log"
-        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''}"
+        subcmd_str = f"--zzz_worker_mode --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} --scratch_dir {args.scratch_dir}"
         worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 funannot_parser --genome {genome_id} {subcmd_str} &>> {worker_log}"
 
         try:
@@ -230,7 +241,6 @@ def funannot_parser_master(args):
                     cols = cols_eggnog
                 stream.write('\t'.join(cols) + '\n')
             cat_files(list_of_temp_files, final_file, 10)
-
 
     if args.genomes:
         genome_id_list = decode_genomes_arg(args, species_for_genome)
@@ -266,42 +276,55 @@ def funannot_parser_worker(args):
     contig_len_fp = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
     gene_feature_fp = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
 
-    # Read in centroids_info.txt and only keep the first column
-    centroids_99 = pd.read_csv(cluster_info_fp, sep='\t', usecols=[0])
     contig_len = pd.read_csv(contig_len_fp, sep='\t')
     gene_features = pd.read_csv(gene_feature_fp, sep='\t')
 
-    # Only keep cenroids_99 from given genome
-    genes_99 = pd.merge(centroids_99, gene_features, left_on='centroid_99', right_on='gene_id', how='inner')
-    genes_99 = pd.merge(genes_99, contig_len[['contig_id', 'contig_length']], left_on='contig_id', right_on='contig_id', how='inner')
+    # 2023-12-05: we keep ALL the genes
+    genes_99 = pd.merge(gene_features, contig_len[['contig_id', 'contig_length']], left_on='contig_id', right_on='contig_id', how='inner')
+    genes_99 = genes_99.rename(columns={'gene_id': 'centroid_99'})
     genes_99 = genes_99[['contig_id', 'start', 'end', 'centroid_99', 'strand', 'gene_type', 'contig_length']]
 
     # Genomad virus
     df = parse_genomad_virus_genes(midas_db.get_target_layout("genomad_virus_genes", False, species_id, genome_id))
-    local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "genomad_virus")
+    local_dest = f"genomad_virus/{genome_id}"
     write_genome_temp(df, genes_99, local_dest)
 
     # Genomad plasmid
     df = parse_genomad_plasmid_genes(midas_db.get_target_layout("genomad_plasmid_genes", False, species_id, genome_id))
-    local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "genomad_plasmid")
+    local_dest = f"genomad_plasmid/{genome_id}"
     write_genome_temp(df, genes_99, local_dest)
 
     # MEfinder
     df = parse_mefinder(midas_db.get_target_layout("mefinder_results", False, species_id, genome_id))
-    local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "mefinder")
+    local_dest = f"mefinder/{genome_id}"
     write_genome_temp(df, genes_99, local_dest)
 
     # Resfinder
     df = parse_resfinder(midas_db.get_target_layout("resfinder_results", False, species_id, genome_id))
-    local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "resfinder")
+    local_dest = f"resfinder/{genome_id}"
     write_genome_temp(df, genes_99, local_dest)
 
-    # EggNOG
+    # Only EggNOG is done on the centroid_99s.
+    centroids_99 = pd.read_csv(cluster_info_fp, sep='\t', usecols=[0]) # Only keep the list of centroid_99
+    genes_99 = pd.merge(centroids_99, gene_features, left_on='centroid_99', right_on='gene_id', how='inner')
+    genes_99 = pd.merge(genes_99, contig_len[['contig_id', 'contig_length']], left_on='contig_id', right_on='contig_id', how='inner')
+    genes_99 = genes_99[['contig_id', 'start', 'end', 'centroid_99', 'strand', 'gene_type', 'contig_length']]
+
     df = read_eggnog_csv(midas_db.get_target_layout("eggnog_results", False, species_id))
-    local_dest = midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "eggnog")
+    local_dest = f"eggnog/{genome_id}"
     merged_df = df.merge(genes_99, left_on='#query', right_on='centroid_99', how='inner')
     merged_df = merged_df.drop(columns=['centroid_99'])
     merged_df.to_csv(local_dest, sep='\t', index=False, header=False)
+
+    if args.scratch_dir != ".":
+        copy_tasks = [
+            (f"genomad_virus/{genome_id}", midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "genomad_virus")),
+            (f"genomad_plasmid/{genome_id}", midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "genomad_plasmid")),
+            (f"mefinder/{genome_id}", midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "mefinder")),
+            (f"resfinder/{genome_id}", midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "resfinder")),
+            (f"eggnog/{genome_id}", midas_db.get_target_layout("funcannot_tempfile", False, species_id, genome_id, "eggnog"))
+        ]
+        multithreading_map(copy_star, copy_tasks, 2)
 
 
 def register_args(main_func):
@@ -331,6 +354,11 @@ def register_args(main_func):
                            type=int,
                            default=num_physical_cores,
                            help="Number of threads")
+    subparser.add_argument('--scratch_dir',
+                           dest='scratch_dir',
+                           type=str,
+                           default=".",
+                           help="Absolute path to scratch directory for fast I/O.")
     return main_func
 
 
