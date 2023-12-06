@@ -72,7 +72,7 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "mefinder_results":              f"functional_annotation/{species_id}/{genome_id}/mefinder_output/mefinder.csv",
         "resfinder_results":             f"functional_annotation/{species_id}/{genome_id}/resfinder_output/ResFinder_results_tab.txt",
         ## Parsed Functional Anntations
-        "funcannot_tempfile":            f"functional_annotation/{species_id}/temp/{component}/{genome_id}",
+        "funcannot_tempfile":            f"functional_annotation/{species_id}/temp.v1.1.3/{component}/{genome_id}",
         "pangenome_genomad_virus":       f"pangenomes/{species_id}/genomad_virus.tsv",
         "pangenome_genomad_plasmid":     f"pangenomes/{species_id}/genomad_plasmid.tsv",
         "pangenome_mefinder":            f"pangenomes/{species_id}/mefinder.tsv",
