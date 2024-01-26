@@ -2,13 +2,12 @@
 import os
 import sys
 import json
-from multiprocessing import Semaphore
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, num_physical_cores, retry, find_files, pythonpath, upload, OutputStream, command, multithreading_map
 from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
-from midas2.models.species import design_genes_chunks, design_run_snps_chunks, design_merge_snps_chunks
+from midas2.models.species import design_run_snps_chunks, design_merge_snps_chunks
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -28,10 +27,6 @@ def get_dest_filename(chunk_type, species_id, genome_id=""):
     if chunk_type == "merge_snps":
         dest_filename = "chunks_sites_merge"
         msg = f"Designing chunks of sites for representative genome {genome_id} from species {species_id} for MERGE snps."
-
-    if chunk_type == "genes":
-        dest_filename = "chunks_centroids"
-        msg = f"Designing chunks of centroids for species {species_id}."
 
     return (dest_filename, msg)
 
@@ -112,9 +107,6 @@ def compute_chunks_worker(args):
     if args.chunk_type == "merge_snps":
         contigs_fp = midas_db.fetch_file("representative_genome", species_id, genome_id)
         chunks_to_cache = design_merge_snps_chunks(species_id, contigs_fp, args.chunk_size)
-    if args.chunk_type == "genes":
-        cluster_info_fp = midas_db.fetch_file("pangenome_cluster_info", species_id)
-        chunks_to_cache = design_genes_chunks(species_id, cluster_info_fp, args.chunk_size)
 
     dest_filename, _ = get_dest_filename(args.chunk_type, species_id, genome_id)
 

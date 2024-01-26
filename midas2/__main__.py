@@ -14,8 +14,8 @@ from midas2.subcommands import aws_batch_init, aws_batch_submit, init, \
     infer_markers, build_midasdb, database, \
     run_species, run_genes, run_snps, \
     merge_species, merge_snps, merge_genes, \
-    build_bowtie2db, compute_chunks, recluster_centroids, \
-    funannot_parser  # pylint: disable=unused-import
+    build_bowtie2db, compute_chunks, recluster_centroids, augment_pangenome, \
+    annotate_pangenome, enhance_pangenome# pylint: disable=unused-import
 
 from midas2.common.argparser import parse_args
 

@@ -17,7 +17,7 @@ def get_single_layout(sample_name, dbtype=""):
             "tempdir":                 f"{sample_name}/temp/{dbtype}",
             "temp_subdir":             f"{sample_name}/temp/{dbtype}/{species_id}",
 
-            "midas_db_dir":            f"midasdb",
+            "midas_db_dir":            "midasdb",
             "bt2_indexes_dir":         f"{sample_name}/bt2_indexes/{dbtype}",
 
             # species workflow output
@@ -42,10 +42,7 @@ def get_single_layout(sample_name, dbtype=""):
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
             "genes_log":               f"{sample_name}/genes/log.txt",
             "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
-            "genes_chunk_summary":     f"{sample_name}/genes/chunks_summary.tsv",
             "genes_pangenomes_bam":    f"{sample_name}/temp/genes/pangenomes.bam",
-            "chunk_c95_coverage":      f"{sample_name}/temp/genes/{species_id}/c95_{chunk_id}.tsv.lz4",
-            "chunk_c95_are_markers":   f"{sample_name}/temp/genes/{species_id}/markers_{chunk_id}.tsv.lz4",
         }
     return per_species
 
@@ -103,7 +100,7 @@ class Sample: # pylint: disable=too-few-public-methods
         assert os.path.exists(summary_path), f"load_profile_by_dbtype:: missing {summary_path} for {self.sample_name}"
 
         schema = fetch_schema_by_dbtype(dbtype)
-        profile = dict()
+        profile = {}
         with InputStream(summary_path) as stream:
             for info in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
                 profile[info["species_id"]] = info

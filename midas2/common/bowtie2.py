@@ -69,8 +69,10 @@ def bowtie2_align(bt2_db_dir, bt2_db_name, bamfile_path, args):
     else:
         r1 = f"-U {args.r1}"
 
+    extra_flags = args.aln_extra_flags
+
     try:
-        bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_fraglen} {max_reads} --{aln_mode} --{aln_speed} --threads {args.num_cores} -q {r1} {r2}"
+        bt2_command = f"bowtie2 --no-unal -x {bt2_db_prefix} {max_fraglen} {max_reads} --{aln_mode} --{aln_speed} {extra_flags} --threads {args.num_cores} -q {r1} {r2}"
         command(f"set -o pipefail; {bt2_command} | \
                 samtools view --threads {args.num_cores} -b - | \
                 samtools sort --threads {args.num_cores} -o {bamfile_path}", quiet=False)

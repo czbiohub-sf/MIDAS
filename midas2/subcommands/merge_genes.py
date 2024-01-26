@@ -10,7 +10,7 @@ from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, args_string
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.schemas import genes_info_schema, genes_coverage_schema, format_data, DECIMALS6
-from midas2.models.species import scan_cluster_info
+from midas2.common.utilities import scan_cluster_info
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -31,14 +31,14 @@ def register_args(main_func):
                            dest='samples_list',
                            type=str,
                            required=True,
-                           help=f"Path to TSV file mapping sample name to single sample midas output directory.")
+                           help="Path to TSV file mapping sample name to single sample midas output directory.")
 
     # Species and sample filters
     subparser.add_argument('--species_list',
                            dest='species_list',
                            type=str,
                            metavar="CHAR",
-                           help=f"Comma separated list of species ids OR path to list of species TXT.")
+                           help="Comma separated list of species ids OR path to list of species TXT.")
     subparser.add_argument('--genome_depth',
                            dest='genome_depth',
                            type=float,
@@ -57,12 +57,12 @@ def register_args(main_func):
                            type=str,
                            default="uhgg",
                            choices=MIDASDB_NAMES,
-                           help=f"MIDAS Database name.")
+                           help="MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Path to local MIDAS Database.")
+                           help="Path to local MIDAS Database.")
 
     # Presence/Absence
     subparser.add_argument('--min_copy',
@@ -129,7 +129,8 @@ def collect(accumulator, my_args):
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count
-    cluster_info = scan_cluster_info(sp.cluster_info_fp)
+
+    cluster_info = scan_cluster_info(sp.cluster_info_fp, "centroid_95")
 
     with InputStream(genes_coverage_fp) as stream:
         for r in select_from_tsv(stream, selected_columns=genes_coverage_schema, result_structure=dict):
@@ -185,7 +186,7 @@ def merge_genes(args):
         species_ids_of_interest = [sp.id for sp in dict_of_species.values()]
         species_counts = len(species_ids_of_interest)
 
-        assert species_ids_of_interest, f"No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
+        assert species_ids_of_interest, "No (specified) species pass the genome_coverage filter across samples, please adjust the genome_coverage or species_list"
         tsprint(f"{species_counts} species pass the filter")
 
         pool_of_samples.create_dirs(["outdir"], args.debug)

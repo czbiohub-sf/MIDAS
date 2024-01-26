@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import os
 import re
+from io import StringIO
 from bisect import bisect
 from collections import defaultdict
 import gffutils
 import Bio.SeqIO
+import pandas as pd
+import numpy as np
 
 from midas2.common.utils import InputStream, OutputStream, retry, select_from_tsv, tsprint, command
-from midas2.params.schemas import genes_feature_schema, PAN_GENE_INFO_SCHEMA, MARKER_INFO_SCHEMA, PAN_GENE_LENGTH_SCHEMA, CLUSTER_INFO_SCHEMA
+from midas2.params.schemas import genes_feature_schema, PANGENOME_INFO_SCHEMA, PANGENOME_CLUSTER_SCHEMA, fetch_centroid_prevalence_schema
 
 
 def decode_species_arg(args, species):
@@ -105,6 +108,14 @@ def get_gen_seq(genome_seq, start, end, strand):
     return seq
 
 
+def get_contig_length(fasta_file):
+    clen = {}
+    with InputStream(fasta_file) as file:
+        for rec in Bio.SeqIO.parse(file, 'fasta'):
+            clen[rec.id] = len(rec.seq)
+    return clen
+
+
 def index_replace(codon, allele, pos, strand):
     """ Replace character at index i in string x with y"""
     bases = list(codon)
@@ -163,7 +174,7 @@ def annotate_site(ref_pos, curr_contig, curr_feature, genes_sequence):
         return locus_type, curr_gene_id
 
     curr_seq = genes_sequence[curr_gene_id]["seq"]
-    assert len(curr_seq) % 3 == 0, f"gene must by divisible by 3 to id codons"
+    assert len(curr_seq) % 3 == 0, f"gene {curr_gene_id} must by divisible by 3 to id codons"
 
     ref_codon, within_codon_pos = fetch_ref_codon(ref_pos, curr_gene, curr_seq)
 
@@ -196,59 +207,28 @@ def update_id(cid):
 
 
 @retry
-def scan_mapfile(mapfile):
-    """ Extract <marker_id, gene_id> pairs from the marker mapfile """
-    dict_of_markers = dict()
-    with InputStream(mapfile) as stream:
-        for gene_id, marker_id in select_from_tsv(stream, ["gene_id", "marker_id"], schema=MARKER_INFO_SCHEMA):
-            dict_of_markers[gene_id] = marker_id
-    return dict_of_markers
-
-
-@retry
-def scan_gene_info(gene_info_fp, dict_of_filtered_c99s):
-    """ Extract <centroid_99, ...> from the gene_info file """
-    dict_of_centroids = dict()
-    with InputStream(gene_info_fp) as stream:
-        for r in select_from_tsv(stream, selected_columns=list(PAN_GENE_INFO_SCHEMA.keys())[1:], result_structure=dict):
-            c99_id = r["centroid_99"]
-            if c99_id in dict_of_filtered_c99s and c99_id not in dict_of_centroids:
-                dict_of_centroids[c99_id] = r
-    return dict_of_centroids
-
-
-@retry
-def scan_gene_info_list(gene_info_fp, colk="centroid_99", colv="gene_id"):
-    """ Extract <colk, [colvs]> from the gene_info file """
-    dict_of_centroids = defaultdict(list)
-    with InputStream(gene_info_fp) as stream:
-        for r in select_from_tsv(stream, selected_columns=list(PAN_GENE_INFO_SCHEMA.keys())[:3], result_structure=dict):
-            if r[colk] not in dict_of_centroids:
-                dict_of_centroids[r[colk]] = [r[colv]]
-            elif r[colv] not in dict_of_centroids[r[colk]]:
-                dict_of_centroids[r[colk]].append(r[colv])
-            else:
-                continue
-    return dict_of_centroids
-
-
-@retry
-def scan_gene_length(gene_length_file):
-    gene_length_dict = dict()
-    with InputStream(gene_length_file) as stream:
-        for r in select_from_tsv(stream, schema=PAN_GENE_LENGTH_SCHEMA, result_structure=dict):
-            gene_length_dict[r["gene_id"]] = r["gene_length"]
-    return gene_length_dict
-
-
-@retry
-def scan_cluster_info(info_file):
-    """ Read in cluster_info """
-    cluster_info = dict()
+def scan_info_file(info_file, schema, key):
+    """
+    Scan gene_info or cluster_info into memory.
+     - schema := PANGENOME_CLUSTER_SCHEMA
+     - key := gene_id, centroid_99
+    """
+    dict_of_info = {}
     with InputStream(info_file) as stream:
-        for r in select_from_tsv(stream, selected_columns=CLUSTER_INFO_SCHEMA, result_structure=dict):
-            cluster_info[r["centroid_99"]] = r
-    return cluster_info
+        for r in select_from_tsv(stream, selected_columns=schema, result_structure=dict):
+            kid = r[key]
+            if kid not in dict_of_info:
+                dict_of_info[kid] = r
+    return dict_of_info
+
+
+def scan_cluster_info(cluster_info_path, cxx = "centroid_99"):
+    return scan_info_file(cluster_info_path, PANGENOME_CLUSTER_SCHEMA, cxx)
+
+
+def scan_centroid_prev(fp, xx):
+    CENTROID_PREV_SCHEMA = fetch_centroid_prevalence_schema(xx)
+    return scan_info_file(fp, CENTROID_PREV_SCHEMA, f"centroid_{xx}")
 
 
 @retry
@@ -261,6 +241,7 @@ def scan_genes(annotated_genes):
     return gene_seqs
 
 
+@retry
 def scan_gene_feature(features_file):
     """ Read TAB-delimited *.genes files from gene_annotations """
     features = defaultdict(dict)
@@ -268,21 +249,6 @@ def scan_gene_feature(features_file):
         for r in select_from_tsv(stream, selected_columns=genes_feature_schema, result_structure=dict):
             features[r['contig_id']][r['gene_id']] = r ## gnl|Prokka|
     return features
-
-
-def fetch_c99s_are_markers(cluster_info_fp):
-    assert os.path.exists(cluster_info_fp), f"{cluster_info_fp} doesn't exit"
-
-    list_of_markers = []
-    dict_of_c99s_are_markers = defaultdict(dict)
-
-    filter_cmd = f"awk \'$8 != \"\"\'"
-    with InputStream(cluster_info_fp, filter_cmd) as stream:
-        for r in select_from_tsv(stream, selected_columns=["centroid_99", "marker_id"], result_structure=dict):
-            dict_of_c99s_are_markers[r["centroid_99"]] = r
-            if r["marker_id"] not in dict_of_c99s_are_markers:
-                list_of_markers.append(r["marker_id"])
-    return dict_of_c99s_are_markers, list_of_markers
 
 
 def compute_gene_boundary(features):
@@ -299,7 +265,7 @@ def compute_gene_boundary(features):
         # therefore, we update the gene feature files for the genes with overlapping ranges with the adjacent genes before
         prev_gene = None
         gc = 0
-        gene_offsets = dict()
+        gene_offsets = {}
         for gid, grange in feature_ranges_sorted.items():
             gc += 1
             if prev_gene is None:
@@ -328,25 +294,6 @@ def has_ambiguous_bases(sequence):
     return any(base in ambiguous_bases for base in sequence)
 
 
-def write_cluster_info(dict_of_centroids_list, dict_of_centroids, dict_of_markers, dict_of_gene_length, cluster_info_fp):
-    with OutputStream(cluster_info_fp) as stream:
-        stream.write("\t".join(CLUSTER_INFO_SCHEMA.keys()) + "\n")
-        for r in dict_of_centroids.values():
-            centroid_99 = r["centroid_99"]
-            # Marker transitivity: if more than 10% of the members of a given centroid_99 are labeled as marker, so be the centroid_99.
-            marker_id = ""
-            if centroid_99 in dict_of_markers:
-                marker_id = dict_of_markers[centroid_99]
-            else:
-                member_list = dict_of_centroids_list[centroid_99]
-                member_markers = [dict_of_markers[g] for g in member_list if g in dict_of_markers]
-                if len(member_markers) > 0.1 * len(member_list):
-                    marker_id = member_markers[0]
-            gene_len = dict_of_gene_length[centroid_99]
-            val = list(r.values()) + [gene_len, marker_id]
-            stream.write("\t".join(map(str, val)) + "\n")
-
-
 def parse_gff_to_tsv(gff3_file, genes_file):
     """ Convert GFF3 features format into genes.feature """
     command(f"rm -f {genes_file}")
@@ -371,26 +318,10 @@ def parse_gff_to_tsv(gff3_file, genes_file):
     return True
 
 
-def get_contig_length(fasta_file):
-    clen = {}
-    with InputStream(fasta_file) as file:
-        for rec in Bio.SeqIO.parse(file, 'fasta'):
-            clen[rec.id] = len(rec.seq)
-    return clen
-
-
-def write_contig_length(dict_of_contig_length, contig_length_fp):
-    with OutputStream(contig_length_fp) as stream:
-        stream.write("\t".join(["genome_id", "contig_id", "contig_length"]) + "\n")
-        for gid, r in dict_of_contig_length.items():
-            for cid, clen in r.items():
-                vals = [gid, cid, str(clen)]
-                stream.write("\t".join(vals) + "\n")
-
-
-def exclude_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, cutoff=0.4):
-    """ Rmove c99s shorter than 40% of the corresponding c95 """
-    dict_of_c99s = dict()
+def prune_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, cutoff=0.4):
+    # remove c99s shorter than 40% of the length of corresponding c95
+    # Moved to midasdb using pandas
+    dict_of_c99s = {}
     for c95, list_of_c99s in dict_of_c95_per_c99.items():
         c95_length = dict_of_gene_length[c95]
         filtered_c99 = [c99 for c99 in list_of_c99s if dict_of_gene_length[c99] >= cutoff * c95_length]
@@ -399,13 +330,101 @@ def exclude_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, cutoff=0.4):
     return dict_of_c99s
 
 
-def extract_filtered_c99s(dict_of_filtered_c99s, local_ffn, local_c99_ffn):
-    # local_ffn: the originally generated centroids.ffn. TODO: write to temp/centroids.99 directly!
-    # local_c99_ffn: overwrite centroids.ffn
-    with open(local_ffn, 'w') as ostream, \
-         InputStream(local_c99_ffn, check_path=False) as istream:
-        for rec in Bio.SeqIO.parse(istream, 'fasta'):
-            gid = rec.id
-            if gid in dict_of_filtered_c99s:
-                gseq = str(rec.seq).upper()
-                ostream.write(f">{gid}\n{gseq}\n")
+
+def augment_gene_info(centroid_info, gene_to_marker, dict_of_gene_length, gene_info_file):
+    """ Augment gene_info.txt with two additional columns: gene_length and marker_id """
+    with OutputStream(gene_info_file) as stream:
+        stream.write("\t".join(PANGENOME_INFO_SCHEMA.keys()) + "\n")
+        for gene_id, r in centroid_info.items():
+            gene_len = dict_of_gene_length[gene_id]
+            marker_id = gene_to_marker[gene_id] if gene_id in gene_to_marker else ""
+            val = [gene_id] + list(r.values()) + [gene_len, marker_id]
+            stream.write("\t".join(map(str, val)) + "\n")
+
+
+def compute_marker_density(genes_info, centroid_xx = "centroid_95"):
+    """ For each centroid_xx, we compute the marker density across its ALL ORF members"""
+    # genes_info: Pandas DataFrame
+    df = genes_info[[centroid_xx, 'marker_id']]
+    grouped = df.groupby(centroid_xx)
+    # compute the number of ORFs assigned with a SGC marker ID
+    non_nan_count = grouped['marker_id'].count()
+    total_count = grouped.size()
+    # marker density := the number of ORFs assigned as markers  / the total number of ORFs memebers (ratio)
+    ratio = non_nan_count / total_count
+    # Convert the series to a DataFrame and rename the columns
+    ratio = ratio.reset_index()
+    ratio.columns = [centroid_xx, f'{centroid_xx}_marker_density']
+    return ratio
+
+
+def fetch_marker_ids(c99_info, centroid_xx = "centroid_95"):
+    # We want to make sure the marker_id and is_centroid95_marker are consistent
+    mids = c99_info[c99_info[f"is_{centroid_xx}_marker"]][[centroid_xx, 'marker_id']].drop_duplicates()
+    mids.columns = [centroid_xx, f'{centroid_xx}_marker_id']
+    return mids
+
+
+def decorate_cluster_info(genes_info, cutoff=0.4):
+    c99_df = genes_info[genes_info["gene_id"] == genes_info["centroid_99"]]
+    for c_xx in ['centroid_99', 'centroid_95']:
+        c_xx_sgc_density = compute_marker_density(genes_info, c_xx)
+        c_xx_sgc_density[f'is_{c_xx}_marker'] = c_xx_sgc_density[f'{c_xx}_marker_density'] > cutoff
+        c99_df = pd.merge(c99_df, c_xx_sgc_density, how='left', on=c_xx)
+    c99_df.rename(columns={'gene_length': 'centroid_99_length'}, inplace=True)
+    c99_df.drop('gene_id', axis=1, inplace=True)
+    # cal marker_id for centroids
+    mids = fetch_marker_ids(c99_df, "centroid_95")
+    c99_df = pd.merge(c99_df, mids, how='left', on=c_xx)
+    c99_df.fillna('', inplace=True)
+    return c99_df
+
+
+def decorate_genes_info(midas_db, genes_info_fp, species_id):
+    # decorate genes_info with binary gene annotation
+    genes_info = pd.read_csv(genes_info_fp, sep="\t")
+    for mstep in ['genomad_virus', 'genomad_plasmid', 'mefinder', 'resfinder']:
+        final_file = midas_db.get_target_layout(f"panannot_{mstep}", False, species_id)
+        new_df = pd.read_csv(final_file, sep='\t')
+
+        if "genomad_virus" == mstep:
+            new_col_name = "gene_is_phage"
+        if "genomad_plasmid" == mstep:
+            new_col_name = "gene_is_plasmid"
+        if "mefinder" == mstep:
+            new_col_name = "gene_is_amr"
+        if "resfinder" == mstep:
+            new_col_name = "gene_is_me"
+
+        new_df[new_col_name] = 1
+        new_df = new_df[['gene_id', new_col_name]].groupby('gene_id').first().reset_index()
+        # append gene level MGE status
+        genes_info = pd.merge(genes_info, new_df, on='gene_id', how='left')
+        genes_info[new_col_name] = np.where(genes_info[new_col_name].isna(), 0, 1)
+    return genes_info
+
+
+def read_eggnog_csv(filename):
+    # Read the file line-by-line and exclude lines starting with '##'
+    with open(filename, 'r') as file:
+        lines = [line for line in file if not line.startswith('##')]
+    # Convert the filtered lines into a DataFrame
+    df = pd.read_csv(StringIO('\n'.join(lines)), sep='\t')
+    return df
+
+
+def annotation_ratio_x_members(midas_db, species_id, xx='80'):
+    """ Compuate the annotation ratio for centroid_xx level across its all gene members' annotation """
+    genes_annotated = pd.read_csv(midas_db.get_target_layout("pangenome_genes_annot", False, species_id), sep="\t")
+    eggnog = read_eggnog_csv(midas_db.get_target_layout("panannot_eggnog", False, species_id))
+
+    target_cols = ['gene_is_phage', 'gene_is_plasmid', 'gene_is_amr', 'gene_is_me']
+
+    centroids_xx = f'centroid_{xx}'
+    cxx_df = genes_annotated.groupby([centroids_xx])[target_cols].sum() / genes_annotated.groupby([centroids_xx])[target_cols].count()
+    cxx_df.columns = ['phage_ratio', 'plasmid_ratio', 'amr_ratio', 'me_ratio']
+    cxx_df = cxx_df.reset_index()
+
+    cxx_df = pd.merge(cxx_df, eggnog[['#query', 'COG_category', 'EC', 'KEGG_Pathway', 'Description', 'PFAMs']], left_on = centroids_xx, right_on = '#query', how='left')
+    cxx_df = cxx_df.drop(columns=['#query'])
+    return cxx_df

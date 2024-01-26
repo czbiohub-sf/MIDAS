@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 import os
 import sys
-from collections import defaultdict
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, cat_files, split, upload_star, copy_star
-from midas2.common.utilities import decode_species_arg, decode_genomes_arg, scan_mapfile, scan_gene_info, scan_gene_length, write_cluster_info, parse_gff_to_tsv, get_contig_length, write_contig_length, scan_gene_info_list, exclude_short_c99s, extract_filtered_c99s
+from midas2.common.utils import tsprint, retry, command, multithreading_map, find_files, upload, num_physical_cores, pythonpath, split, upload_star
+from midas2.common.utilities import decode_genomes_arg, parse_gff_to_tsv
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MARKER_FILE_EXTS, MIDASDB_NAMES
-from midas2.subcommands.build_pangenome import localpath
 
 
 @retry
@@ -99,148 +97,6 @@ def generate_gene_feature_worker(args):
         upload(output_genes, dest_file)
 
 
-def generate_cluster_info(args):
-    if args.zzz_worker_mode: #"zzz_worker_mode" in args and args.zzz_worker_mode:
-        generate_cluster_info_worker(args)
-    else:
-        generate_cluster_info_master(args)
-
-
-def generate_cluster_info_master(args):
-
-    midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
-    species = midas_db.uhgg.species
-    num_threads = args.num_threads
-
-    def species_work(species_id):
-        assert species_id in species, f"Species {species_id} is not in the database."
-        species_genomes = species[species_id]
-
-        dest_file = midas_db.get_target_layout("pangenome_cluster_info", True, species_id)
-        local_file = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
-        # We need this for within-contig-gene-position
-        dest_file2 = midas_db.get_target_layout("pangenome_contigs_len", True, species_id)
-        local_file2 = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
-        msg = f"Computing cluster_info AND contig_length for species {species_id} with {len(species_genomes)} total genomes."
-
-        if args.upload and find_files_with_retry(dest_file):
-            if not args.force:
-                tsprint(f"Destination {dest_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
-                return
-            msg = msg.replace("Computing", "Recomputing")
-        if not args.upload and os.path.exists(local_file):
-            if not args.force:
-                tsprint(f"Destination {local_file} for species {species_id} cluster_info already exists.  Specify --force to overwrite.")
-                return
-            msg = msg.replace("Computing", "Recomputing")
-
-        tsprint(msg)
-        last_dest = midas_db.get_target_layout("cluster_info_log", True, species_id)
-        local_dest = midas_db.get_target_layout("cluster_info_log", False, species_id)
-        local_dir = os.path.dirname(local_dest)
-        command(f"mkdir -p {local_dir}")
-
-        worker_log = os.path.basename(local_dest)
-        worker_subdir = os.path.dirname(local_dest) if args.scratch_dir == "." else f"{args.scratch_dir}/buildpan/{species_id}"
-        worker_log = f"{worker_subdir}/{worker_log}"
-
-        if not args.debug:
-            command(f"rm -rf {worker_subdir}")
-        if not os.path.isdir(worker_subdir):
-            command(f"mkdir -p {worker_subdir}")
-
-        # Recurisve call via subcommand.  Use subdir, redirect logs.
-        subcmd_str = f"--zzz_worker_mode -t {num_threads} --midasdb_name {args.midasdb_name} --midasdb_dir {os.path.abspath(args.midasdb_dir)} {'--debug' if args.debug else ''} {'--upload' if args.upload else ''} --scratch_dir {args.scratch_dir}"
-        worker_cmd = f"cd {worker_subdir}; PYTHONPATH={pythonpath()} {sys.executable} -m midas2 build_midasdb --generate_cluster_info --species {species_id} {subcmd_str} &>> {worker_log}"
-
-        with open(f"{worker_log}", "w") as slog:
-            slog.write(msg + "\n")
-            slog.write(worker_cmd + "\n")
-
-        try:
-            command(worker_cmd)
-        finally:
-            if args.upload:
-                upload(f"{worker_log}", last_dest, check=False)
-            if args.scratch_dir != ".":
-                command(f"cp -r {worker_log} {local_dest}")
-            if not args.debug:
-                command(f"rm -rf {worker_subdir}", check=False)
-
-    species_id_list = decode_species_arg(args, species)
-    multithreading_map(species_work, species_id_list, num_threads)
-
-
-def generate_cluster_info_worker(args):
-
-    violation = "Please do not call generate_cluster_info_worker directly.  Violation"
-    assert args.zzz_worker_mode, f"{violation}:  Missing --zzz_worker_mode arg."
-
-    species_id = args.species
-    midas_db = MIDAS_DB(args.midasdb_dir, args.midasdb_name, num_cores=args.num_threads)
-
-    species = midas_db.uhgg.species
-    assert species_id in species, f"{violation}: Species {species_id} is not in the database."
-
-    # Collect mapfile from all genomes of species_id
-    mapfiles_by_genomes = midas_db.fetch_files("marker_genes_map", [species_id], rep_only=False)
-    cat_files(mapfiles_by_genomes.values(), "mapfile", 20)
-    dict_of_markers = scan_mapfile("mapfile") # <gene_id, marker_id>
-
-    if args.scratch_dir != "." and os.path.isfile("temp/cdhit/genes.len"):
-        # Recluster centroids using cd-hit
-        gene_info_fp = "temp/gene_info.txt"
-        gene_length_fp = "temp/cdhit/genes.len"
-    else:
-        gene_info_fp = midas_db.fetch_file("pangenome_genes_info", species_id)
-        gene_length_fp = midas_db.fetch_file("pangenome_genes_len", species_id)
-    assert os.path.isfile(gene_info_fp) and os.path.isfile(gene_length_fp), f"Build pangenome outputs are missing."
-
-    # Remove centroids_99 shorter than 40% of the corresponding centroids_95
-    dict_of_gene_length = scan_gene_length(gene_length_fp) # <gene_id:gene_length>
-    dict_of_c95_per_c99 = scan_gene_info_list(gene_info_fp, colk="centroid_95", colv="centroid_99")
-    dict_of_filtered_c99s = exclude_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, 0.4)
-
-    # For centroids_99 not showing in the filtered dictionary, they will be removed from the centroids.ffn as well.
-    local_ffn = midas_db.get_target_layout("pangenome_centroids", False, species_id)
-    local_c99_ffn = localpath(midas_db, species_id, "temp/centroids.99.ffn")
-    command(f"mv {local_ffn} {local_c99_ffn}")
-    extract_filtered_c99s(dict_of_filtered_c99s, local_ffn, local_c99_ffn)
-
-    # Fetch the full cluster information for filtered centroid_99
-    dict_of_centroids = scan_gene_info(gene_info_fp, dict_of_filtered_c99s) # <centroid_99, dict_of_cluster>
-    # Fetch the list_of_genes for all centroid_99
-    dict_of_centroids_list = scan_gene_info_list(gene_info_fp) # <centroids_99, list_of_genes>
-    # Write cluster_info.txt
-    write_cluster_info(dict_of_centroids_list, dict_of_centroids, dict_of_markers, dict_of_gene_length, "cluster_info.txt")
-
-    ### Compute contigs length
-    ffns_by_genomes = midas_db.fetch_files("annotation_fna", [species_id], False)
-    dict_of_contig_length = defaultdict(dict)
-    for genome_id, genomefna in ffns_by_genomes.items():
-        dict_of_contig_length[genome_id] = get_contig_length(genomefna)
-    write_contig_length(dict_of_contig_length, "contigs.len")
-
-    if args.upload:
-        upload_tasks = [
-            ("cluster_info.txt", midas_db.get_target_layout("pangenome_cluster_info", True, species_id)),
-            ("mapfile", midas_db.get_target_layout("marker_map_by_species", True, species_id)),
-            ("contigs.len", midas_db.get_target_layout("pangenome_contigs_len", True, species_id))
-        ]
-        multithreading_map(upload_star, upload_tasks, 2)
-
-    if args.scratch_dir != ".":
-        copy_tasks = [
-            ("mapfile", midas_db.get_target_layout("marker_map_by_species", False, species_id)),
-            ("cluster_info.txt", midas_db.get_target_layout("pangenome_cluster_info", False, species_id)),
-            ("contigs.len", midas_db.get_target_layout("pangenome_contigs_len", False, species_id))
-        ]
-        multithreading_map(copy_star, copy_tasks, 2)
-
-    if not args.debug:
-        command("rm -f genes.len gene_info.txt mapfile")
-
-
 def build_markerdb(args):
     """ Collate marker genes of repgenomes into phyeco.fa and phyeco.map """
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores=num_physical_cores)
@@ -255,17 +111,17 @@ def build_markerdb(args):
     if not os.path.isdir(build_marker_subdir):
         command(f"mkdir -p {build_marker_subdir}")
 
-    msg = f"Collating marker genes sequences."
+    msg = "Collating marker genes sequences."
     if args.upload and find_files_with_retry(last_dest):
         if not args.force:
             tsprint(f"Destination {last_dest} already exists.  Specify --force to overwrite.")
             return
-        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
+        msg = msg.replace(msg.split(" ", maxsplit=1)[0], "Re-" + msg.split(" ", maxsplit=1)[0])
     if not args.upload and os.path.exists(build_markerdb_log):
         if not args.force:
             tsprint(f"Destination {build_markerdb_log} already exists.  Specify --force to overwrite.")
             return
-        msg = msg.replace(msg.split(" ")[0], "Re-" + msg.split(" ")[0])
+        msg = msg.replace(msg.split(" ", maxsplit=1)[0], "Re-" + msg.split(" ", maxsplit=1)[0])
 
     tsprint(msg)
     with open(build_markerdb_log, "w") as slog:
@@ -323,18 +179,10 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help="Generate gene features for each genomes")
-    subparser.add_argument('--generate_cluster_info',
-                           action='store_true',
-                           default=False,
-                           help="Generate cluster_info.txt used in chunk design and merge_genes.")
     subparser.add_argument('--build_markerdb',
                            action='store_true',
                            default=False,
-                           help=f"Generate cluster_info.txt used in chunk design and merge_genes.")
-    subparser.add_argument('--compute_contig_length',
-                           action='store_true',
-                           default=False,
-                           help="Compute contigs length for all the genomes given species.")
+                           help="Build SGC marker db.")
     subparser.add_argument('--upload',
                            action='store_true',
                            default=False,
@@ -358,7 +206,5 @@ def main(args):
     tsprint(f"Executing midas2 subcommand {args.subcommand}.") # with args {vars(args)}.
     if args.generate_gene_feature:
         generate_gene_feature(args)
-    if args.generate_cluster_info:
-        generate_cluster_info(args)
     if args.build_markerdb:
         build_markerdb(args)
