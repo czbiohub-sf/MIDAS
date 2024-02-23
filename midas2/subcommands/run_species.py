@@ -26,7 +26,7 @@ def register_args(main_func):
 
     subparser.add_argument('midas_outdir',
                            type=str,
-                           help="""Path to directory to store results.  Name should correspond to unique sample identifier.""")
+                           help="Path to directory to store results.  Name should correspond to unique sample identifier.")
     subparser.add_argument('--sample_name',
                            dest='sample_name',
                            required=True,
@@ -44,12 +44,12 @@ def register_args(main_func):
                            type=str,
                            default="uhgg",
                            choices=MIDASDB_NAMES,
-                           help=f"MIDAS Database name.")
+                           help="MIDAS Database name.")
     subparser.add_argument('--midasdb_dir',
                            dest='midasdb_dir',
                            type=str,
                            default="midasdb",
-                           help=f"Path to local MIDAS Database.")
+                           help="Path to local MIDAS Database.")
 
     subparser.add_argument('--word_size',
                            dest='word_size',
@@ -61,7 +61,7 @@ def register_args(main_func):
                            dest='aln_mapid',
                            type=float,
                            metavar="FLOAT",
-                           help=f"Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in marker_genes.mapping_cutoffs.")
+                           help="Discard reads with alignment identity < ALN_MAPID.  Values between 0-100 accepted.  By default gene-specific species-level cutoffs are used, as specifeid in marker_genes.mapping_cutoffs.")
     subparser.add_argument('--aln_cov',
                            dest='aln_cov',
                            default=DEFAULT_ALN_COV,
@@ -86,7 +86,7 @@ def register_args(main_func):
                            dest='max_reads',
                            type=int,
                            metavar="INT",
-                           help=f"Number of reads to use from input file(s).  (All)")
+                           help="Number of reads to use from input file(s).  (All)")
     subparser.add_argument('--num_cores',
                            dest='num_cores',
                            type=int,
@@ -455,48 +455,48 @@ def run_species(args):
         with OutputStream(sample.get_target_layout("species_log")) as stream:
             stream.write(f"Single sample abundant species profiling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
 
-        tsprint(f"MIDAS2::fetch_midasdb_files::start")
+        tsprint("MIDAS2::fetch_midasdb_files::start")
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
         midas_db.fetch_files("markerdb")
         midas_db.fetch_files("markerdb_models")
         marker_db_files = midas_db.fetch_files("marker_db")
-        tsprint(f"MIDAS2::fetch_midasdb_files::finish")
+        tsprint("MIDAS2::fetch_midasdb_files::finish")
 
         with InputStream(midas_db.get_target_layout("marker_db_hmm_cutoffs", False)) as cutoff_params:
             marker_cutoffs = dict(select_from_tsv(cutoff_params, selected_columns={"marker_id": str, "marker_cutoff": float}))
 
         # Align reads to marker-genes database
-        tsprint(f"MIDAS2::map_reads_hsblastn::start")
+        tsprint("MIDAS2::map_reads_hsblastn::start")
         m8_file = sample.get_target_layout("species_alignments_m8")
         if args.debug and os.path.exists(m8_file):
             tsprint(f"Use existing {m8_file} according to --debug flag.")
         else:
             map_reads_hsblastn(m8_file, args.r1, args.r2, args.word_size, marker_db_files["fa"], args.max_reads, args.num_cores)
-        tsprint(f"MIDAS2::map_reads_hsblastn::finish")
+        tsprint("MIDAS2::map_reads_hsblastn::finish")
 
-        tsprint(f"MIDAS2::read in marker information::start")
+        tsprint("MIDAS2::read in marker information::start")
         genes_that_are_marker_fp = sample.get_target_layout("species_marker_genes")
         markers_info, markers_length = read_markers_info(marker_db_files["fa"], marker_db_files["map"], genes_that_are_marker_fp)
-        tsprint(f"MIDAS2::read in marker information::finish")
+        tsprint("MIDAS2::read in marker information::finish")
 
         # Classify reads
-        tsprint(f"MIDAS2::find_best_hits::start")
+        tsprint("MIDAS2::find_best_hits::start")
         best_hits = find_best_hits(m8_file, markers_info, marker_cutoffs, args)
-        tsprint(f"MIDAS2::find_best_hits::finish")
+        tsprint("MIDAS2::find_best_hits::finish")
 
-        tsprint(f"MIDAS2::assign_unique::start")
+        tsprint("MIDAS2::assign_unique::start")
         unique_alns, unique_covered_markers = assign_unique(best_hits, markers_info, args)
-        tsprint(f"MIDAS2::assign_unique::finish")
+        tsprint("MIDAS2::assign_unique::finish")
 
-        tsprint(f"MIDAS2::assign_non_unique::start")
+        tsprint("MIDAS2::assign_non_unique::start")
         ambiguous_alns, ambiguous_covered_markers = assign_non_unique(best_hits, unique_alns, markers_info, args)
-        tsprint(f"MIDAS2::assign_non_unique::finish")
+        tsprint("MIDAS2::assign_non_unique::finish")
 
         # Estimate species abundance
-        tsprint(f"MIDAS2::normalize_counts::start")
+        tsprint("MIDAS2::normalize_counts::start")
         species_alns, species_covered_markers = merge_counts(unique_alns, ambiguous_alns, unique_covered_markers, ambiguous_covered_markers, markers_length)
         species_abundance, markers_abundance = normalize_counts(species_alns, species_covered_markers, markers_length)
-        tsprint(f"MIDAS2::normalize_counts::finish")
+        tsprint("MIDAS2::normalize_counts::finish")
         write_abundance(sample.get_target_layout("species_summary"), species_abundance)
         write_marker_abundance(sample.get_target_layout("markers_summary"), markers_abundance, species_abundance)
 

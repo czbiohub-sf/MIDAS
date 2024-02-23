@@ -7,6 +7,7 @@ from operator import itemgetter
 
 from midas2.common.utils import InputStream, OutputStream, command, select_from_tsv
 from midas2.common.utilities import scan_fasta, scan_cluster_info
+from midas2.params.schemas import fetch_cluster_xx_info_schema
 
 
 class Species:
@@ -21,12 +22,12 @@ class Species:
         self.num_of_snps_chunks = None
         self.max_contig_length = None
 
-        # Genes chunk
-        self.cluster_info_fp = None
-        self.chunks_of_centroids_fp = None
-        self.num_of_genes_chunks = None
-        self.num_of_centroids = None
-        self.chunks_contigs = None
+        # Genes
+        self.clusters_info_fp = {} # Initialize an empty dictionary for cluster_xx_info
+        self.pangenome_size = {}
+        self.clusters_info = {} # Initialize an empty dictionary for cluster_xx_info
+        self.list_of_markers = {}
+        self.clusters_map = {}
 
         # MERGE Flow: select species
         self.list_of_samples = [] # relevant samples for given species
@@ -38,26 +39,41 @@ class Species:
         self.gene_seq_fp = None
 
 
-    def compute_gene_chunks(self, midas_db, chunk_size):
-        """ Each chunk is indexed by <species_id, chunk_id> """
-
+    def set_clusters_info_fp(self, midas_db, xx):
+        # Dynamically create or update a cluster attribute
+        # The attribute name is constructed dynamically based on xx
         species_id = self.id
+        self.clusters_info_fp[xx] = midas_db.get_target_layout("pangenome_cluster_xx", False, species_id, "", xx)
 
-        local_file = midas_db.get_target_layout("chunks_centroids", False, species_id, "", chunk_size)
-        cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
 
-        if not os.path.exists(local_file):
-            chunks_of_centroids = design_genes_chunks(species_id, cluster_info_fp, chunk_size)
-            write_chunks_cache(chunks_of_centroids, local_file)
-        chunks_of_centroids = load_chunks_cache(local_file)
-        _, _, num_of_genes_chunks, num_of_centroids = chunks_of_centroids[-1]
+    def get_clusters_info_fp(self, xx):
+        # Dynamically retrieve the cluster attribute
+        return self.clusters_info_fp.get(xx, None)
 
-        self.num_of_genes_chunks = num_of_genes_chunks
-        self.num_of_centroids = num_of_centroids
-        self.chunks_of_centroids_fp = local_file
-        self.cluster_info_fp = cluster_info_fp
 
-        return True
+    def get_clusters_info(self, xx):
+        # Dynamically retrieve the cluster attribute
+        if xx == "99":
+            cxx_info = scan_cluster_info(self.get_clusters_info_fp(xx), xx)
+        else:
+            cxx_info = scan_cluster_info(self.get_clusters_info_fp(xx), xx, fetch_cluster_xx_info_schema(xx))
+
+        list_of_markers = list(set(r[f'centroid_{xx}_marker_id'] for r in cxx_info.values() if r[f'centroid_{xx}_marker_id']))
+
+        self.clusters_info[xx] = cxx_info
+        self.pangenome_size[xx] = len(cxx_info)
+        self.list_of_markers[xx] = list_of_markers
+
+
+    def get_cluster_map(self, xx_in, xx_out):
+        c99_info = self.clusters_info['99']
+        cid_map = {}
+        for row in c99_info.values():
+            cxx_in = f"centroid_{xx_in}"
+            cxx_out = f"centroid_{xx_out}"
+            if cxx_in not in cid_map:
+                cid_map[row[cxx_in]] = row[cxx_out]
+        self.clusters_map[xx_in] = cid_map
 
 
     def compute_snps_chunks(self, midas_db, chunk_size, workflow):
@@ -92,7 +108,7 @@ class Species:
             self.contigs_fp = contigs_fp
 
         if workflow == "merge":
-            chunks_contigs = dict()
+            chunks_contigs = {}
             for chunk_list in chunks_of_sites.values():
                 _, chunk_id, contig_id, list_of_contigs = chunk_list[0][:4]
                 loc_fp = midas_db.get_target_layout("chunks_contig_lists", False, species_id, chunk_id, chunk_size)
@@ -117,11 +133,6 @@ class Species:
         self.contigs = scan_fasta(midas_db.get_target_layout("representative_genome", False, species_id, genome_id))
 
 
-    def get_cluster_info_fp(self, midas_db):
-        species_id = self.id
-        self.cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
-
-
     def fetch_contigs_ids(self):
         list_of_contig_ids = []
         with InputStream(self.contigs_fp, "grep \'>\'") as stream:
@@ -136,7 +147,7 @@ class Species:
 
 
     def fetch_samples_depth(self):
-        self.list_of_samples_depth = [sample.profile[self.id]["mean_coverage"] for sample in self.list_of_samples]
+        self.list_of_samples_depth = [sample.profile[self.id]["mean_depth"] for sample in self.list_of_samples]
 
 
 def parse_species(args):
@@ -157,7 +168,7 @@ def filter_species(profile_fp, select_by, select_threshold, species_list=None):
     nargs = len(select_by)
     assert len(select_by) == len(select_threshold)
 
-    dict_of_species = dict()
+    dict_of_species = {}
     if "median_marker_coverage" in select_by:
         column_names = list(set(["species_id", "median_marker_coverage"] + select_by))
     else:
@@ -346,31 +357,3 @@ def design_merge_snps_chunks(species_id, contigs_file, chunk_size):
     chunks_of_sites[-1] = (species_id, -1, number_of_chunks, max_contig_length)
 
     return chunks_of_sites
-
-
-def design_genes_chunks(species_id, cluster_info_path, chunk_size):
-    """ Each chunk is indexed by (species_id, chunk_id) """
-
-    cluster_info = scan_cluster_info(cluster_info_path)
-    num_of_centroids = len(cluster_info)
-
-    chunk_id = 0
-    genes_counter = 0
-    curr_chunk_of_genes = dict()
-    chunks_of_centroids = defaultdict(dict)
-
-    for row in cluster_info.values():
-        if not chunk_id*chunk_size <= genes_counter < (chunk_id+1)*chunk_size:
-            chunks_of_centroids[chunk_id] = curr_chunk_of_genes
-            chunk_id += 1
-            curr_chunk_of_genes = defaultdict()
-        curr_chunk_of_genes[row["centroid_99"]] = row["centroid_99_length"]
-        genes_counter += 1
-
-    chunks_of_centroids[chunk_id] = curr_chunk_of_genes # last chunk
-    chunk_id += 1
-
-    number_of_chunks = chunk_id
-    chunks_of_centroids[-1] = (species_id, -1, number_of_chunks, num_of_centroids)
-
-    return chunks_of_centroids

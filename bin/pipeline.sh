@@ -5,24 +5,26 @@
 
 #! /usr/bin/bash
 
-if [ $# -ne 4 ]; then
-    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEM"
+if [ $# -ne 5 ]; then
+    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEMscript_dir "
     exit 1
 fi
 
 #######
-script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
+#script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
 
 species_id="$1"
-species_dir="$2"
+pangenome_dir="$2"
 total_threads="$3"
 total_mem="$4" #500000
+script_dir="$5"
 
 vsearch_threads=8
 vsearch_jobs=$((total_threads / vsearch_threads))
 thread2=$((total_threads / 2))
 
 ####### INPUTS: global scratch directory
+species_dir="${pangenome_dir}/${species_id}"
 vsearch_dir="${species_dir}/temp/vsearch"
 genes_ffn="${vsearch_dir}/genes.ffn"
 genes_len="${vsearch_dir}/genes.len"
@@ -158,7 +160,7 @@ is_success="${out_dir}/PIPELINE_SUCCESS"
 if [[ ! -e ${is_success} ]]; then
   awk '{ if ($0 ~ /^>/) {print $0} else {print toupper($0)}}' ${cdhit_centroids_ffn} > ${out_dir}/centroids.99.ffn
   seqkit grep -w 0 -f ${info_dir}/list_of_cdhit_genes ${genes_ffn} > ${out_dir}/genes.ffn
-  cp ${gene_info_cdhit} "${out_dir}/gene_info.txt"
+  cp ${gene_info_cdhit} "${out_dir}/gene_info.txt" #<--
   grep -Fwf <(cut -f1 ${gene_info_cdhit}) ${genes_len} > "${out_dir}/genes.len"
 
   if [ -s ${out_dir}/centroids.99.ffn ]; then

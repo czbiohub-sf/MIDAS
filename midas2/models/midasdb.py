@@ -3,6 +3,7 @@ import os
 import json
 from hashlib import md5
 from collections import defaultdict
+
 from midas2.common.utils import select_from_tsv, sorted_dict, InputStream, download_reference, command, multithreading_map, download_tarball
 from midas2.params.inputs import MIDASDB_DICT, MARKER_FILE_EXTS, MD5SUM_JSON, marker_set
 from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
@@ -17,7 +18,7 @@ DEFAULT_CHUNKS = [DEFAULT_GENE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE
 def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
         # Input: table of content and collections of genomes
-        "table_of_contents":             f"genomes.tsv",
+        "table_of_contents":             "genomes.tsv",
         "raw_genome":                    f"mags/{species_id}/{genome_id}.{component}",
         "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
         "import_log":                    f"cleaned_imports/{species_id}/{genome_id}/import_genome.log",
@@ -39,65 +40,72 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "build_markerdb_log":            f"markers/{marker_set}/build_markerdb.log",
 
         "pangenome_file":                f"pangenomes/{species_id}/{component}",
-        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "pangenome_tempfile":            f"pangenomes/{species_id}/temp/{genome_id}/{component}",
+        "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "recluster_log":                 f"pangenomes/{species_id}/recluster_centroids.log",
-        "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
-        "pangenome_genes_info":          f"pangenomes/{species_id}/gene_info.txt",
-        "pangenome_genes_len":           f"pangenomes/{species_id}/genes.len",
 
-        "pangenome_cluster_info":        f"pangenomes/{species_id}/cluster_info.txt",
+        "pangenome_marker_map":          f"pangenomes/{species_id}/temp/markers.map",
+        "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
+        "pangenome_genes_info":          f"pangenomes/{species_id}/genes_info.tsv",
+        "cluster_xx_info":               f"pangenomes/{species_id}/augment/clusters_{component}_info.tsv",
         "pangenome_contigs_len":         f"pangenomes/{species_id}/contigs.len",
-        "cluster_info_log":              f"pangenomes/{species_id}/cluster_info.log",
+        "pangenome_genes_annot":         f"pangenomes/{species_id}/genes_annotated.tsv",
+        "cluster_xx_annot":              f"pangenomes/{species_id}/annotation/clusters_{component}_annot.tsv",
+        "pangenome_cluster_xx":          f"pangenomes/{species_id}/clusters_{component}_info.tsv",
+
+        "augment_log":                   f"pangenomes/{species_id}/augment.log",
         "contig_length_log":             f"pangenomes/{species_id}/contig_length.log",
+        "enhance_log":                   f"pangenomes/{species_id}/pangenome_enhance.log",
+        "prune_log":                     f"pangenomes/{species_id}/pruned/pangenome_prune.log",
+
+        "genomad_virus_genes":           f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_genes.tsv",
+        "genomad_virus_summary":         f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_summary.tsv",
+        "genomad_plasmid_genes":         f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_genes.tsv",
+        "genomad_plasmid_summary":       f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_summary.tsv",
+        "mefinder_results":              f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/mefinder_output/mefinder.csv",
+        "resfinder_results":             f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/resfinder_output/ResFinder_results_tab.txt",
+        "eggnog_results":                f"pangenomes_annotation/02_eggnog/{species_id}/{species_id}.emapper.annotations",
+        "panannot_tempfile":             f"pangenomes_annotation/03_processed/{species_id}/{component}/{genome_id}",
+
+        "panannot_genomad_virus":        f"pangenomes/{species_id}/annotation/genomad_virus.tsv",
+        "panannot_genomad_plasmid":      f"pangenomes/{species_id}/annotation/genomad_plasmid.tsv",
+        "panannot_mefinder":             f"pangenomes/{species_id}/annotation/mefinder.tsv",
+        "panannot_resfinder":            f"pangenomes/{species_id}/annotation/resfinder.tsv",
+        "panannot_eggnog":               f"pangenomes/{species_id}/annotation/eggnog.tsv",
+        "pruned_centroids":              f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.ffn",
+        "pruned_centroids_rs":           f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.rmsig.ffn",
 
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
-        "marker_map_by_species":         f"markers/{marker_set}/temp/{species_id}/{species_id}.markers.map",
         "marker_genes_seq":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.fa",
         "marker_genes_map":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.map",
         "marker_genes_hmmsearch":        f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.hmmsearch",
         "marker_genes_log":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/build_marker_genes.log",
 
-        "chunks_centroids":              f"chunks/genes/chunksize.{component}/{species_id}.json",
         "chunks_sites_run":              f"chunks/sites/run/chunksize.{component}/{species_id}/{genome_id}.json",
         "chunks_sites_merge":            f"chunks/sites/merge/chunksize.{component}/{species_id}/{genome_id}.json",
         "chunks_contig_lists":           f"temp/chunksize.{component}/{species_id}/cid.{genome_id}_list_of_contigs",
-
-        ## 2023-10-17 Raw Functional Annotations
-        "eggnog_results":                f"eggnog_results/{species_id}/{species_id}.emapper.annotations",
-        "genomad_virus_genes":           f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_genes.tsv",
-        "genomad_virus_summary":         f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_summary.tsv",
-        "genomad_plasmid_genes":         f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_genes.tsv",
-        "genomad_plasmid_summary":       f"functional_annotation/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_plasmid_summary.tsv",
-        "mefinder_results":              f"functional_annotation/{species_id}/{genome_id}/mefinder_output/mefinder.csv",
-        "resfinder_results":             f"functional_annotation/{species_id}/{genome_id}/resfinder_output/ResFinder_results_tab.txt",
-        ## Parsed Functional Anntations
-        "funcannot_tempfile":            f"functional_annotation/{species_id}/temp.v1.1.3/{component}/{genome_id}",
-        "pangenome_genomad_virus":       f"pangenomes/{species_id}/genomad_virus.tsv",
-        "pangenome_genomad_plasmid":     f"pangenomes/{species_id}/genomad_plasmid.tsv",
-        "pangenome_mefinder":            f"pangenomes/{species_id}/mefinder.tsv",
-        "pangenome_resfinder":           f"pangenomes/{species_id}/resfinder.tsv",
-        "pangenome_eggnog":              f"pangenomes/{species_id}/eggnog.tsv",
     }
+
 
 
 def get_tarball_layout(species_id="", genome_id=""): # target folder
     return {
-        "toc":                           f"genomes.tsv",
-        "metadata":                      f"metadata.tsv",
-        "md5sum":                        f"md5sum.json",
+        "toc":                           "genomes.tsv",
+        "metadata":                      "metadata.tsv",
+        "md5sum":                        "md5sum.json",
         "repgenome":                     f"gene_annotations/{species_id}/{genome_id}",
         "pangenome":                     f"pangenomes/{species_id}",
         "markerdb":                      f"markers/{marker_set}",
         "markerdb_models":               f"markers_models/{marker_set}",
-        "chunks":                        f"chunks"
+        "chunks":                        "chunks"
     }
 
 
+# TODO: update the pangenome componenets
 tarball_mapping = {
     "toc":                           ["table_of_contents"],
     "repgenome":                     ["annotation_fna", "annotation_ffn", "annotation_genes"],
-    "pangenome":                     ["pangenome_centroids", "pangenome_cluster_info"],
+    "pangenome":                     ["pangenome_centroids", "pangenome_genes_info"],
     "markerdb":                      MARKER_FILE_EXTS,
     "markerdb_models":               ["hmm", "hmm_cutoffs"],
     "chunks":                        ["chunks_centroids", "chunks_sites_run", "chunks_sites_merge"],
@@ -261,7 +269,7 @@ class MIDAS_DB: # pylint: disable=too-few-public-methods
         """ Fetch S3 individual file (if not exists) and/or return local file path in a dictionary. """
         if list_of_species:
             if not rep_only:
-                assert len(list_of_species) == 1, f"Only download all genomes for single species"
+                assert len(list_of_species) == 1, "Only download all genomes for single species"
 
             args_list = []
             for species_id in list_of_species:

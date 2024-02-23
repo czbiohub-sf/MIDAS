@@ -88,6 +88,7 @@ head -n 2 ${samples_fp} | xargs -Ixx bash -c \
 echo "Testing Across-Samples CNV Module"
 midas2 merge_genes --samples_list ${pool_fp} --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
      --num_cores ${num_cores} --sample_counts 2 ${merge_midas_outdir} \
+     --cluster_level_in 99 --genome_depth 0.4 \
      &> ${logs_dir}/merge_genes_${num_cores}.log
 
 

@@ -113,7 +113,7 @@ class SamplePool: # pylint: disable=too-few-public-methods
                 if species_id not in raw_species:
                     raw_species[species_id] = Species(species_id)
                 # Skip low-coverage <species, sample>
-                if record['mean_coverage'] < args.genome_depth:
+                if record['mean_depth'] < args.genome_depth:
                     continue
                 # Skip low prevalent <species, sample>
                 if (dbtype == "snps" and record['fraction_covered'] < args.genome_coverage):

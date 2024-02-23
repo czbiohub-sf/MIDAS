@@ -31,34 +31,81 @@ BLAST_M8_SCHEMA = {
 }
 
 
-PAN_GENE_INFO_SCHEMA = {
-    "gene_id": str,
-    "centroid_99": str,
-    "centroid_95": str,
-    "centroid_90": str,
-    "centroid_85": str,
-    "centroid_80": str,
-    "centroid_75": str,
-}
-
-
-PAN_GENE_LENGTH_SCHEMA = {
+GENE_LENGTH_SCHEMA = {
     "gene_id": str,
     "genome_id": str,
     "gene_length": int,
 }
 
 
-CLUSTER_INFO_SCHEMA = {
+PANGENOME_INFO_SCHEMA = {
+    "gene_id": str,
     "centroid_99": str,
     "centroid_95": str,
     "centroid_90": str,
     "centroid_85": str,
     "centroid_80": str,
     "centroid_75": str,
-    "centroid_99_length": int,
+    "gene_length": int,
     "marker_id": str,
 }
+
+
+GENE_ANNOTATED_SCHEMA = {
+    "gene_is_phage": int,
+    "gene_is_plasmid": int,
+    "gene_is_amr": int,
+    "gene_is_me": int,
+}
+
+
+PANGENOME_ANNOTATED_SCHEMA = {**PANGENOME_INFO_SCHEMA, **GENE_ANNOTATED_SCHEMA}
+
+
+PANGENOME_CLUSTER_SCHEMA = {
+    "centroid_99": str,
+    "centroid_95": str,
+    "centroid_90": str,
+    "centroid_85": str,
+    "centroid_80": str,
+    "centroid_75": str,
+    "centroid_99_genome_counts": int,
+    "centroid_99_genome_prevalence": float,
+    "centroid_99_gene_counts": int,
+    "centroid_99_gene_length": int,
+    "centroid_99_marker_density": float,
+    "centroid_99_marker_id": str,
+    "phage_ratio": float,
+    "plasmid_ratio": float,
+    "amr_ratio": float,
+    "me_ratio": float,
+    "COG_category": str,
+    "EC": str,
+    "KEGG_Pathway": str,
+    "Description": str,
+    "PFAMs": str
+}
+
+
+def fetch_cluster_xx_info_schema(xx):
+    return {
+        f"centroid_{xx}": str,
+        f"centroid_{xx}_genome_counts": int,
+        f"centroid_{xx}_genome_prevalence": float,
+        f"centroid_{xx}_gene_counts": int,
+        f"centroid_{xx}_gene_length": int,
+        f"centroid_{xx}_marker_density": float,
+        f"centroid_{xx}_marker_id": str,
+        "phage_ratio": float,
+        "plasmid_ratio": float,
+        "amr_ratio": float,
+        "me_ratio": float,
+        "COG_category": str,
+        "EC": str,
+        "KEGG_Pathway": str,
+        "Description": str,
+        "PFAMs": str
+    }
 
 
 def fetch_default_genome_depth(dbtype):
@@ -86,7 +133,7 @@ species_prevalence_schema = {
     "median_abundance": float,
     "mean_abundance": float,
     "median_coverage": float,
-    "mean_coverage": float,
+    "mean_depth": float,
     "sample_counts": float,
 }
 
@@ -99,19 +146,7 @@ snps_profile_schema = {
     "aligned_reads": int,
     "mapped_reads": int,
     "fraction_covered": float,
-    "mean_coverage": float,
-}
-
-
-snps_chunk_summary_schema = {
-    "species_id": str,
-    "chunk_id": int,
-    "contig_id": str,
-    "chunk_length": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "contig_total_depth": int,
-    "contig_covered_bases": int
+    "mean_depth": float,
 }
 
 
@@ -165,6 +200,35 @@ snps_info_schema = {
 }
 
 
+def fetch_genes_depth_schema(xx):
+    return {
+        f"cluster_{xx}_id": str,
+        "gene_length": int,
+        "aligned_reads": int,
+        "mapped_reads": int,
+        "total_depth": int,
+        "mean_depth": float,
+        "copy_number": float,
+        "genome_prevalence": float,
+        "marker_id": str,
+    }
+
+
+def fetch_genes_chunk_schema(xx):
+    return {
+        "species_id": str,
+        f"c{xx}_id": str,
+        f"c{xx}_length": int,
+        "aligned_reads": int,
+        "mapped_reads": int,
+        "total_depth": int,
+        "mean_depth": float,
+        "copy_number": float,
+        "genome_prevalence": float,
+        "marker_id": str,
+    }
+
+
 genes_summary_schema = {
     "species_id": str,
     "pangenome_size": int,
@@ -172,8 +236,8 @@ genes_summary_schema = {
     "fraction_covered": float,
     "aligned_reads": int,
     "mapped_reads": int,
-    "mean_coverage": float,
-    "marker_coverage": float,
+    "mean_depth": float,
+    "marker_depth": float,
 }
 
 
@@ -182,25 +246,6 @@ genes_info_schema = {
     "copynum": float,
     "depth": float,
     "reads": int,
-}
-
-
-genes_coverage_schema = {
-    "gene_id": str,
-    "gene_length": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "read_depth": int,
-    "mean_coverage": float,
-    "copy_number": float,
-}
-
-
-genes_are_markers_schema = {
-    "centroid_95": str,
-    "marker_id": str,
-    "marker_length": int,
-    "read_depth": float,
 }
 
 
@@ -255,3 +300,27 @@ species_marker_profile_schema = {
     "uniq_alnbps": int,
     "ambi_alnbps": int,
 }
+
+
+
+COLS_GENOMAD = ['gene_id', 'contig_id', 'start', 'end', 'strand',
+    'gene_type', 'contig_length', 'start_genomad', 'end_genomad',
+    'gene', 'annotation_conjscan', 'annotation_amr',
+    'annotation_accessions', 'annotation_description']
+
+
+COLS_MEFINDER = ['gene_id', 'contig_id', 'start', 'end', 'strand',
+    'gene_type', 'contig_length', 'start_mefinder', 'end_mefinder',
+    'mge_no', 'prediction', 'name', 'type', 'synonyms']
+
+
+COLS_RESFINDER = ['gene_id', 'contig_id', 'start', 'end', 'strand',
+    'gene_type', 'contig_length', 'start_resfinder', 'end_resfinder',
+    'resistance_gene', 'phenotype', 'accession_no']
+
+
+COLS_EGGNOG = ['#query', 'seed_ortholog', 'evalue', 'score', 'eggNOG_OGs',
+       'max_annot_lvl', 'COG_category', 'Description', 'Preferred_name', 'GOs',
+       'EC', 'KEGG_ko', 'KEGG_Pathway', 'KEGG_Module', 'KEGG_Reaction',
+       'KEGG_rclass', 'BRITE', 'KEGG_TC', 'CAZy', 'BiGG_Reaction', 'PFAMs',
+       'contig_id', 'start', 'end', 'strand', 'gene_type', 'contig_length']
