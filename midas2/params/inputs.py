@@ -14,12 +14,12 @@ MIDASDB_NAMES = list(MIDASDB_DICT.keys())
 
 
 MIDASDB_VERSION = {
-    "uhgg": f"version 1.0",
+    "uhgg": f"version 2.0",
     "gtdb": f"version r202",
 }
 
 MIDASDB_STATS = {
-    "uhgg": {"species":4644, "genomes":286997, "version":f"version 1.0"},
+    "uhgg": {"species":4744, "genomes":289232, "version":f"version 2.0"},
     "gtdb": {"species":47893, "genomes":258405, "version":f"version r202"}
 }
 

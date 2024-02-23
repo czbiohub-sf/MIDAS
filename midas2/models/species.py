@@ -6,7 +6,7 @@ from collections import defaultdict
 from operator import itemgetter
 
 from midas2.common.utils import InputStream, OutputStream, command, select_from_tsv
-from midas2.common.utilities import scan_fasta, scan_info_file, scan_cluster_info
+from midas2.common.utilities import scan_fasta, scan_cluster_info
 from midas2.params.schemas import fetch_cluster_xx_info_schema
 
 
@@ -67,7 +67,7 @@ class Species:
 
     def get_cluster_map(self, xx_in, xx_out):
         c99_info = self.clusters_info['99']
-        cid_map = dict()
+        cid_map = {}
         for row in c99_info.values():
             cxx_in = f"centroid_{xx_in}"
             cxx_out = f"centroid_{xx_out}"
@@ -168,7 +168,7 @@ def filter_species(profile_fp, select_by, select_threshold, species_list=None):
     nargs = len(select_by)
     assert len(select_by) == len(select_threshold)
 
-    dict_of_species = dict()
+    dict_of_species = {}
     if "median_marker_coverage" in select_by:
         column_names = list(set(["species_id", "median_marker_coverage"] + select_by))
     else:

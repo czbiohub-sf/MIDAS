@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 from midas2.common.utils import InputStream, OutputStream, retry, select_from_tsv, tsprint, command
-from midas2.params.schemas import genes_feature_schema, PANGENOME_CLUSTER_SCHEMA, fetch_cluster_xx_info_schema
+from midas2.params.schemas import genes_feature_schema, PANGENOME_CLUSTER_SCHEMA
 
 
 def decode_species_arg(args, species):
@@ -67,7 +67,7 @@ def acgt_string(A, C, G, T):
 
 def translate(codon):
     """ Translate individual codon """
-    # Translation table 11: none differences from the standard code 
+    # Translation table 11: none differences from the standard code
     codontable = {
         'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
         'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
@@ -263,7 +263,7 @@ def compute_gene_boundary(features):
         prev_gene = None
         gc = 0
         gene_offsets = {}
-        for gid, grange in feature_ranges_sorted.items():
+        for gid, _ in feature_ranges_sorted.items():
             gc += 1
             if prev_gene is None:
                 prev_gene = gid

@@ -18,7 +18,7 @@ DEFAULT_CHUNKS = [DEFAULT_GENE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE
 def get_midasdb_layout(species_id="", genome_id="", component=""):
     return {
         # Input: table of content and collections of genomes
-        "table_of_contents":             f"genomes.tsv",
+        "table_of_contents":             "genomes.tsv",
         "raw_genome":                    f"mags/{species_id}/{genome_id}.{component}",
         "imported_genome":               f"cleaned_imports/{species_id}/{genome_id}/{genome_id}.{component}",
         "import_log":                    f"cleaned_imports/{species_id}/{genome_id}/import_genome.log",
@@ -65,15 +65,15 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "mefinder_results":              f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/mefinder_output/mefinder.csv",
         "resfinder_results":             f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/resfinder_output/ResFinder_results_tab.txt",
         "eggnog_results":                f"pangenomes_annotation/02_eggnog/{species_id}/{species_id}.emapper.annotations",
+        "panannot_tempfile":             f"pangenomes_annotation/03_processed/{species_id}/{component}/{genome_id}",
 
-        "panannot_tempfile":            f"pangenomes_annotation/03_processed/{species_id}/{component}/{genome_id}",
-        "panannot_genomad_virus":       f"pangenomes/{species_id}/annotation/genomad_virus.tsv",
-        "panannot_genomad_plasmid":     f"pangenomes/{species_id}/annotation/genomad_plasmid.tsv",
-        "panannot_mefinder":            f"pangenomes/{species_id}/annotation/mefinder.tsv",
-        "panannot_resfinder":           f"pangenomes/{species_id}/annotation/resfinder.tsv",
-        "panannot_eggnog":              f"pangenomes/{species_id}/annotation/eggnog.tsv",
-        "pruned_centroids":             f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.ffn",
-        "pruned_centroids_rs":          f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.rmsig.ffn",
+        "panannot_genomad_virus":        f"pangenomes/{species_id}/annotation/genomad_virus.tsv",
+        "panannot_genomad_plasmid":      f"pangenomes/{species_id}/annotation/genomad_plasmid.tsv",
+        "panannot_mefinder":             f"pangenomes/{species_id}/annotation/mefinder.tsv",
+        "panannot_resfinder":            f"pangenomes/{species_id}/annotation/resfinder.tsv",
+        "panannot_eggnog":               f"pangenomes/{species_id}/annotation/eggnog.tsv",
+        "pruned_centroids":              f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.ffn",
+        "pruned_centroids_rs":           f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.rmsig.ffn",
 
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
         "marker_genes_seq":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.fa",
@@ -87,7 +87,7 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
     }
 
 
-# TODO: update the target files in the tarball
+
 def get_tarball_layout(species_id="", genome_id=""): # target folder
     return {
         "toc":                           "genomes.tsv",
@@ -101,10 +101,11 @@ def get_tarball_layout(species_id="", genome_id=""): # target folder
     }
 
 
+# TODO: update the pangenome componenets
 tarball_mapping = {
     "toc":                           ["table_of_contents"],
     "repgenome":                     ["annotation_fna", "annotation_ffn", "annotation_genes"],
-    "pangenome":                     ["pangenome_centroids", "pangenome_cluster_info", "pangenome_genes_annot", "pangenome_cluster_annot"],
+    "pangenome":                     ["pangenome_centroids", "pangenome_genes_info"],
     "markerdb":                      MARKER_FILE_EXTS,
     "markerdb_models":               ["hmm", "hmm_cutoffs"],
     "chunks":                        ["chunks_centroids", "chunks_sites_run", "chunks_sites_merge"],

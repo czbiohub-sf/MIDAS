@@ -159,7 +159,7 @@ def register_args(main_func):
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
-                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning annotate genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
+                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning build midasdb for genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
     subparser.add_argument('--species',
                            dest='species',
                            required=False,

@@ -1,5 +1,5 @@
 {% set name = "midas2" %}
-{% set version = "2.0.0" %}
+{% set version = "2.0.0.rc1" %}
 
 package:
   name: {{ name }}
@@ -37,6 +37,7 @@ requirements:
     - vsearch >=2.23.0
     - seqkit >=2.5.1
     - cd-hit >=4.8.1
+    - pandas
 
 test:
   imports:

@@ -269,7 +269,7 @@ def annotate_pangenome_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('annotate_pangenome', main_func, help='Genome annotation for specified genomes using Prokka with all cores')
+    subparser = add_subcommand('annotate_pangenome', main_func, help='Decorate pangenome with annotated genomes.')
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
@@ -278,7 +278,7 @@ def register_args(main_func):
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,
-                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning annotate genomes whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
+                           help="genome[,genome...] to import;  alternatively, slice in format idx:modulus, e.g. 1:30, meaning pangenome annotate whose ids are 1 mod 30; or, the special keyword 'all' meaning all genomes")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,

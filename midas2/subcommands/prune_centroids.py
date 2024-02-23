@@ -27,12 +27,12 @@ Output:
 DEFAULT_PRUNE_CUTOFF = 0.4
 
 def register_args(main_func):
-    subparser = add_subcommand('prune_centroids', main_func, help='Genome annotation for specified genomes using Prokka with all cores')
+    subparser = add_subcommand('prune_centroids', main_func, help='Prune centroids for specified genomes/species')
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
                            required=False,
-                           help="species[,species...] whose centroid(s) to prune;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
+                           help="species[,species...] whose centroid(s) to prune;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning prune species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,

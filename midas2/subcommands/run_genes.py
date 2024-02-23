@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import json
 import os
-from math import floor, ceil
+from math import ceil
 from collections import defaultdict
-from itertools import repeat, chain
+from itertools import repeat
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
@@ -13,8 +13,8 @@ from midas2.common.utilities import extract_genomeid
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
 from midas2.models.species import Species, parse_species
-from midas2.params.schemas import genes_summary_schema, fetch_genes_depth_schema, format_data, DECIMALS6, fetch_cluster_xx_info_schema, fetch_genes_chunk_schema
-from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, samtools_idxstats, bowtie2_index_exists, _keep_read
+from midas2.params.schemas import genes_summary_schema, fetch_genes_depth_schema, format_data, DECIMALS6, fetch_genes_chunk_schema
+from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, samtools_idxstats, bowtie2_index_exists, _keep_read
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -276,7 +276,7 @@ def prepare_species(species_to_analyze, midas_db):
     return True
 
 
-def fetch_genes_from_bam(idxstats_fp, midas_db, species_to_analyze):
+def fetch_genes_from_bam(idxstats_fp, midas_db):
     """ Compute the genes present in the BAM file """
     species_for_genome = midas_db.uhgg.genomes
     global readonly_bamgenes
@@ -506,7 +506,7 @@ def run_genes(args):
 
         tsprint("MIDAS2::multiprocessing_map::start")
         # It's important to maintain the order of the bam genes
-        fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db, species_to_analyze)
+        fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db)
 
         total_c99_counts = len(readonly_bamgenes)
         number_of_chunks = args.num_cores

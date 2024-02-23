@@ -16,7 +16,7 @@ from midas2.params.inputs import MIDASDB_NAMES
 DEFAULT_GENOME_DEPTH = 1.0
 DEFAULT_SAMPLE_COUNTS = 1
 DEFAULT_CLUSTER_OUT_ID = '80'
-DEFAULT_CLUSTER_IN_ID = '80'
+DEFAULT_CLUSTER_IN_ID = '99'
 DEFAULT_MIN_COPY = 0.35
 DEFAULT_NUM_CORES = 4
 
@@ -121,9 +121,6 @@ def build_gene_matrices(species_id):
     global dict_of_species
 
     min_copy = global_args.min_copy
-    xx_in = global_args.cluster_level_in
-    xx_out = global_args.cluster_level_out
-
     sp = dict_of_species[species_id]
 
     # First pass: accumulate the gene matrix sample by sample
@@ -150,7 +147,6 @@ def collect(accumulator, my_args):
     species_id, sample_index, genes_depth_fp = my_args
 
     xx_in = global_args.cluster_level_in
-    xx_out = global_args.cluster_level_out
 
     sp = dict_of_species[species_id]
     total_samples_count = sp.samples_count

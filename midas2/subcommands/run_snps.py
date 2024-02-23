@@ -606,7 +606,7 @@ def midas_pileup(packed_args):
         "contig_covered_bases": 0,
     }
 
-    sliced_pileup = list()
+    sliced_pileup = []
     for within_chunk_index in range(0, current_chunk_size):
         depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
         count_a = counts[0][within_chunk_index]
@@ -695,7 +695,7 @@ def compute_chunk_aln_summary(list_of_contig_aln_stats, species_ids_of_interest)
     global global_args
     global dict_of_site_chunks
 
-    dict_of_chunk_aln_stats = dict()
+    dict_of_chunk_aln_stats = {}
 
     for spidx, species_id in enumerate(species_ids_of_interest):
 

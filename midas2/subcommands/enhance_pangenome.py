@@ -188,12 +188,12 @@ def enhance_pangenome_worker(args):
 
 
 def register_args(main_func):
-    subparser = add_subcommand('enhance_pangenome', main_func, help='Pangenome annotation for specified species')
+    subparser = add_subcommand('enhance_pangenome', main_func, help='Enhance pangenome for specified species')
     subparser.add_argument('-s',
                            '--species',
                            dest='species',
                            required=False,
-                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning enhance species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
     subparser.add_argument('--midasdb_name',
                            dest='midasdb_name',
                            type=str,

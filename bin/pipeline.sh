@@ -14,7 +14,7 @@ fi
 #script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
 
 species_id="$1"
-species_dir="$2"
+pangenome_dir="$2"
 total_threads="$3"
 total_mem="$4" #500000
 script_dir="$5"
@@ -24,6 +24,7 @@ vsearch_jobs=$((total_threads / vsearch_threads))
 thread2=$((total_threads / 2))
 
 ####### INPUTS: global scratch directory
+species_dir="${pangenome_dir}/${species_id}"
 vsearch_dir="${species_dir}/temp/vsearch"
 genes_ffn="${vsearch_dir}/genes.ffn"
 genes_len="${vsearch_dir}/genes.len"
