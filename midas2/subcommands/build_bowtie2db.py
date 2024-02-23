@@ -10,7 +10,7 @@ from midas2.params.inputs import MIDASDB_NAMES
 
 
 DEFAULT_SAMPLE_COUNTS = 2
-
+DEFAULT_PRUNE_CUTOFF = 0.4
 
 def register_args(main_func):
     subparser = add_subcommand('build_bowtie2db', main_func, help='Build rep-genome and pan-genome Bowtie2 indexes for list of species')
@@ -71,16 +71,32 @@ def register_args(main_func):
                            default=num_physical_cores,
                            help=f"Number of physical cores to use ({num_physical_cores})")
     # Prune centroids_99 for cleaner reads mapping
-    subparser.add_argument('--prune_centroids99',
+    subparser.add_argument('--prune_centroids',
                            action='store_true',
                            default=False,
                            help='Prune shorter centroids99 within each centroids95 cluster')
-    subparser.add_argument('--prune_opts',
-                           dest='prune_opts',
+    subparser.add_argument('--prune_method',
+                           dest='prune_method',
                            type=str,
-                           default="0.4",
-                           help="Prune centroids99 shorter than 40% of its centroids.95.")
+                           default='max',
+                           choices=['max', 'median', 'mean'],
+                           help="Prune methods: max, median or mean.")
+    subparser.add_argument('--prune_cutoff',
+                           dest='prune_cutoff',
+                           type=float,
+                           default=DEFAULT_PRUNE_CUTOFF,
+                           help=f"Prune cutoff: for each centroid_95, centroid99 shorter than {DEFAULT_PRUNE_CUTOFF} of the chosen method are pruned for reading mapping.")
+    subparser.add_argument('--remove_singleton',
+                           action='store_true',
+                           default=False,
+                           help='Remove c75 clusters with only one gene member in species with more genomes.')
     return main_func
+
+
+def fetch_pruned_targets(midas_db, species_of_interest, opts, cutoff, remove_singleton):
+    if remove_singleton:
+        return {spid: midas_db.get_target_layout("pruned_centroids_rs", False, spid, opts, cutoff) for spid in species_of_interest}
+    return {spid: midas_db.get_target_layout("pruned_centroids", False, spid, opts, cutoff) for spid in species_of_interest}
 
 
 def build_bowtie2db(args):
@@ -101,7 +117,6 @@ def build_bowtie2db(args):
             tsprint("MIDAS2::build_bowtie2_repgenomes_indexes::start")
             midas_db.fetch_files("repgenome", species_of_interest)
             contigs_files = midas_db.fetch_files("representative_genome", species_of_interest)
-            tsprint(contigs_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, contigs_files, args.num_cores)
             tsprint("MIDAS2::build_bowtie2_repgenomes_indexes::finish")
 
@@ -109,10 +124,9 @@ def build_bowtie2db(args):
             tsprint("MIDAS2::build_bowtie2_pangenomes_indexes::start")
             midas_db.fetch_files("pangenome", species_of_interest)
             if args.prune_centroids:
-                centroids_files = midas_db.fetch_files("pruned_centroids", species_of_interest)
+                centroids_files = fetch_pruned_targets(midas_db, species_of_interest, args.prune_method, args.prune_cutoff, args.remove_singleton)
             else:
                 centroids_files = midas_db.fetch_files("pangenome_centroids", species_of_interest)
-            tsprint(centroids_files)
             build_bowtie2_db(args.bt2_indexes_dir, args.bt2_indexes_name, centroids_files, args.num_cores)
             tsprint("MIDAS2::build_bowtie2_pangenomes_indexes::finish")
 

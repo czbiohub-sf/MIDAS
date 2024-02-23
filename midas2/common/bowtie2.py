@@ -96,16 +96,26 @@ def samtools_sort(bamfile_path, sorted_bamfile, debug, num_cores):
 
 
 def samtools_index(bamfile_path, debug, num_cores):
-
     if debug and os.path.exists(f"{bamfile_path}.bai"):
         tsprint(f"Skipping samtools index in debug mode as temporary data exists: {bamfile_path}.bai")
         return
-
     try:
         command(f"samtools index -@ {num_cores} {bamfile_path}", quiet=False)
     except:
         tsprint(f"Samtools index {bamfile_path} run into error")
         command(f"rm -f {bamfile_path}.bai")
+        raise
+
+
+def samtools_idxstats(bamfile_path, debug, num_cores):
+    if debug and os.path.exists(f"{bamfile_path}.idxstats"):
+        tsprint(f"Skipping samtools idxstats in debug mode as temporary data exists: {bamfile_path}.idxstats")
+        return
+    try:
+        command(f"samtools idxstats -@ {num_cores} {bamfile_path} | awk \'$3 > 0 {{print $1}}\' > {bamfile_path}.idxstats", quiet=False)
+    except:
+        tsprint(f"Samtools idxstats {bamfile_path} run into error")
+        command(f"rm -f {bamfile_path}.idxstats")
         raise
 
 

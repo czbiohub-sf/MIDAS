@@ -51,7 +51,7 @@ PANGENOME_INFO_SCHEMA = {
 }
 
 
-ANNOTATED_SCHEMA = {
+GENE_ANNOTATED_SCHEMA = {
     "gene_is_phage": int,
     "gene_is_plasmid": int,
     "gene_is_amr": int,
@@ -59,7 +59,7 @@ ANNOTATED_SCHEMA = {
 }
 
 
-PANGENOME_ANNOTATED_SCHEMA = {**PANGENOME_INFO_SCHEMA, **ANNOTATED_SCHEMA}
+PANGENOME_ANNOTATED_SCHEMA = {**PANGENOME_INFO_SCHEMA, **GENE_ANNOTATED_SCHEMA}
 
 
 PANGENOME_CLUSTER_SCHEMA = {
@@ -69,31 +69,33 @@ PANGENOME_CLUSTER_SCHEMA = {
     "centroid_85": str,
     "centroid_80": str,
     "centroid_75": str,
-    "centroid_99_length": int,
-    "marker_id": str,
+    "centroid_99_genome_counts": int,
+    "centroid_99_genome_prevalence": float,
+    "centroid_99_gene_counts": int,
+    "centroid_99_gene_length": int,
     "centroid_99_marker_density": float,
-    "is_centroid_99_marker": bool,
-    "centroid_95_marker_density": float,
-    "is_centroid_95_marker": bool,
-    "centroid_95_marker_id": str,
+    "centroid_99_marker_id": str,
+    "phage_ratio": float,
+    "plasmid_ratio": float,
+    "amr_ratio": float,
+    "me_ratio": float,
+    "COG_category": str,
+    "EC": str,
+    "KEGG_Pathway": str,
+    "Description": str,
+    "PFAMs": str
 }
 
 
-CLUSTER_INFO_SCHEMA = {
-    "centroid_99": str,
-    "centroid_95": str,
-    "centroid_90": str,
-    "centroid_85": str,
-    "centroid_80": str,
-    "centroid_75": str,
-    "centroid_99_length": int,
-    "marker_id": str,
-}
-
-
-def fetch_centriod_annotated_schema(xx):
+def fetch_cluster_xx_info_schema(xx):
     return {
         f"centroid_{xx}": str,
+        f"centroid_{xx}_genome_counts": int,
+        f"centroid_{xx}_genome_prevalence": float,
+        f"centroid_{xx}_gene_counts": int,
+        f"centroid_{xx}_gene_length": int,
+        f"centroid_{xx}_marker_density": float,
+        f"centroid_{xx}_marker_id": str,
         "phage_ratio": float,
         "plasmid_ratio": float,
         "amr_ratio": float,
@@ -103,14 +105,6 @@ def fetch_centriod_annotated_schema(xx):
         "KEGG_Pathway": str,
         "Description": str,
         "PFAMs": str
-    }
-
-
-def fetch_centroid_prevalence_schema(xx):
-    return {
-        f"centroid_{xx}": str,
-        "centroid_prevalence": float,
-        "centroid_length": int
     }
 
 
@@ -139,7 +133,7 @@ species_prevalence_schema = {
     "median_abundance": float,
     "mean_abundance": float,
     "median_coverage": float,
-    "mean_coverage": float,
+    "mean_depth": float,
     "sample_counts": float,
 }
 
@@ -152,19 +146,7 @@ snps_profile_schema = {
     "aligned_reads": int,
     "mapped_reads": int,
     "fraction_covered": float,
-    "mean_coverage": float,
-}
-
-
-snps_chunk_summary_schema = {
-    "species_id": str,
-    "chunk_id": int,
-    "contig_id": str,
-    "chunk_length": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "contig_total_depth": int,
-    "contig_covered_bases": int
+    "mean_depth": float,
 }
 
 
@@ -218,6 +200,35 @@ snps_info_schema = {
 }
 
 
+def fetch_genes_depth_schema(xx):
+    return {
+        f"cluster_{xx}_id": str,
+        "gene_length": int,
+        "aligned_reads": int,
+        "mapped_reads": int,
+        "total_depth": int,
+        "mean_depth": float,
+        "copy_number": float,
+        "genome_prevalence": float,
+        "marker_id": str,
+    }
+
+
+def fetch_genes_chunk_schema(xx):
+    return {
+        "species_id": str,
+        f"c{xx}_id": str,
+        f"c{xx}_length": int,
+        "aligned_reads": int,
+        "mapped_reads": int,
+        "total_depth": int,
+        "mean_depth": float,
+        "copy_number": float,
+        "genome_prevalence": float,
+        "marker_id": str,
+    }
+
+
 genes_summary_schema = {
     "species_id": str,
     "pangenome_size": int,
@@ -225,8 +236,8 @@ genes_summary_schema = {
     "fraction_covered": float,
     "aligned_reads": int,
     "mapped_reads": int,
-    "mean_coverage": float,
-    "marker_coverage": float,
+    "mean_depth": float,
+    "marker_depth": float,
 }
 
 
@@ -235,19 +246,6 @@ genes_info_schema = {
     "copynum": float,
     "depth": float,
     "reads": int,
-}
-
-
-genes_coverage_schema = {
-    "centroid_95": str,
-    "gene_length": int,
-    "aligned_reads": int,
-    "mapped_reads": int,
-    "read_depth": int,
-    "mean_coverage": float,
-    "copy_number": float,
-    "gene_prevalence": float,
-    "marker_id": str,
 }
 
 

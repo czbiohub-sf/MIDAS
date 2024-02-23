@@ -44,16 +44,19 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "pangenome_log":                 f"pangenomes/{species_id}/pangenome_build.log",
         "recluster_log":                 f"pangenomes/{species_id}/recluster_centroids.log",
 
+        "pangenome_marker_map":          f"pangenomes/{species_id}/temp/markers.map",
         "pangenome_centroids":           f"pangenomes/{species_id}/centroids.ffn",
         "pangenome_genes_info":          f"pangenomes/{species_id}/genes_info.tsv",
-        "pangenome_cluster_info":        f"pangenomes/{species_id}/clusters_info.tsv",
+        "cluster_xx_info":               f"pangenomes/{species_id}/augment/clusters_{component}_info.tsv",
         "pangenome_contigs_len":         f"pangenomes/{species_id}/contigs.len",
         "pangenome_genes_annot":         f"pangenomes/{species_id}/genes_annotated.tsv",
-        "pangenome_cluster_annot":       f"pangenomes/{species_id}/centroids.{component}_annotated.tsv",
+        "cluster_xx_annot":              f"pangenomes/{species_id}/annotation/clusters_{component}_annot.tsv",
+        "pangenome_cluster_xx":          f"pangenomes/{species_id}/clusters_{component}_info.tsv",
+
         "augment_log":                   f"pangenomes/{species_id}/augment.log",
         "contig_length_log":             f"pangenomes/{species_id}/contig_length.log",
-        "pangenome_enhance_log":         f"pangenomes/{species_id}/pangenome_enhance.log",
-
+        "enhance_log":                   f"pangenomes/{species_id}/pangenome_enhance.log",
+        "prune_log":                     f"pangenomes/{species_id}/pruned/pangenome_prune.log",
 
         "genomad_virus_genes":           f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_genes.tsv",
         "genomad_virus_summary":         f"pangenomes_annotation/01_mge/{species_id}/{genome_id}/genomad_output/{genome_id}_summary/{genome_id}_virus_summary.tsv",
@@ -69,10 +72,10 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "panannot_mefinder":            f"pangenomes/{species_id}/annotation/mefinder.tsv",
         "panannot_resfinder":           f"pangenomes/{species_id}/annotation/resfinder.tsv",
         "panannot_eggnog":              f"pangenomes/{species_id}/annotation/eggnog.tsv",
-        "pruned_centroids":             f"pangenomes/{species_id}/pruned/centroids_opts.{component}.ffn",
+        "pruned_centroids":             f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.ffn",
+        "pruned_centroids_rs":          f"pangenomes/{species_id}/pruned/centroids_by.{genome_id}.{component}.rmsig.ffn",
 
         "marker_genes":                  f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.{component}",
-        "marker_map_by_species":         f"markers/{marker_set}/temp/{species_id}/{species_id}.markers.map",
         "marker_genes_seq":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.fa",
         "marker_genes_map":              f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.markers.map",
         "marker_genes_hmmsearch":        f"markers/{marker_set}/temp/{species_id}/{genome_id}/{genome_id}.hmmsearch",
@@ -84,6 +87,7 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
     }
 
 
+# TODO: update the target files in the tarball
 def get_tarball_layout(species_id="", genome_id=""): # target folder
     return {
         "toc":                           "genomes.tsv",

@@ -32,8 +32,7 @@ def get_single_layout(sample_name, dbtype=""):
             "snps_summary":            f"{sample_name}/snps/snps_summary.tsv",
             "snps_log":                f"{sample_name}/snps/log.txt",
             "snps_pileup":             f"{sample_name}/snps/{species_id}.snps.tsv.lz4",
-            "snps_chunk_summary":      f"{sample_name}/snps/chunks_summary.tsv",
-            "snps_repgenomes_bam":     f"{sample_name}/temp/snps/repgenomes.bam",
+            "snps_repgenomes_bam":     f"{sample_name}/snps/{sample_name}.bam",
             "species_bam":             f"{sample_name}/temp/snps/{species_id}/{species_id}.bam",
             "species_sorted_bam":      f"{sample_name}/temp/snps/{species_id}/{species_id}.sorted.bam",
             "chunk_pileup":            f"{sample_name}/temp/snps/{species_id}/snps_{chunk_id}.tsv.lz4",
@@ -41,8 +40,9 @@ def get_single_layout(sample_name, dbtype=""):
             # genes workflow output
             "genes_summary":           f"{sample_name}/genes/genes_summary.tsv",
             "genes_log":               f"{sample_name}/genes/log.txt",
-            "genes_coverage":          f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
-            "genes_pangenomes_bam":    f"{sample_name}/temp/genes/pangenomes.bam",
+            "genes_depth":             f"{sample_name}/genes/{species_id}.genes.tsv.lz4",
+            "pangenome_bam":           f"{sample_name}/genes/{sample_name}.bam",
+            "chunk_depth":             f"{sample_name}/temp/genes/genes_{chunk_id}.tsv.lz4",
         }
     return per_species
 

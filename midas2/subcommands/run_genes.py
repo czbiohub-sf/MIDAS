@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 import json
 import os
-
+from math import floor, ceil
 from collections import defaultdict
-from itertools import repeat
+from itertools import repeat, chain
 import numpy as np
 from pysam import AlignmentFile  # pylint: disable=no-name-in-module
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, args_string
-from midas2.common.utilities import scan_cluster_info, scan_centroid_prev
+from midas2.common.utils import tsprint, InputStream, OutputStream, select_from_tsv, multiprocessing_map, args_string, command, multithreading_map
+from midas2.common.utilities import extract_genomeid
 from midas2.models.midasdb import MIDAS_DB
 from midas2.models.sample import Sample
 from midas2.models.species import Species, parse_species
-from midas2.params.schemas import genes_summary_schema, genes_coverage_schema, format_data, DECIMALS6
-from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_index, bowtie2_index_exists, _keep_read
+from midas2.params.schemas import genes_summary_schema, fetch_genes_depth_schema, format_data, DECIMALS6, fetch_cluster_xx_info_schema, fetch_genes_chunk_schema
+from midas2.common.bowtie2 import build_bowtie2_db, bowtie2_align, samtools_sort, samtools_index, samtools_idxstats, bowtie2_index_exists, _keep_read
 from midas2.params.inputs import MIDASDB_NAMES
 
 
@@ -23,11 +23,14 @@ DEFAULT_ALN_MAPQ = 0
 DEFAULT_ALN_COV = 0.75
 DEFAULT_ALN_READQ = 20
 
-DEFAULT_READ_DEPTH = 0
+DEFAULT_TOTAL_DEPTH = 1
 DEFAULT_MARKER_MEDIAN_DEPTH = 2.0
 
 DEFAULT_MAX_FRAGLEN = 500
 DEFAULT_NUM_CORES = 8
+DEFAULT_PRUNE_CUTOFF = 0.4
+DEFAULT_CLUSTER_ID = '99'
+DEFAULT_MARKER_CUTOFF = 0.01
 
 
 def register_args(main_func):
@@ -79,7 +82,7 @@ def register_args(main_func):
     subparser.add_argument('--select_by',
                            dest='select_by',
                            type=str,
-                           default="median_marker_coverage",
+                           default="median_marker_depth",
                            help="Comma separated columns from species_profile to filter species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
@@ -98,7 +101,7 @@ def register_args(main_func):
     subparser.add_argument('--aln_mode',
                            type=str,
                            dest='aln_mode',
-                           default='local',
+                           default='global',
                            choices=['local', 'global'],
                            help='Global/local read alignment (Default local, corresponds to the bowtie2 --local; global corresponds to the bowtie2 --end-to-end).')
     subparser.add_argument('--aln_interleaved',
@@ -118,9 +121,10 @@ def register_args(main_func):
                            help="Number of reads to use from input file(s) for read alignment.  (All)")
     subparser.add_argument('--aln_extra_flags',
                            type=str,
+                           metavar="CHAR",
                            dest='aln_extra_flags',
                            default='',
-                           help='Extra bowtei2 align flags. E.g. --mm --ignore-quals')
+                           help="Extra bowtei2 align flags. E.g. --mm --ignore-quals")
 
 
     # Coverage flags
@@ -150,12 +154,12 @@ def register_args(main_func):
                            help=f"Discard reads with alignment coverage < ALN_COV ({DEFAULT_ALN_COV}).  Values between 0-1 accepted.")
 
     # Gene filters
-    subparser.add_argument('--read_depth',
-                           dest='read_depth',
+    subparser.add_argument('--total_depth',
+                           dest='total_depth',
                            type=int,
                            metavar="INT",
-                           default=DEFAULT_READ_DEPTH,
-                           help=f"Discard genes with post-filtered reads < READ_DEPTH  ({DEFAULT_READ_DEPTH})")
+                           default=DEFAULT_TOTAL_DEPTH,
+                           help=f"Discard genes with post-filtered reads < total_depth  ({DEFAULT_TOTAL_DEPTH})")
 
     # Resource related
     subparser.add_argument('--num_cores',
@@ -165,25 +169,48 @@ def register_args(main_func):
                            default=DEFAULT_NUM_CORES,
                            help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
     # Prune centroids_99 for cleaner reads mapping
-    subparser.add_argument('--prune_centroids99',
+    subparser.add_argument('--prune_centroids',
                            action='store_true',
                            default=False,
                            help='Prune shorter centroids99 within each centroids95 cluster')
-    subparser.add_argument('--prune_opts',
-                           dest='prune_opts',
+    subparser.add_argument('--prune_method',
+                           dest='prune_method',
                            type=str,
-                           default="0.4",
-                           help="Prune centroids99 shorter than 40% of its centroids.95.")
-    subparser.add_argument('--aln_only',
-                           dest = 'aln_only',
+                           default='max',
+                           choices=['max', 'median', 'mean'],
+                           help="Prune methods: max, median or mean.")
+    subparser.add_argument('--prune_cutoff',
+                           dest='prune_cutoff',
+                           type=float,
+                           default=DEFAULT_PRUNE_CUTOFF,
+                           help=f"Prune cutoff: for each centroid_95, centroid99 shorter than {DEFAULT_PRUNE_CUTOFF} of the chosen method are pruned for reading mapping.")
+    subparser.add_argument('--remove_singleton',
+                           action='store_true',
+                           default=False,
+                           help='Remove c75 clusters with only one gene member in species with more genomes.')
+
+    subparser.add_argument('--alignment_only',
+                           dest = 'alignment_only',
                            action='store_true',
                            default=False,
                            help='Perform only alignment steps.')
-    subparser.add_argument('--keep_bam',
-                           dest = 'keep_bam',
+    subparser.add_argument('--cluster_level',
+                           dest='cluster_level',
+                           type=str,
+                           default=DEFAULT_CLUSTER_ID,
+                           choices=['75', '80', '85', '90', '95', '99'],
+                           help=f"Aggregate reads to cluster level other than {DEFAULT_CLUSTER_ID}. Only for debug purpose.")
+
+    subparser.add_argument('--remove_bam',
+                           dest = 'remove_bam',
                            action='store_true',
                            default=False,
-                           help='Keep BAM file.')
+                           help='Remove BAM file.')
+    subparser.add_argument('--remove_bt2_index',
+                           dest = 'remove_bt2_index',
+                           action='store_true',
+                           default=False,
+                           help='Remove bowtie2 index files.')
     return main_func
 
 
@@ -193,135 +220,237 @@ def keep_read(aln):
     return _keep_read(aln, args.aln_mapid, args.aln_readq, args.aln_mapq, args.aln_cov)
 
 
-def prepare_species(species_to_analyze, midas_db):
-    global dict_of_species
-    dict_of_species = {species_id: Species(species_id) for species_id in species_to_analyze}
+def fetch_prebuilt_bt2db(args, species_list):
+    bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
+    bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
 
-    for species_id in species_to_analyze:
-        sp = dict_of_species[species_id]
-        sp.get_cluster_info_fp(midas_db)
-        sp.get_c95_prevalence_fp(midas_db)
+    assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
+    assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), "Require list of speices used to build the provided Bowtie2 indexes."
 
+    tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
+    with InputStream(args.prebuilt_bowtie2_species) as stream:
+        bt2_species_list = [spid[0] for spid in select_from_tsv(stream, schema={"species_id": str})]
+    # Update species_list: either/or
+    species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
+    return bt2_db_dir, bt2_db_name, species_list
+
+
+def get_bowtie2_indexes(args, species_list):
+    if args.prebuilt_bowtie2_indexes:
+        bt2_db_dir, bt2_db_name, species_list = fetch_prebuilt_bt2db(args, species_list)
+    else:
+        sample.create_dirs(["bt2_indexes_dir"], args.debug)
+        bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
+        bt2_db_name = "pangenomes"
+    return bt2_db_dir, bt2_db_name, species_list
+
+
+def filter_species_list(args, species_list):
+    select_thresholds = args.select_threshold.split(',')
+    no_filter = len(select_thresholds) == 1 and float(select_thresholds[0]) == -1
+
+    species_to_analyze = species_list if no_filter else sample.select_species(args, species_list)
+    return species_to_analyze
+
+
+def fetch_pruned_centroids(midas_db, species_id, prune_method, prune_cutoff, remove_singleton):
+    if remove_singleton:
+        return midas_db.get_target_layout("pruned_centroids_rs", False, species_id, prune_method, prune_cutoff)
+    return midas_db.get_target_layout("pruned_centroids", False, species_id, prune_method, prune_cutoff)
+
+
+def _fetch_cxx_info(pargs):
+    sp, midas_db, xx = pargs
+    for xx in set(["99", xx]):
+        sp.set_clusters_info_fp(midas_db, xx)
+        sp.get_clusters_info(xx)
     return True
 
 
-def collect_reads(c99_info, c95_prevalence, pangenome_bamfile):
-    list_of_c99_ids = sorted(list(c99_info.keys()))
+def prepare_species(species_to_analyze, midas_db):
+    global dict_of_species
+    global global_args
+    dict_of_species = {species_id: Species(species_id) for species_id in species_to_analyze}
+    num_cores = min(midas_db.num_cores, 8)
+    multithreading_map(_fetch_cxx_info, [(sp, midas_db, global_args.cluster_level) for sp in dict_of_species.values()], num_cores)
+    return True
 
-    c95_values = defaultdict(dict)
+
+def fetch_genes_from_bam(idxstats_fp, midas_db, species_to_analyze):
+    """ Compute the genes present in the BAM file """
+    species_for_genome = midas_db.uhgg.genomes
+    global readonly_bamgenes
+    readonly_bamgenes = {}
+    with InputStream(idxstats_fp) as stream:
+        for _ in select_from_tsv(stream, schema={"gene_id": str}):
+            geneid = _[0]
+            speciesid = species_for_genome[extract_genomeid(geneid)]
+            readonly_bamgenes[geneid] = speciesid
+    return True
+
+
+def compute_pileup_per_chunk(pargs):
+    """ Collect total number of read depths over each covered position for centroids_99 """
+    global global_args
+    global dict_of_species
+    global readonly_bamgenes
+
+    chunk_id, chunk_start, chunk_end, pangenome_bamfile, headerless_sliced_path, xx = pargs
+
+    if global_args.debug and os.path.exists(headerless_sliced_path):
+        tsprint(f"Skipping compute pileup for chunk {chunk_id} in debug mode as temporary data exists: {headerless_sliced_path}")
+        return headerless_sliced_path
+
+    chunk_geneids_list = list(readonly_bamgenes.keys())[chunk_start:chunk_end]
+
+    cxx_values = defaultdict(dict)
     with AlignmentFile(pangenome_bamfile) as bamfile:
-        # Competitive alignment is done on centroid_99 level, while coverage are computed on centroid_95 level.
-        for c99_id in list_of_c99_ids:
-            c95_id = c99_info[c99_id]["centroid_95"]
+        # Competitive alignment is done on centroid_99 level.
+        for c99_id in chunk_geneids_list:
+            c99_aligned_reads = bamfile.count(c99_id)
+            if c99_aligned_reads < global_args.total_depth:
+                continue
 
-            # centroids_95 is subset of centroids_99
-            c99_length = c99_info[c99_id]["centroid_99_length"]
-            c95_length = c99_info[c95_id]["centroid_99_length"]
+            c99_mapped_reads = bamfile.count(c99_id, read_callback=keep_read)
+            if c99_mapped_reads < global_args.total_depth:
+                continue
 
-            aligned_reads = bamfile.count(c99_id)
-            mapped_reads = bamfile.count(c99_id, read_callback=keep_read)
+            species_id = readonly_bamgenes[c99_id]
+            sp = dict_of_species[species_id]
+
+            c99_info = sp.clusters_info['99']
+            cxx_info = sp.clusters_info[xx]
+
+            cxx_id = c99_info[c99_id][f"centroid_{xx}"]
+            c99_length = c99_info[c99_id]["centroid_99_gene_length"]
+            cxx_length = cxx_info[cxx_id][f"centroid_{xx}_gene_length"]
 
             # Compute total per-position depth for aligned gene region
             c99_covered_bases = 0
             c99_total_depth = 0
             counts = bamfile.count_coverage(c99_id, read_callback=keep_read)
             for within_chunk_index in range(0, c99_length):
-                # Per-position depth: total number of bases mappped to given c99
+                # Per-position depth: total number of bases mappped
                 gene_depth = sum([counts[nt][within_chunk_index] for nt in range(4)])
                 c99_total_depth += gene_depth
                 if gene_depth > 0:
                     c99_covered_bases += 1
-
             if c99_total_depth == 0: # Sparse by default.
                 continue
+            c99_mean_depth = float(c99_total_depth / c99_length)
 
-            if c95_id not in c95_values:
-                c95_values[c95_id]["c95_id"] = c95_id
-                c95_values[c95_id]["c95_length"] = c95_length
-                c95_values[c95_id]["aligned_reads"] = aligned_reads
-                c95_values[c95_id]["mapped_reads"] = mapped_reads
-                c95_values[c95_id]["read_depth"] = c99_total_depth #read depths are summed at c95
-                c95_values[c95_id]["mean_coverage"] = 0.0
-                c95_values[c95_id]["copy_number"] = 0.0
-                c95_values[c95_id]["c95_prevalence"] = c95_prevalence[c95_id]
-                c95_values[c95_id]["marker_id"] = c99_info[c95_id]["centroid_95_marker_id"] if c99_info[c95_id]["is_centroid_95_marker"] else ""
+            if cxx_id not in cxx_values:
+                cxx_values[cxx_id] = {
+                    "species_id": species_id,
+                    f"c{xx}_id": cxx_id,
+                    f"c{xx}_length": cxx_length,
+                    "aligned_reads": c99_aligned_reads,
+                    "mapped_reads": c99_mapped_reads,
+                    "total_depth": c99_total_depth,
+                    "mean_depth": c99_mean_depth,
+                    "copy_number": 0.0,
+                    "genome_prevalence": cxx_info[cxx_id][f"centroid_{xx}_genome_prevalence"],
+                    "marker_id": cxx_info[cxx_id][f"centroid_{xx}_marker_id"],
+                }
             else:
-                c95_values[c95_id]["aligned_reads"] += aligned_reads
-                c95_values[c95_id]["mapped_reads"] += mapped_reads
-                c95_values[c95_id]["read_depth"] += c99_total_depth
-    return c95_values
+                cxx_values[cxx_id]["aligned_reads"] += c99_aligned_reads
+                cxx_values[cxx_id]["mapped_reads"] += c99_mapped_reads
+                cxx_values[cxx_id]["total_depth"] += c99_total_depth
+                cxx_values[cxx_id]["mean_depth"] += c99_mean_depth
+
+    with OutputStream(headerless_sliced_path) as stream:
+        for rec in cxx_values.values():
+            stream.write("\t".join(map(format_data, rec.values(), repeat(DECIMALS6, len(rec)))) + "\n")
+
+    return headerless_sliced_path
 
 
-def decorate_coverage(c95_values):
-    # Compute the median read coverage for all mapped marker genes for given species
-    list_of_markers = set(r['marker_id'] for r in c95_values.values() if r['marker_id'])
-    markers_coverage = dict(zip(list_of_markers, [0.0]*len(list_of_markers)))
-    for c95_cov in c95_values.values():
-        if c95_cov["is_centroid_95_marker"]:
-            markers_coverage[c95_cov["marker_id"]] += c95_cov["read_depth"] / c95_cov["c95_length"]
-    median_marker_coverage = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_coverage.values())))
+def merge_depth_across_chunks(list_of_chunks_pileup, xx):
+    depth_schema = fetch_genes_chunk_schema(xx)
+    depth_cols = list(depth_schema.keys())[1:]
 
-    # Update the mean_coverage and copy_number values of c95_values
-    pangenome_size = 0
-    for c95_cov in c95_values.values():
-        c95_cov["mean_coverage"] = float(c95_cov["read_depth"] / c95_cov["gene_length"])
-        if median_marker_coverage > 0:
-            c95_cov["copy_number"] = float(c95_cov["mean_coverage"] / median_marker_coverage)
-        pangenome_size += 1
+    # operational gene cluster level other than 99 could end up in different batches of c99s
+    cxx_values = defaultdict(lambda: defaultdict(dict))
+    for chunk_file in list_of_chunks_pileup:
+        with InputStream(chunk_file) as stream:
+            for r in select_from_tsv(stream, schema=depth_schema):
+                species_id, cxx_id = r[:2]
+                cxx_val = dict(zip(depth_cols, r[1:]))
+                if cxx_id not in cxx_values[species_id]:
+                    cxx_values[species_id][cxx_id] = cxx_val
+                else:
+                    cxx_values[species_id][cxx_id]["aligned_reads"] += cxx_val["aligned_reads"]
+                    cxx_values[species_id][cxx_id]["mapped_reads"] += cxx_val["mapped_reads"]
+                    cxx_values[species_id][cxx_id]["total_depth"] += cxx_val["total_depth"]
+                    cxx_values[species_id][cxx_id]["mean_depth"] += cxx_val["mean_depth"]
+    return cxx_values
 
-    return median_marker_coverage, pangenome_size
+
+def compute_median_marker_depth(cxx_values, list_of_markers):
+    """ Compute the median read coverage for ALL marker genes for given species """
+    markers_depth = dict(zip(list_of_markers, [0.0]*len(list_of_markers)))
+
+    for cxx_cov in cxx_values.values():
+        if cxx_cov["marker_id"]:
+            markers_depth[cxx_cov["marker_id"]] += cxx_cov['mean_depth']
+
+    median_marker_depth = np.median(list(map(lambda x: float(format(x, DECIMALS6)), markers_depth.values())))
+    return median_marker_depth
 
 
-def process_species(species_id):
-    """ Collect total number of read depths over each covered position for centroids_99 """
-
+def compute_species_summary(dict_of_gene_depth):
     global global_args
     global sample
-    pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
-
     global dict_of_species
-    sp = dict_of_species[species_id]
 
-    c99_info = scan_cluster_info(sp.cluster_info_fp, "centroid_99")
-    c95_prevalence = scan_centroid_prev(sp.c95_prevalence_fp, "95")
+    xx = global_args.cluster_level
+    species_depth_summary_dict = defaultdict(dict)
+    for species_id, sp in dict_of_species.items():
+        sp = dict_of_species[species_id]
+        cxx_values = dict_of_gene_depth[species_id]
 
-    c95_values = collect_reads(c99_info, c95_prevalence, pangenome_bamfile)
-    median_marker_coverage, pangenome_size = decorate_coverage(c95_values)
+        cxx_info = sp.clusters_info[xx]
+        list_of_markers = sp.list_of_markers[xx]
+        median_marker_depth = compute_median_marker_depth(cxx_values, list_of_markers)
+        tsprint(f"median marker depth for {species_id} is {median_marker_depth}")
 
-    # Aggreate species coverage summary AND write per-gene coverage to file
-    c95_summary = {
-        "species_id": species_id,
-        "pangenoem_size": pangenome_size,
-        "covered_genes": 0,
-        "fraction_covered": 0,
-        "aligned_reads": 0,
-        "mapped_reads": 0,
-        "mean_coverage": 0,
-        "marker_coverage": median_marker_coverage,
-    }
+        cxx_summary = {
+            "species_id": species_id,
+            "pangenome_size": len(cxx_info),
+            "covered_genes": 0,
+            "fraction_covered": 0,
+            "aligned_reads": 0,
+            "mapped_reads": 0,
+            "mean_depth": 0,
+            "marker_depth": median_marker_depth,
+        }
 
-    c95_cov_fp = sample.get_target_layout("genes_coverage", species_id)
-    with OutputStream(c95_cov_fp) as stream:
-        stream.write('\t'.join(genes_coverage_schema.keys()) + '\n')
-        for rec in c95_values.values():
-            if rec["mapped_reads"] > global_args.read_depth:
-                # accumuate across covered centroid_95s
-                c95_summary["covered_genes"] += 1
-                c95_summary["aligned_reads"] += rec["aligned_reads"]
-                c95_summary["mapped_reads"] += rec["mapped_reads"]
-                c95_summary["mean_coverage"] += rec["mean_coverage"]
-                # write single centroid_95 coverage to file
-                stream.write("\t".join(map(format_data, rec, repeat(DECIMALS6, len(rec)))) + "\n")
+        cxx_cov_fp = sample.get_target_layout("genes_depth", species_id)
+        with OutputStream(cxx_cov_fp) as stream:
+            stream.write('\t'.join(fetch_genes_depth_schema(xx).keys()) + '\n')
+            for rec in cxx_values.values():
+                # Collect species depth summary
+                cxx_summary["covered_genes"] += 1
+                cxx_summary["aligned_reads"] += rec["aligned_reads"]
+                cxx_summary["mapped_reads"] += rec["mapped_reads"]
+                cxx_summary["mean_depth"] += rec["mean_depth"]
+                # Update copy_number in one pass
+                rec["copy_number"] = float(rec["mean_depth"] / median_marker_depth) if median_marker_depth > 0 else 0.0
+                # Write species, gene depth to file
+                stream.write("\t".join(map(format_data, rec.values(), repeat(DECIMALS6, len(rec)))) + "\n")
 
-    c95_summary["fraction_covered"] = c95_summary["covered_genes"] / c95_summary["pangenome_size"]
-    c95_summary["mean_coverage"] = c95_summary["mean_coverage"] / c95_summary["covered_genes"] if c95_summary["covered_genes"] > 0 else 0
-    return c95_summary
+        cxx_summary["fraction_covered"] = cxx_summary["covered_genes"] / cxx_summary["pangenome_size"]
+        cxx_summary["mean_depth"] = cxx_summary["mean_depth"] / cxx_summary["covered_genes"] if cxx_summary["covered_genes"] > 0 else 0
+
+        species_depth_summary_dict[species_id] = cxx_summary
+
+    return species_depth_summary_dict
 
 
-def write_species_summary(species_covs, genes_coverage_path):
-    with OutputStream(genes_coverage_path) as stream:
+def write_species_summary(species_covs, genes_depth_path):
+    with OutputStream(genes_depth_path) as stream:
         stream.write("\t".join(genes_summary_schema.keys()) + "\n")
-        for rec in species_covs:
+        for rec in species_covs.values():
             stream.write("\t".join(map(format_data, rec.values())) + "\n")
 
 
@@ -338,75 +467,78 @@ def run_genes(args):
         with OutputStream(sample.get_target_layout("genes_log")) as stream:
             stream.write(f"Single sample pan-gene copy number variant calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
 
+        # Read in list of species
         species_list = parse_species(args)
+        bt2_db_dir, bt2_db_name, species_list = get_bowtie2_indexes(args, species_list)
 
-        if args.prebuilt_bowtie2_indexes:
-            bt2_db_dir = os.path.dirname(args.prebuilt_bowtie2_indexes)
-            bt2_db_name = os.path.basename(args.prebuilt_bowtie2_indexes)
-
-            assert bowtie2_index_exists(bt2_db_dir, bt2_db_name), f"Provided {bt2_db_dir}/{bt2_db_name} don't exist."
-            assert (args.prebuilt_bowtie2_species and os.path.exists(args.prebuilt_bowtie2_species)), "Require list of speices used to build the provided Bowtie2 indexes."
-
-            tsprint(f"Read in list of species used to build provided bowtie2 indexes {bt2_db_dir}/{bt2_db_name}")
-            with InputStream(args.prebuilt_bowtie2_species) as stream:
-                bt2_species_list = [spid[0] for spid in select_from_tsv(stream, schema={"species_id": str})]
-
-            # Update species_list: either/or
-            species_list = list(set(species_list) & set(bt2_species_list)) if species_list else bt2_species_list
-        else:
-            sample.create_dirs(["bt2_indexes_dir"], args.debug)
-            bt2_db_dir = sample.get_target_layout("bt2_indexes_dir")
-            bt2_db_name = "pangenomes"
-
-        # Select abundant species present in the sample for SNPs calling
-        select_thresholds = args.select_threshold.split(',')
-        no_filter = len(select_thresholds) == 1 and float(select_thresholds[0]) == -1
-
-        species_to_analyze = species_list if no_filter else sample.select_species(args, species_list)
+        # Restricted species profile: only abundant species based on species SGC profiling results
+        species_to_analyze = filter_species_list(args, species_list)
         species_counts = len(species_to_analyze)
-
         assert species_counts > 0, "No (specified) species pass the marker_depth filter, please adjust the marker_depth or species_list"
         tsprint(len(species_to_analyze))
 
-        tsprint("MIDAS2::prepare_species::start")
         num_cores = min(species_counts, args.num_cores)
         midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name, num_cores)
         midas_db.fetch_files("pangenome", species_to_analyze)
-        prepare_species(species_to_analyze, midas_db, args.chunk_size)
-        tsprint("MIDAS2::prepare_species::finish")
 
-        # Build Bowtie indexes for species in the restricted species profile
-        tsprint("MIDAS2::build_bowtie2db::start")
         if args.prune_centroids:
-            centroids_files = midas_db.fetch_files("pruned_centroids", species_to_analyze)
+            centroids_files = {sid: fetch_pruned_centroids(midas_db, sid, args.prune_method, args.prune_cutoff, args.remove_singleton) for sid in species_to_analyze}
         else:
             centroids_files = midas_db.fetch_files("pangenome_centroids", species_to_analyze)
+
         build_bowtie2_db(bt2_db_dir, bt2_db_name, centroids_files, args.num_cores)
         tsprint("MIDAS2::build_bowtie2db::finish")
 
         # Align reads to pangenome database
         tsprint("MIDAS2::bowtie2_align::start")
-        sample.create_species_subdirs(species_to_analyze, "temp", args.debug)
-        pangenome_bamfile = sample.get_target_layout("genes_pangenomes_bam")
+        pangenome_bamfile = sample.get_target_layout("pangenome_bam")
         bowtie2_align(bt2_db_dir, bt2_db_name, pangenome_bamfile, args)
         samtools_index(pangenome_bamfile, args.debug, args.num_cores)
+        samtools_idxstats(pangenome_bamfile, args.debug, args.num_cores)
         tsprint("MIDAS2::bowtie2_align::finish")
 
-        if args.aln_only:
+        if args.alignment_only:
             return
 
+        tsprint("MIDAS2::prepare_species::start")
+        prepare_species(species_to_analyze, midas_db)
+        tsprint("MIDAS2::prepare_species::finish")
+
         tsprint("MIDAS2::multiprocessing_map::start")
-        species_coverages = multiprocessing_map(process_species, species_to_analyze, num_cores)
+        # It's important to maintain the order of the bam genes
+        fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db, species_to_analyze)
+
+        total_c99_counts = len(readonly_bamgenes)
+        number_of_chunks = args.num_cores
+        chunk_size = ceil(total_c99_counts / number_of_chunks)
+
+        args_list = []
+        chunk_id = 0
+        for chunk_start in range(0, total_c99_counts, chunk_size):
+            chunk_end = chunk_start + chunk_size
+            headerless_sliced_path = sample.get_target_layout("chunk_depth", "", chunk_id)
+            args_list.append((chunk_id, chunk_start, chunk_end, pangenome_bamfile, headerless_sliced_path, args.cluster_level))
+            chunk_id += 1
+
+        list_of_chunks_depth = multiprocessing_map(compute_pileup_per_chunk, args_list, number_of_chunks)
+        dict_of_gene_depth = merge_depth_across_chunks(list_of_chunks_depth, args.cluster_level)
         tsprint("MIDAS2::multiprocessing_map::finish")
 
         tsprint("MIDAS2::write_species_summary::start")
-        write_species_summary(species_coverages, sample.get_target_layout("genes_summary"))
+        species_depth_summary = compute_species_summary(dict_of_gene_depth)
+        write_species_summary(species_depth_summary, sample.get_target_layout("genes_summary"))
         tsprint("MIDAS2::write_species_summary::finish")
 
-        if not args.keep_bam:
-            sample.remove_dirs(["tempdir"])
-        if not args.prebuilt_bowtie2_indexes:
+        if args.remove_bam:
+            command(f"rm -f {pangenome_bamfile}", check=False)
+            command(f"rm -f {pangenome_bamfile}.bai", check=False)
+            command(f"rm -f {pangenome_bamfile}.idxstats", check=False)
+
+        if args.remove_bt2_index:
             sample.remove_dirs(["bt2_indexes_dir"])
+
+        if not args.debug:
+            sample.remove_dirs(["tempdir"])
 
     except Exception as error:
         if not args.debug:

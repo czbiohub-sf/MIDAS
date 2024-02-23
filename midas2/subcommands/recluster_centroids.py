@@ -5,11 +5,11 @@ from collections import defaultdict
 from multiprocessing import Semaphore
 
 from midas2.common.argparser import add_subcommand
-from midas2.common.utils import tsprint, retry, InputStream, command, hashmap, cat_files, multithreading_map, select_from_tsv, pythonpath, num_physical_cores, copy_star, flatten
-from midas2.common.utilities import decode_species_arg, augment_gene_info
+from midas2.common.utils import tsprint, retry, InputStream, OutputStream, command, hashmap, cat_files, multithreading_map, select_from_tsv, pythonpath, num_physical_cores, copy_star, flatten
+from midas2.common.utilities import decode_species_arg
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
-from midas2.params.schemas import GENE_LENGTH_SCHEMA, MARKER_INFO_SCHEMA
+from midas2.params.schemas import GENE_LENGTH_SCHEMA, MARKER_INFO_SCHEMA, PANGENOME_INFO_SCHEMA
 from midas2.subcommands.build_pangenome import vsearch, CLUSTERING_PERCENTS, read_uclust_info, localpath
 
 
@@ -20,7 +20,7 @@ Input:
     - temp/cdhit/genes.ffn
     - temp/cdhit/genes.len
 Output:
-    - genes_info.tsv
+    - genes_info.tsv: the unique id of this table is gene id of the cleaned set of genes
     - centroids.99.ffn
     - temp/centroids.xx.ffn
 """
@@ -55,6 +55,17 @@ def read_gene_info(centroid_info, gene_info_file, percent_id):
     with InputStream(gene_info_file) as stream:
         for r in select_from_tsv(stream, selected_columns=['gene_id', 'centroid_99'], schema={'gene_id':str, 'centroid_99':str}):
             centroid_info[r[0]][percent_id] = r[1]
+
+
+def augment_gene_info(centroid_info, gene_to_marker, dict_of_gene_length, gene_info_file):
+    """ Augment gene_info.txt with two additional columns: gene_length and marker_id """
+    with OutputStream(gene_info_file) as stream:
+        stream.write("\t".join(PANGENOME_INFO_SCHEMA.keys()) + "\n")
+        for gene_id, r in centroid_info.items():
+            gene_len = dict_of_gene_length[gene_id]
+            marker_id = gene_to_marker[gene_id] if gene_id in gene_to_marker else ""
+            val = [gene_id] + list(r.values()) + [gene_len, marker_id]
+            stream.write("\t".join(map(str, val)) + "\n")
 
 
 def xref(cluster_files):
@@ -195,7 +206,7 @@ def recluster_centroid_worker(args):
 
     copy_tasks = [
         ("cdhit/genes.ffn", localpath(midas_db, species_id, "genes.ffn")),
-        ("mapfile", midas_db.get_target_layout("marker_map_by_species", False, species_id)),
+        ("mapfile", midas_db.get_target_layout("pangenome_marker_map", False, species_id)),
         ("genes_info.tsv", localpath(midas_db, species_id, "genes_info.tsv")),
         (f"cdhit/centroids.{max_percent}.ffn", midas_db.get_target_layout("pangenome_centroids", False, species_id))
     ]

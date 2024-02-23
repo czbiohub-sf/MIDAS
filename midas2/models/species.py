@@ -6,7 +6,8 @@ from collections import defaultdict
 from operator import itemgetter
 
 from midas2.common.utils import InputStream, OutputStream, command, select_from_tsv
-from midas2.common.utilities import scan_fasta, scan_info_file
+from midas2.common.utilities import scan_fasta, scan_info_file, scan_cluster_info
+from midas2.params.schemas import fetch_cluster_xx_info_schema
 
 
 class Species:
@@ -22,8 +23,11 @@ class Species:
         self.max_contig_length = None
 
         # Genes
-        self.cluster_info_fp = None
-        self.c95_prevalence_fp = None
+        self.clusters_info_fp = {} # Initialize an empty dictionary for cluster_xx_info
+        self.pangenome_size = {}
+        self.clusters_info = {} # Initialize an empty dictionary for cluster_xx_info
+        self.list_of_markers = {}
+        self.clusters_map = {}
 
         # MERGE Flow: select species
         self.list_of_samples = [] # relevant samples for given species
@@ -33,6 +37,43 @@ class Species:
         # Merge SNPs
         self.gene_feature_fp = None
         self.gene_seq_fp = None
+
+
+    def set_clusters_info_fp(self, midas_db, xx):
+        # Dynamically create or update a cluster attribute
+        # The attribute name is constructed dynamically based on xx
+        species_id = self.id
+        self.clusters_info_fp[xx] = midas_db.get_target_layout("pangenome_cluster_xx", False, species_id, "", xx)
+
+
+    def get_clusters_info_fp(self, xx):
+        # Dynamically retrieve the cluster attribute
+        return self.clusters_info_fp.get(xx, None)
+
+
+    def get_clusters_info(self, xx):
+        # Dynamically retrieve the cluster attribute
+        if xx == "99":
+            cxx_info = scan_cluster_info(self.get_clusters_info_fp(xx), xx)
+        else:
+            cxx_info = scan_cluster_info(self.get_clusters_info_fp(xx), xx, fetch_cluster_xx_info_schema(xx))
+
+        list_of_markers = list(set(r[f'centroid_{xx}_marker_id'] for r in cxx_info.values() if r[f'centroid_{xx}_marker_id']))
+
+        self.clusters_info[xx] = cxx_info
+        self.pangenome_size[xx] = len(cxx_info)
+        self.list_of_markers[xx] = list_of_markers
+
+
+    def get_cluster_map(self, xx_in, xx_out):
+        c99_info = self.clusters_info['99']
+        cid_map = dict()
+        for row in c99_info.values():
+            cxx_in = f"centroid_{xx_in}"
+            cxx_out = f"centroid_{xx_out}"
+            if cxx_in not in cid_map:
+                cid_map[row[cxx_in]] = row[cxx_out]
+        self.clusters_map[xx_in] = cid_map
 
 
     def compute_snps_chunks(self, midas_db, chunk_size, workflow):
@@ -92,14 +133,6 @@ class Species:
         self.contigs = scan_fasta(midas_db.get_target_layout("representative_genome", False, species_id, genome_id))
 
 
-    def get_cluster_info_fp(self, midas_db):
-        species_id = self.id
-        self.cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
-
-    def get_c95_prevalence_fp(self, midas_db):
-        species_id = self.id
-        self.c95_prevalence_fp = midas_db.get_target_layout("pangenome_file", False, species_id, "", "augment/centroid_95_prevalence.tsv")
-
     def fetch_contigs_ids(self):
         list_of_contig_ids = []
         with InputStream(self.contigs_fp, "grep \'>\'") as stream:
@@ -114,7 +147,7 @@ class Species:
 
 
     def fetch_samples_depth(self):
-        self.list_of_samples_depth = [sample.profile[self.id]["mean_coverage"] for sample in self.list_of_samples]
+        self.list_of_samples_depth = [sample.profile[self.id]["mean_depth"] for sample in self.list_of_samples]
 
 
 def parse_species(args):

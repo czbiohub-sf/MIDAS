@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-import os
 import re
 from io import StringIO
 from bisect import bisect
 from collections import defaultdict
+from functools import reduce
 import gffutils
 import Bio.SeqIO
 import pandas as pd
 import numpy as np
 
 from midas2.common.utils import InputStream, OutputStream, retry, select_from_tsv, tsprint, command
-from midas2.params.schemas import genes_feature_schema, PANGENOME_INFO_SCHEMA, PANGENOME_CLUSTER_SCHEMA, fetch_centroid_prevalence_schema
+from midas2.params.schemas import genes_feature_schema, PANGENOME_CLUSTER_SCHEMA, fetch_cluster_xx_info_schema
 
 
 def decode_species_arg(args, species):
@@ -67,6 +67,7 @@ def acgt_string(A, C, G, T):
 
 def translate(codon):
     """ Translate individual codon """
+    # Translation table 11: none differences from the standard code 
     codontable = {
         'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
         'ACA':'T', 'ACC':'T', 'ACG':'T', 'ACT':'T',
@@ -96,15 +97,15 @@ def complement(base):
     return base
 
 
-def rev_comp(seq):
+def reverse_complement(seq):
     """ Reverse complement sequence """
     return ''.join([complement(base) for base in list(seq[::-1])])
 
 
-def get_gen_seq(genome_seq, start, end, strand):
+def extract_sequence_by_position(genome_seq, start, end, strand):
     seq = genome_seq[start-1 : end]
     if strand == "-":
-        return rev_comp(seq)
+        return reverse_complement(seq)
     return seq
 
 
@@ -222,13 +223,9 @@ def scan_info_file(info_file, schema, key):
     return dict_of_info
 
 
-def scan_cluster_info(cluster_info_path, cxx = "centroid_99"):
-    return scan_info_file(cluster_info_path, PANGENOME_CLUSTER_SCHEMA, cxx)
-
-
-def scan_centroid_prev(fp, xx):
-    CENTROID_PREV_SCHEMA = fetch_centroid_prevalence_schema(xx)
-    return scan_info_file(fp, CENTROID_PREV_SCHEMA, f"centroid_{xx}")
+def scan_cluster_info(cluster_info_path, xx="99", schema=PANGENOME_CLUSTER_SCHEMA):
+    cxx = f"centroid_{xx}"
+    return scan_info_file(cluster_info_path, schema, cxx)
 
 
 @retry
@@ -318,93 +315,148 @@ def parse_gff_to_tsv(gff3_file, genes_file):
     return True
 
 
-def prune_short_c99s(dict_of_c95_per_c99, dict_of_gene_length, cutoff=0.4):
-    # remove c99s shorter than 40% of the length of corresponding c95
-    # Moved to midasdb using pandas
-    dict_of_c99s = {}
-    for c95, list_of_c99s in dict_of_c95_per_c99.items():
-        c95_length = dict_of_gene_length[c95]
-        filtered_c99 = [c99 for c99 in list_of_c99s if dict_of_gene_length[c99] >= cutoff * c95_length]
-        for _ in filtered_c99:
-            dict_of_c99s[_] = c95
-    return dict_of_c99s
+def extract_genomeid(s):
+    # Replace everything after the right most "_" with empty string.
+    index = s.rfind('_')
+    return s[:index] if index != -1 else s
+
+
+def compute_cxx_length(genes_info, centroid_xx = "centroid_99", func='median'):
+    """ For each centroid_xx, we compute either (1) median gene length or (2) max gene length across all gene members """
+    if func == "median":
+        cxx_length = genes_info[[centroid_xx, 'gene_length']].groupby(centroid_xx)['gene_length'].median().reset_index()
+    else:
+        cxx_length = genes_info[[centroid_xx, 'gene_length']].groupby(centroid_xx)['gene_length'].max().reset_index()
+    cxx_length.columns = [centroid_xx, f'{centroid_xx}_gene_length']
+    return cxx_length
 
 
 
-def augment_gene_info(centroid_info, gene_to_marker, dict_of_gene_length, gene_info_file):
-    """ Augment gene_info.txt with two additional columns: gene_length and marker_id """
-    with OutputStream(gene_info_file) as stream:
-        stream.write("\t".join(PANGENOME_INFO_SCHEMA.keys()) + "\n")
-        for gene_id, r in centroid_info.items():
-            gene_len = dict_of_gene_length[gene_id]
-            marker_id = gene_to_marker[gene_id] if gene_id in gene_to_marker else ""
-            val = [gene_id] + list(r.values()) + [gene_len, marker_id]
-            stream.write("\t".join(map(str, val)) + "\n")
+def compute_cxx_gene_counts(genes_info, centroid_xx="centroid_99"):
+    c_xx_gene_counts = genes_info[[centroid_xx, 'gene_id']].groupby(centroid_xx).size().reset_index(name='total_gene_counts')
+    c_xx_gene_counts.columns = [centroid_xx, f'{centroid_xx}_gene_counts']
+    return c_xx_gene_counts
 
 
-def compute_marker_density(genes_info, centroid_xx = "centroid_95"):
-    """ For each centroid_xx, we compute the marker density across its ALL ORF members"""
-    # genes_info: Pandas DataFrame
-    df = genes_info[[centroid_xx, 'marker_id']]
-    grouped = df.groupby(centroid_xx)
-    # compute the number of ORFs assigned with a SGC marker ID
-    non_nan_count = grouped['marker_id'].count()
-    total_count = grouped.size()
-    # marker density := the number of ORFs assigned as markers  / the total number of ORFs memebers (ratio)
-    ratio = non_nan_count / total_count
-    # Convert the series to a DataFrame and rename the columns
-    ratio = ratio.reset_index()
-    ratio.columns = [centroid_xx, f'{centroid_xx}_marker_density']
-    return ratio
+def list_cxx_coordinate_to_genome(genes_info, centroid_xx="centroid_99", qry_genome = ""):
+    """ This function only locate the coordinate of centroids back to the query genome. """
+    df = genes_info[['gene_id', centroid_xx]].copy()
+    df['genome_id'] = df['gene_id'].apply(lambda x: extract_genomeid(x))
+    cxx_lifted_to_qry = df[df['genome_id'] == qry_genome]
+    cxx_lifted_to_qry = cxx_lifted_to_qry[['gene_id', centroid_xx]]
+    # TODO: to identify multi-copy genes, we need to blast the lifetd pan-genes against qry genome
+    return cxx_lifted_to_qry
 
 
-def fetch_marker_ids(c99_info, centroid_xx = "centroid_95"):
-    # We want to make sure the marker_id and is_centroid95_marker are consistent
-    mids = c99_info[c99_info[f"is_{centroid_xx}_marker"]][[centroid_xx, 'marker_id']].drop_duplicates()
-    mids.columns = [centroid_xx, f'{centroid_xx}_marker_id']
-    return mids
+def render_full_stacked_cxx_by_genome(genes_info, c_xx='centroid_99'):
+    df = genes_info[['gene_id', c_xx]].copy()
+    df['genome_id'] = df['gene_id'].apply(lambda x: extract_genomeid(x))
+    centroid_xx_info = df[[c_xx, 'genome_id']].drop_duplicates()
+    return centroid_xx_info
 
 
-def decorate_cluster_info(genes_info, cutoff=0.4):
-    c99_df = genes_info[genes_info["gene_id"] == genes_info["centroid_99"]]
-    for c_xx in ['centroid_99', 'centroid_95']:
-        c_xx_sgc_density = compute_marker_density(genes_info, c_xx)
-        c_xx_sgc_density[f'is_{c_xx}_marker'] = c_xx_sgc_density[f'{c_xx}_marker_density'] > cutoff
-        c99_df = pd.merge(c99_df, c_xx_sgc_density, how='left', on=c_xx)
-    c99_df.rename(columns={'gene_length': 'centroid_99_length'}, inplace=True)
-    c99_df.drop('gene_id', axis=1, inplace=True)
-    # cal marker_id for centroids
-    mids = fetch_marker_ids(c99_df, "centroid_95")
-    c99_df = pd.merge(c99_df, mids, how='left', on=c_xx)
-    c99_df.fillna('', inplace=True)
-    return c99_df
+def compute_cxx_prevalence(genes_info, c_xx='centroid_99'):
+    """ For each centroid_xx, we compute the operational gene family / cluster prevalence across all genomes """
+    # Parse genome_id from the gene_id
+    df = genes_info[['gene_id', c_xx]].copy()
+    df['genome_id'] = df['gene_id'].apply(lambda x: extract_genomeid(x))
+    # Subset the genes_info with custom list of genomes
+    total_genomes = df['genome_id'].nunique()
+    # Group_by centroid_xx and count the number of genomes with genes falling into given operational gene cluster
+    centroid_xx_info = df[[c_xx, 'genome_id']].drop_duplicates()
+    centroid_xx_prev = centroid_xx_info.groupby(c_xx)['genome_id'].count().reset_index(name='genome_counts')
+    centroid_xx_prev['prevalence'] = centroid_xx_prev['genome_counts'] / total_genomes
+    centroid_xx_prev.columns = [c_xx, f"{c_xx}_genome_counts", f"{c_xx}_genome_prevalence"]
+    return centroid_xx_prev
 
 
-def decorate_genes_info(midas_db, genes_info_fp, species_id):
+def select_marker_by_max_counts(df, centroid_xx):
+    # This is more like a remedy than a solution.
+    # Edge case 1: cxx has two both marker_id and empty marker_id (NaN)
+    # Edge case 2: rarely a erroneous fusion ORF could be assigned to two markers, and we keep the marker_id assignment with max gene_counts
+    # Edge case 3: we drop ties
+    df['max_counts'] = df.groupby(centroid_xx)['occurrence'].transform('max')
+    max_occur_df = df[df['occurrence'] == df['max_counts']]
+    max_occur_df = max_occur_df.drop(columns=['max_counts'])
+    max_occur_df = max_occur_df[~max_occur_df.duplicated(subset=centroid_xx, keep=False)]
+    return max_occur_df
+
+
+def impute_cxx_marker_id(genes_info, c_xx="centroid_99", cutoff=0.5):
+    """ Marker assignment for each centroid_xx is voted by all gene members """
+    df = genes_info[[c_xx, 'marker_id']]
+    # First compute the total_gene_counts per centroid_xx
+    gene_counts = df.groupby(c_xx).size().reset_index(name='total_gene_counts')
+    # Second compute the centroid_xx, marker_id occurrences, exlucding NA marker_ids
+    pair_counts = df.dropna(subset=['marker_id']).groupby([c_xx, 'marker_id']).size().reset_index(name='occurrence')
+    max_pair_counts = select_marker_by_max_counts(pair_counts, c_xx)
+    # Third compute the ratio
+    c_xx_markers = pd.merge(max_pair_counts, gene_counts, on=c_xx)
+    c_xx_markers['marker_density'] = c_xx_markers['occurrence'] / c_xx_markers['total_gene_counts']
+    # Fouth only keep marker assignment if (max) occurrence > cutoff
+    passed_markers = c_xx_markers[c_xx_markers['marker_density'] > cutoff][[c_xx, "marker_id"]]
+    # Fifth we still want to keep the low marker_density
+    c_xx_markers = pd.merge(c_xx_markers[[c_xx, 'marker_density']], passed_markers, on=c_xx, how='left')
+    c_xx_markers.columns = [c_xx, f'{c_xx}_marker_density', f'{c_xx}_marker_id']
+    return c_xx_markers
+
+
+def decorate_cxx_with_gene_info(genes_info, centroid_xx = 'centroid_99'):
+    cxx_summary = genes_info.groupby(centroid_xx)['gene_length'].agg(
+        mean_gene_length='mean',
+        median_gene_length='median',
+        std_gene_length='std',
+        min_gene_length='min',
+        max_gene_length='max',
+    ).reset_index()
+    return cxx_summary
+
+
+def generate_cluster_xx_info(genes_info, c_xx = 'centroid_99', cutoff=0.5):
+    # Say we start with c99, which is the original cluster_info
+    c_xx_df = genes_info[genes_info["gene_id"] == genes_info[c_xx]]
+    c_xx_prev = compute_cxx_prevalence(genes_info, c_xx)
+    c_xx_gene_counts = compute_cxx_gene_counts(genes_info, c_xx)
+    c_xx_length = compute_cxx_length(genes_info, c_xx, 'max') #<---
+    c_xx_markers = impute_cxx_marker_id(genes_info, c_xx, cutoff)
+    #c_xx_gene_info = decorate_cxx_with_gene_info(genes_info, c_xx)
+    if c_xx == 'centroid_99':
+        c_xx_df = c_xx_df.drop(['gene_id', 'gene_length', 'marker_id'], axis=1)
+    else:
+        c_xx_df = c_xx_df[c_xx]
+    list_of_dfs = [c_xx_df, c_xx_prev, c_xx_gene_counts, c_xx_length, c_xx_markers]
+    result = reduce(lambda left, right: pd.merge(left, right, on=c_xx, how='left'), list_of_dfs)
+    # Replace NaN with 0 for marker_density
+    result[f'{c_xx}_marker_density'] = result[f'{c_xx}_marker_density'].fillna(0)
+    return result
+
+
+def fetch_new_col_name(mstep, by="gene"):
+    if mstep == "genomad_virus":
+        new_col_name = f"{by}_is_phage"
+    if mstep == "genomad_plasmid":
+        new_col_name = f"{by}_is_plasmid"
+    if mstep == "mefinder":
+        new_col_name = f"{by}_is_amr"
+    if mstep == "resfinder":
+        new_col_name = f"{by}_is_me"
+    return new_col_name
+
+
+def decorate_genes_info_with_annot(genes_info, annot_files):
     # decorate genes_info with binary gene annotation
-    genes_info = pd.read_csv(genes_info_fp, sep="\t")
-    for mstep in ['genomad_virus', 'genomad_plasmid', 'mefinder', 'resfinder']:
-        final_file = midas_db.get_target_layout(f"panannot_{mstep}", False, species_id)
-        new_df = pd.read_csv(final_file, sep='\t')
-
-        if "genomad_virus" == mstep:
-            new_col_name = "gene_is_phage"
-        if "genomad_plasmid" == mstep:
-            new_col_name = "gene_is_plasmid"
-        if "mefinder" == mstep:
-            new_col_name = "gene_is_amr"
-        if "resfinder" == mstep:
-            new_col_name = "gene_is_me"
-
-        new_df[new_col_name] = 1
-        new_df = new_df[['gene_id', new_col_name]].groupby('gene_id').first().reset_index()
+    for mstep, mfile in annot_files.items():
+        new_col_name = fetch_new_col_name(mstep)
+        annot_df = pd.read_csv(mfile, sep='\t')
+        annot_df[new_col_name] = 1
+        annot_df = annot_df[['gene_id', new_col_name]].groupby('gene_id').first().reset_index()
         # append gene level MGE status
-        genes_info = pd.merge(genes_info, new_df, on='gene_id', how='left')
+        genes_info = pd.merge(genes_info, annot_df, on='gene_id', how='left')
         genes_info[new_col_name] = np.where(genes_info[new_col_name].isna(), 0, 1)
     return genes_info
 
 
-def read_eggnog_csv(filename):
+def scan_eggnog(filename):
     # Read the file line-by-line and exclude lines starting with '##'
     with open(filename, 'r') as file:
         lines = [line for line in file if not line.startswith('##')]
@@ -413,18 +465,18 @@ def read_eggnog_csv(filename):
     return df
 
 
-def annotation_ratio_x_members(midas_db, species_id, xx='80'):
+def annotation_ratio_x_members(genes_annotated, eggnog_file, xx='75'):
     """ Compuate the annotation ratio for centroid_xx level across its all gene members' annotation """
-    genes_annotated = pd.read_csv(midas_db.get_target_layout("pangenome_genes_annot", False, species_id), sep="\t")
-    eggnog = read_eggnog_csv(midas_db.get_target_layout("panannot_eggnog", False, species_id))
-
-    target_cols = ['gene_is_phage', 'gene_is_plasmid', 'gene_is_amr', 'gene_is_me']
+    eggnog = scan_eggnog(eggnog_file)
+    eggnog.drop_duplicates(inplace=True)
 
     centroids_xx = f'centroid_{xx}'
+    target_cols = ['gene_is_phage', 'gene_is_plasmid', 'gene_is_amr', 'gene_is_me']
     cxx_df = genes_annotated.groupby([centroids_xx])[target_cols].sum() / genes_annotated.groupby([centroids_xx])[target_cols].count()
     cxx_df.columns = ['phage_ratio', 'plasmid_ratio', 'amr_ratio', 'me_ratio']
     cxx_df = cxx_df.reset_index()
 
-    cxx_df = pd.merge(cxx_df, eggnog[['#query', 'COG_category', 'EC', 'KEGG_Pathway', 'Description', 'PFAMs']], left_on = centroids_xx, right_on = '#query', how='left')
+    eggnog_cols = ['#query', 'COG_category', 'EC', 'KEGG_Pathway', 'Description', 'PFAMs']
+    cxx_df = pd.merge(cxx_df, eggnog[eggnog_cols], left_on = centroids_xx, right_on = '#query', how='left')
     cxx_df = cxx_df.drop(columns=['#query'])
     return cxx_df

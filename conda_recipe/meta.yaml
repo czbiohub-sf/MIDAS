@@ -1,13 +1,13 @@
 {% set name = "midas2" %}
-{% set version = "1.1.3" %}
+{% set version = "2.0.0" %}
 
 package:
   name: {{ name }}
   version: {{ version }}
 
 source:
-  url: https://files.pythonhosted.org/packages/6b/0e/38e8b996909e837b262b7d20ccc6381f811b99759aad3cb2d5ec8d285a54/midas2-1.1.3.tar.gz
-  sha256: 234352e8b7c6403de3e36bba90156a0967834cb0cb02d06a6387126bf9716a25
+  url: https://files.pythonhosted.org/packages/4b/ae/601fdd774eda776d310a927ddb0cca2e445a2a53643f09f29aa33d380399/midas2-1.1.0.tar.gz
+  sha256: d58e9b9d4ccc765e400e982392b0b0a7bfff2ae7898cf9002689382cc53717be
   #git_url: https://github.com/czbiohub/MIDAS2.0.git
   #git_rev: v1.1.0
 
@@ -37,8 +37,6 @@ requirements:
     - vsearch >=2.23.0
     - seqkit >=2.5.1
     - cd-hit >=4.8.1
-    - pandas >=2.1.1
-    - pybedtools >=0.9.1
 
 test:
   imports:

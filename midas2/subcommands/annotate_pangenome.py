@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
 import sys
+from itertools import chain
 import pandas as pd
 from pybedtools import BedTool
 
 from midas2.common.argparser import add_subcommand
 from midas2.common.utils import tsprint, command, multithreading_map, pythonpath, num_physical_cores, copy_star
-from midas2.common.utilities import decode_genomes_arg, read_eggnog_csv
+from midas2.common.utilities import decode_genomes_arg, decode_species_arg, scan_eggnog
 from midas2.models.midasdb import MIDAS_DB
 from midas2.params.inputs import MIDASDB_NAMES
 
@@ -140,6 +141,7 @@ def annotate_pangenome(args):
 def annotate_pangenome_master(args):
 
     midas_db = MIDAS_DB(os.path.abspath(args.midasdb_dir), args.midasdb_name)
+    species = midas_db.uhgg.species
     species_for_genome = midas_db.uhgg.genomes
 
     def genome_work(genome_id):
@@ -184,7 +186,11 @@ def annotate_pangenome_master(args):
         finally:
             command(f"rm -f {worker_log}")
 
-    genome_id_list = decode_genomes_arg(args, species_for_genome)
+    if args.species:
+        species_id_list = decode_species_arg(args, species)
+        genome_id_list = list(chain.from_iterable(species[spid].keys() for spid in species_id_list))
+    if args.genomes:
+        genome_id_list = decode_genomes_arg(args, species_for_genome)
     multithreading_map(genome_work, genome_id_list, num_threads=args.num_threads)
 
 
@@ -208,7 +214,7 @@ def annotate_pangenome_worker(args):
     genome_id = args.genomes
     species_id = species_for_genome[genome_id]
 
-    cluster_info_fp = midas_db.get_target_layout("pangenome_cluster_info", False, species_id)
+    cluster_info_fp = midas_db.get_target_layout("cluster_xx_info", False, species_id, "", "99")
     contig_len_fp = midas_db.get_target_layout("pangenome_contigs_len", False, species_id)
     gene_feature_fp = midas_db.get_target_layout("annotation_genes", False, species_id, genome_id)
 
@@ -245,7 +251,7 @@ def annotate_pangenome_worker(args):
     centroids_99 = pd.merge(centroids_99, contig_len[['contig_id', 'contig_length']], left_on='contig_id', right_on='contig_id', how='inner')
     centroids_99 = centroids_99[['contig_id', 'start', 'end', 'centroid_99', 'strand', 'gene_type', 'contig_length']]
 
-    df = read_eggnog_csv(midas_db.get_target_layout("eggnog_results", False, species_id))
+    df = scan_eggnog(midas_db.get_target_layout("eggnog_results", False, species_id))
     local_dest = f"eggnog/{genome_id}"
     merged_df  = df.merge(centroids_99, left_on='#query', right_on='centroid_99', how='inner')
     merged_df = merged_df.drop(columns=['centroid_99'])
@@ -264,6 +270,11 @@ def annotate_pangenome_worker(args):
 
 def register_args(main_func):
     subparser = add_subcommand('annotate_pangenome', main_func, help='Genome annotation for specified genomes using Prokka with all cores')
+    subparser.add_argument('-s',
+                           '--species',
+                           dest='species',
+                           required=False,
+                           help="species[,species...] whose pangenome(s) to build;  alternatively, species slice in format idx:modulus, e.g. 1:30, meaning build species whose ids are 1 mod 30; or, the special keyword 'all' meaning all species")
     subparser.add_argument('--genomes',
                            dest='genomes',
                            required=False,

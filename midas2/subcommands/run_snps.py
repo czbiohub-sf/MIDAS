@@ -116,6 +116,11 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='FASTA/FASTQ file in -1 are paired and contain forward AND reverse reads')
+    subparser.add_argument('--aln_extra_flags',
+                           type=str,
+                           dest='aln_extra_flags',
+                           default='',
+                           help='Extra bowtei2 align flags. E.g. --mm --ignore-quals')
 
     subparser.add_argument('--fragment_length',
                            type=float,
@@ -217,6 +222,17 @@ def register_args(main_func):
                            metavar="INT",
                            default=DEFAULT_NUM_CORES,
                            help=f"Number of physical cores to use ({DEFAULT_NUM_CORES})")
+
+    subparser.add_argument('--remove_bam',
+                           dest = 'remove_bam',
+                           action='store_true',
+                           default=False,
+                           help='Remove BAM file.')
+    subparser.add_argument('--remove_bt2_index',
+                           dest = 'remove_bt2_index',
+                           action='store_true',
+                           default=False,
+                           help='Remove bowtie2 index files.')
     return main_func
 
 
@@ -732,7 +748,7 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, di
                     "aligned_reads": 0,
                     "mapped_reads": 0,
                     "fraction_covered": 0.0,
-                    "mean_coverage": 0.0
+                    "mean_depth": 0.0
                     }
 
             curr_species_pileup = species_pileup_summary.get(species_id)
@@ -748,7 +764,7 @@ def write_species_pileup_summary(chunks_pileup_summary, snps_summary_outfile, di
         if curr_species_pileup["genome_length"] > 0:
             curr_species_pileup["fraction_covered"] = curr_species_pileup["covered_bases"] / curr_species_pileup["genome_length"]
         if curr_species_pileup["covered_bases"] > 0:
-            curr_species_pileup["mean_coverage"] = curr_species_pileup["total_depth"] / curr_species_pileup["covered_bases"]
+            curr_species_pileup["mean_depth"] = curr_species_pileup["total_depth"] / curr_species_pileup["covered_bases"]
 
     # Write to file
     with OutputStream(snps_summary_outfile) as stream:
@@ -847,10 +863,15 @@ def run_snps(args):
         write_species_pileup_summary(chunks_pileup_summary, snps_summary_fp, dict_of_chunk_aln_stats)
         tsprint(f"MIDAS2::write_species_pileup_summary::finish")
 
+        if args.remove_bam:
+            command(f"rm -f {repgenome_bamfile}", check=False)
+            command(f"rm -f {repgenome_bamfile}.bai", check=False)
+
+        if args.remove_bt2_index:
+            sample.remove_dirs(["bt2_indexes_dir"])
+
         if not args.debug:
             sample.remove_dirs(["tempdir"])
-            if not args.prebuilt_bowtie2_indexes:
-                sample.remove_dirs(["bt2_indexes_dir"])
 
     except Exception as error:
         if not args.debug:
