@@ -515,6 +515,7 @@ def run_genes(args):
         # It's important to maintain the order of the bam genes
         fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db, species_to_analyze)
 
+
         total_c99_counts = len(readonly_bamgenes)
         number_of_chunks = args.num_cores
         chunk_size = ceil(total_c99_counts / number_of_chunks)
