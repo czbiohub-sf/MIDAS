@@ -211,6 +211,11 @@ def register_args(main_func):
                            action='store_true',
                            default=False,
                            help='Remove bowtie2 index files.')
+    subparser.add_argument('--skip_species_summary',
+                           dest = 'skip_species_summary',
+                           action='store_true',
+                           default=False,
+                           help='Skip generating genes_summary.tsv')
     return main_func
 
 
@@ -276,7 +281,7 @@ def prepare_species(species_to_analyze, midas_db):
     return True
 
 
-def fetch_genes_from_bam(idxstats_fp, midas_db):
+def fetch_genes_from_bam(idxstats_fp, midas_db, species_to_analyze):
     """ Compute the genes present in the BAM file """
     species_for_genome = midas_db.uhgg.genomes
     global readonly_bamgenes
@@ -285,7 +290,8 @@ def fetch_genes_from_bam(idxstats_fp, midas_db):
         for _ in select_from_tsv(stream, schema={"gene_id": str}):
             geneid = _[0]
             speciesid = species_for_genome[extract_genomeid(geneid)]
-            readonly_bamgenes[geneid] = speciesid
+            if speciesid in species_to_analyze:
+                readonly_bamgenes[geneid] = speciesid
     return True
 
 
@@ -464,8 +470,9 @@ def run_genes(args):
         sample = Sample(args.sample_name, args.midas_outdir, "genes")
         sample.create_dirs(["outdir", "tempdir"], args.debug)
 
-        with OutputStream(sample.get_target_layout("genes_log")) as stream:
-            stream.write(f"Single sample pan-gene copy number variant calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
+        if not args.skip_species_summary:
+            with OutputStream(sample.get_target_layout("genes_log")) as stream:
+                stream.write(f"Single sample pan-gene copy number variant calling in subcommand {args.subcommand} with args\n{json.dumps(args_string(args), indent=4)}\n")
 
         # Read in list of species
         species_list = parse_species(args)
@@ -506,7 +513,8 @@ def run_genes(args):
 
         tsprint("MIDAS2::multiprocessing_map::start")
         # It's important to maintain the order of the bam genes
-        fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db)
+        fetch_genes_from_bam(f'{pangenome_bamfile}.idxstats', midas_db, species_to_analyze)
+
 
         total_c99_counts = len(readonly_bamgenes)
         number_of_chunks = args.num_cores
@@ -523,11 +531,12 @@ def run_genes(args):
         list_of_chunks_depth = multiprocessing_map(compute_pileup_per_chunk, args_list, number_of_chunks)
         dict_of_gene_depth = merge_depth_across_chunks(list_of_chunks_depth, args.cluster_level)
         tsprint("MIDAS2::multiprocessing_map::finish")
-
-        tsprint("MIDAS2::write_species_summary::start")
         species_depth_summary = compute_species_summary(dict_of_gene_depth)
-        write_species_summary(species_depth_summary, sample.get_target_layout("genes_summary"))
-        tsprint("MIDAS2::write_species_summary::finish")
+
+        if not args.skip_species_summary:
+            tsprint("MIDAS2::write_species_summary::start")
+            write_species_summary(species_depth_summary, sample.get_target_layout("genes_summary"))
+            tsprint("MIDAS2::write_species_summary::finish")
 
         if args.remove_bam:
             command(f"rm -f {pangenome_bamfile}", check=False)
