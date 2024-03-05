@@ -6,7 +6,7 @@
 #! /usr/bin/bash
 
 if [ $# -ne 5 ]; then
-    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEMscript_dir "
+    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEM script_dir "
     exit 1
 fi
 
