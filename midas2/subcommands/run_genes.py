@@ -517,16 +517,15 @@ def run_genes(args):
 
 
         total_c99_counts = len(readonly_bamgenes)
-        number_of_chunks = args.num_cores
-        chunk_size = ceil(total_c99_counts / number_of_chunks)
-
         args_list = []
-        chunk_id = 0
-        for chunk_start in range(0, total_c99_counts, chunk_size):
-            chunk_end = chunk_start + chunk_size
-            headerless_sliced_path = sample.get_target_layout("chunk_depth", "", chunk_id)
-            args_list.append((chunk_id, chunk_start, chunk_end, pangenome_bamfile, headerless_sliced_path, args.cluster_level))
-            chunk_id += 1
+        number_of_chunks = args.num_cores
+
+        if total_c99_counts:
+            chunk_size = ceil(total_c99_counts / number_of_chunks)
+            for chunk_id, chunk_start in enumerate(range(0, total_c99_counts, chunk_size)):
+                chunk_end = chunk_start + chunk_size
+                headerless_sliced_path = sample.get_target_layout("chunk_depth", "", chunk_id)
+                args_list.append((chunk_id, chunk_start, chunk_end, pangenome_bamfile, headerless_sliced_path, args.cluster_level))
 
         list_of_chunks_depth = multiprocessing_map(compute_pileup_per_chunk, args_list, number_of_chunks)
         dict_of_gene_depth = merge_depth_across_chunks(list_of_chunks_depth, args.cluster_level)
