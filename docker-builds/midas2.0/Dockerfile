@@ -45,7 +45,7 @@ RUN pip3 install awscli --upgrade
 RUN pip3 install aegea
 RUN pip3 install 'git+https://github.com/chanzuckerberg/s3mi.git@v0.8.0'
 RUN aegea --version
-RUN s3misudo docker image tag midas2:latest zhaoc1/midas2:v1.1.3
+RUN s3mi
 
 
 RUN conda clean --all -y
