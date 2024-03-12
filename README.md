@@ -10,3 +10,9 @@ For MIDAS2, we have already built two MIDASDBs from large, public, microbial gen
 Publication is available in [Bioinformatics](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btac713/6793850). User manual is available at [ReadTheDocs](https://midas2.readthedocs.io/en/latest).
 
 The performance of reads mapping based metagenotyping pipeline depends on (1) how closely related the DB reference genomes are to the strains in the samples being genotyped, and (2) post-alignment filter options, and etc. Pitfalls of genotyping microbial communities with rapidly growing genome collections can be found [here](https://www.biorxiv.org/content/10.1101/2022.06.30.498336v1).
+
+Quick Installation:
+
+```
+conda create -n midasv3 -c zhaoc1 -c conda-forge -c bioconda -c anaconda -c defaults midas2
+```
