@@ -20,7 +20,7 @@ echo "MIDASDB $db_name is built locally at $db_dir"
 
 rm -rf $db_dir
 
-bash /pollard/home/czhao/projects/MIDAS2/bin/run_mge.sh /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb 4 117086echo "Make copy of custom collection of genomes"
+echo "Make copy of custom collection of genomes"
 cp -r ${testdir}/mags $db_dir
 
 scratch_dir="."
