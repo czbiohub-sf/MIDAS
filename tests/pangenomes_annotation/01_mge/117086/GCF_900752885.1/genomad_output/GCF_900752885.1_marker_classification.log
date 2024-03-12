@@ -1,0 +1,36 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad marker-classification (v1.7.0). This will classify the input sequences into            │
+│  chromosome, plasmid, or virus based on the presence of geNomad markers and other gene-related features.  │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9007  │
+│    52885.1/genomad_output/GCF_900752885.1_marker_classification                                           │
+│    ├── GCF_900752885.1_marker_classification.json (execution parameters)                                  │
+│    ├── GCF_900752885.1_features.tsv (sequence feature data: tabular format)                               │
+│    ├── GCF_900752885.1_features.npz (sequence feature data: binary format)                                │
+│    ├── GCF_900752885.1_marker_classification.tsv (sequence classification: tabular format)                │
+│    ├── GCF_900752885.1_marker_classification.npz (sequence classification: binary format)                 │
+│    ├── GCF_900752885.1_provirus_features.tsv (provirus feature data: tabular format)                      │
+│    ├── GCF_900752885.1_provirus_features.npz (provirus feature data: binary format)                       │
+│    ├── GCF_900752885.1_provirus_marker_classification.tsv (provirus classification: tabular format)       │
+│    └── GCF_900752885.1_provirus_marker_classification.npz (provirus classification: binary format)        │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:14:44] Executing genomad marker-classification.                                                          
+[12:14:44] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_marker_classification directory.                        
+[12:14:45] Sequence features computed.                                                                       
+[12:14:46] Sequence features in binary format written to GCF_900752885.1_features.npz.                       
+[12:14:46] Sequence features in tabular format written to GCF_900752885.1_features.tsv.                      
+[12:14:47] Provirus features computed.                                                                       
+[12:14:47] Provirus features in binary format written to GCF_900752885.1_provirus_features.npz.              
+[12:14:47] Provirus features in tabular format written to GCF_900752885.1_provirus_features.tsv.             
+[12:14:47] Sequences classified.                                                                             
+[12:14:48] Sequence classification in binary format written to GCF_900752885.1_marker_classification.npz.    
+[12:14:48] Sequence classification in tabular format written to GCF_900752885.1_marker_classification.tsv.   
+[12:14:48] Proviruses classified.                                                                            
+[12:14:49] Provirus classification in binary format written to                                               
+           GCF_900752885.1_provirus_marker_classification.npz.                                               
+[12:14:49] Provirus classification in tabular format written to                                              
+           GCF_900752885.1_provirus_marker_classification.tsv.                                               
+[12:14:49] geNomad marker-classification finished!                                                           

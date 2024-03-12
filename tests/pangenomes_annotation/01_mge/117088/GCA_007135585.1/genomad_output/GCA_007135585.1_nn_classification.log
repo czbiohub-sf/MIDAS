@@ -1,0 +1,26 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad nn-classification (v1.7.0). This will classify the input sequences into chromosome,    │
+│  plasmid, or virus based on the nucleotide sequence.                                                      │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0071  │
+│    35585.1/genomad_output/GCA_007135585.1_nn_classification                                               │
+│    ├── GCA_007135585.1_nn_classification.json (execution parameters)                                      │
+│    ├── GCA_007135585.1_encoded_sequences (directory containing encoded sequence data)                     │
+│    ├── GCA_007135585.1_nn_classification.tsv (contig classification: tabular format)                      │
+│    └── GCA_007135585.1_nn_classification.npz (contig classification: binary format)                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:15:51] Executing genomad nn-classification.                                                              
+[12:15:51] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0
+           07135585.1/genomad_output/GCA_007135585.1_nn_classification directory.                            
+[12:15:52] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0
+           07135585.1/genomad_output/GCA_007135585.1_nn_classification/GCA_007135585.1_encoded_sequences     
+           directory.                                                                                        
+[12:15:53] Encoded sequence data written to GCA_007135585.1_encoded_sequences.                               
+[12:16:10] Sequences classified.                                                                             
+[12:16:11] Sequence classification in binary format written to GCA_007135585.1_nn_classification.npz.        
+[12:16:11] Deleting encoded sequence data.                                                                   
+[12:16:11] Sequence classification in tabular format written to GCA_007135585.1_nn_classification.tsv.       
+[12:16:12] geNomad nn-classification finished!                                                               

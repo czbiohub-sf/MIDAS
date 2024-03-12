@@ -1,0 +1,5 @@
+seq_name	length	topology	coordinates	n_genes	genetic_code	virus_score	fdr	n_hallmarks	marker_enrichment	taxonomy
+gnl|Prokka|GCA_900552055.1_81	8703	No terminal repeats	NA	11	11	0.9609	0.0391	3	11.8701	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes
+gnl|Prokka|GCA_900552055.1_126	5596	No terminal repeats	NA	3	11	0.9452	0.0470	0	4.5409	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes
+gnl|Prokka|GCA_900552055.1_72	9928	No terminal repeats	NA	12	11	0.9000	0.0647	2	8.0440	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes
+gnl|Prokka|GCA_900552055.1_178	3835	No terminal repeats	NA	5	11	0.8146	0.0948	0	3.3424	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes

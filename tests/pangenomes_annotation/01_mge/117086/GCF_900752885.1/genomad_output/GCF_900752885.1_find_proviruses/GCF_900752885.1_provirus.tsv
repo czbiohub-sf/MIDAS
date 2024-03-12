@@ -1,0 +1,2 @@
+seq_name	source_seq	start	end	length	n_genes	v_vs_c_score	in_seq_edge	integrases
+gnl|Prokka|GCF_900752885.1_7|provirus_3_13983	gnl|Prokka|GCF_900752885.1_7	3	13983	13981	22	11.6681	True	NA

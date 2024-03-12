@@ -1,0 +1,11 @@
+{
+    "module": "annotate",
+    "input": "GCA_900552055.1.fna",
+    "input_md5": "af75dd88090dedef0ae2f12a6c532b07",
+    "start_time": "2024-03-11T11:37:37.379114-07:00",
+    "parameters": {
+        "use_minimal_db": false,
+        "sensitivity": 4.2,
+        "evalue": 0.001
+    }
+}

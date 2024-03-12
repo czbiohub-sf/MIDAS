@@ -2,7 +2,7 @@
 set -e
 
 if [ $# -ne 4 ]; then
-    echo "Usage: $0 MIDASDBDIR SPECIES GENOME NUMCORES"
+    echo "Usage: $0 MIDASDBDIR NUMCORES SPECIES GENOME"
     exit 1
 fi
 

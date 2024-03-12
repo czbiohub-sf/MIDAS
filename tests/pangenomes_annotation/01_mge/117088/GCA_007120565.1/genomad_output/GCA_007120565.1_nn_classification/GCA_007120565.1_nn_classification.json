@@ -1,0 +1,9 @@
+{
+    "module": "nn_classification",
+    "input": "GCA_007120565.1.fna",
+    "input_md5": "aec447da9a2f0b6b358cb4a6bfdf37e5",
+    "start_time": "2024-03-11T12:15:22.906177-07:00",
+    "parameters": {
+        "single_window": false
+    }
+}

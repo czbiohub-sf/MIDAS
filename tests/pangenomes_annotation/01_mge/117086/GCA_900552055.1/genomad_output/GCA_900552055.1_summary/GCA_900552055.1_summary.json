@@ -1,0 +1,17 @@
+{
+    "module": "summary",
+    "input": "GCA_900552055.1.fna",
+    "input_md5": "af75dd88090dedef0ae2f12a6c532b07",
+    "start_time": "2024-03-11T11:46:38.869199-07:00",
+    "parameters": {
+        "min_score": 0.7,
+        "max_fdr": 0.1,
+        "min_plasmid_hallmarks": 0,
+        "min_plasmid_hallmarks_short_seqs": 1,
+        "min_virus_hallmarks": 0,
+        "min_virus_hallmarks_short_seqs": 1,
+        "min_plasmid_marker_enrichment": 0.0,
+        "min_virus_marker_enrichment": 0.0,
+        "max_uscg": 4
+    }
+}

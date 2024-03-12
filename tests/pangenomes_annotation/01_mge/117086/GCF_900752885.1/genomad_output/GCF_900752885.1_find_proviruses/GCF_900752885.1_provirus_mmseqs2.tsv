@@ -1,0 +1,4 @@
+gnl|Prokka|GCF_900752885.1_218_2 # 3759 # 4268 # -1 # ID=218_2;partial=00;start_type=ATG;rbs_motif=GGAGG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.476	PF00589.RP35	1.557E-21	82
+gnl|Prokka|GCF_900752885.1_243_1 # 3 # 569 # 1 # ID=243_1;partial=10;start_type=Edge;rbs_motif=None;rbs_spacer=None;genetic_code=11;gc_cont=0.434	PF00589.RP35	1.434E-19	77
+gnl|Prokka|GCF_900752885.1_85_10 # 4571 # 5707 # -1 # ID=85_10;partial=00;start_type=ATG;rbs_motif=None;rbs_spacer=None;genetic_code=11;gc_cont=0.430	PRK00236	9.339E-48	167
+gnl|Prokka|GCF_900752885.1_116_2 # 1416 # 1943 # -1 # ID=116_2;partial=00;start_type=ATG;rbs_motif=AGGAGG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.462	TIGR02224	2.593E-06	37

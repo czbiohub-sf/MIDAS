@@ -1,0 +1,7 @@
+{
+    "module": "aggregated_classification",
+    "input": "GCF_900752885.1.fna",
+    "input_md5": "3d6961b2c397a889a179aeae0f533f5c",
+    "start_time": "2024-03-11T12:15:12.370430-07:00",
+    "parameters": {}
+}

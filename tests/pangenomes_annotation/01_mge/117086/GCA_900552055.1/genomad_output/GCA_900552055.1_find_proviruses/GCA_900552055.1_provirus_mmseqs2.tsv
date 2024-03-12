@@ -1,0 +1,5 @@
+gnl|Prokka|GCA_900552055.1_4_4 # 2632 # 3606 # 1 # ID=4_4;partial=00;start_type=ATG;rbs_motif=AGxAGG/AGGxGG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.490	PF00589.RP35	6.380E-24	94
+gnl|Prokka|GCA_900552055.1_4_3 # 1388 # 2635 # 1 # ID=4_3;partial=00;start_type=ATG;rbs_motif=AGGAGG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.486	TIGR02225	2.618E-25	100
+gnl|Prokka|GCA_900552055.1_101_10 # 4663 # 5799 # -1 # ID=101_10;partial=00;start_type=ATG;rbs_motif=None;rbs_spacer=None;genetic_code=11;gc_cont=0.430	PRK00236	9.339E-48	167
+gnl|Prokka|GCA_900552055.1_4_5 # 3594 # 4631 # 1 # ID=4_5;partial=00;start_type=ATG;rbs_motif=GGAG/GAGG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.481	COG4974	9.940E-42	148
+gnl|Prokka|GCA_900552055.1_37_5 # 9151 # 9822 # -1 # ID=37_5;partial=00;start_type=TTG;rbs_motif=None;rbs_spacer=None;genetic_code=11;gc_cont=0.469	COG4974	6.500E-25	94

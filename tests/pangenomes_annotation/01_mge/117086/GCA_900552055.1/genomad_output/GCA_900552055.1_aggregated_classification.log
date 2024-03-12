@@ -1,0 +1,32 @@
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad aggregated-classification (v1.7.0). This will aggregate the results of the    │
+│  marker-classification and nn-classification modules to classify the input sequences into        │
+│  chromosome, plasmid, or virus.                                                                  │
+│  ──────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                        │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086  │
+│    /GCA_900552055.1/genomad_output/GCA_900552055.1_aggregated_classification                     │
+│    ├── GCA_900552055.1_aggregated_classification.json (execution parameters)                     │
+│    ├── GCA_900552055.1_aggregated_classification.tsv (sequence classification: tabular format)   │
+│    ├── GCA_900552055.1_aggregated_classification.npz (sequence classification: binary format)    │
+│    ├── GCA_900552055.1_provirus_aggregated_classification.tsv (provirus classification: tabular  │
+│    │   format)                                                                                   │
+│    └── GCA_900552055.1_provirus_aggregated_classification.npz (provirus classification: binary   │
+│        format)                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+[11:46:29] Executing genomad aggregated-classification.                                             
+[11:46:29] Creating the                                                                             
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117
+           086/GCA_900552055.1/genomad_output/GCA_900552055.1_aggregated_classification directory.  
+[11:46:30] The total marker frequencies of the input sequences were computed.                       
+[11:46:30] Sequences classified.                                                                    
+[11:46:30] Sequence classification in binary format written to                                      
+           GCA_900552055.1_aggregated_classification.npz.                                           
+[11:46:30] Sequence classification in tabular format written to                                     
+           GCA_900552055.1_aggregated_classification.tsv.                                           
+[11:46:30] Proviruses classified.                                                                   
+[11:46:31] Provirus classification in binary format written to                                      
+           GCA_900552055.1_provirus_aggregated_classification.npz.                                  
+[11:46:31] Provirus classification in tabular format written to                                     
+           GCA_900552055.1_provirus_aggregated_classification.tsv.                                  
+[11:46:31] geNomad aggregated-classification finished!                                              

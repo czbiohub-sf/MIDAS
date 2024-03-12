@@ -1,0 +1,2 @@
+gnl|Prokka|GCA_007135585.1_52_1 # 1 # 312 # 1 # ID=52_1;partial=10;start_type=Edge;rbs_motif=None;rbs_spacer=None;genetic_code=11;gc_cont=0.699	PF00589.RP35	1.166E-15	62
+gnl|Prokka|GCA_007135585.1_518_13 # 13975 # 15213 # -1 # ID=518_13;partial=00;start_type=ATG;rbs_motif=AGGAG;rbs_spacer=5-10bp;genetic_code=11;gc_cont=0.683	COG4973	6.371E-20	83

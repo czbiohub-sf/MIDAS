@@ -1,0 +1,18 @@
+{
+    "module": "find-proviruses",
+    "input": "GCA_007135585.1.fna",
+    "input_md5": "694dab5c3f8b48e6fba2e9c1dc25c09e",
+    "start_time": "2024-03-11T12:13:54.393536-07:00",
+    "parameters": {
+        "skip_integrase_identification": false,
+        "skip_trna_identification": false,
+        "crf_threshold": 0.4,
+        "marker_threshold": 12.0,
+        "marker_threshold_integrase": 8.0,
+        "marker_threshold_edge": 8.0,
+        "max_integrase_distance": 10000,
+        "max_trna_distance": 5000,
+        "sensitivity": 8.2,
+        "evalue": 0.001
+    }
+}
