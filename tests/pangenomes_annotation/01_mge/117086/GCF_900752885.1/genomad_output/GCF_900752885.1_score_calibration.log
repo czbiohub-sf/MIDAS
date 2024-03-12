@@ -1,0 +1,69 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad score-calibration (v1.7.0). This will calibrate the classification scores based on     │
+│  the sample composition.                                                                                  │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9007  │
+│    52885.1/genomad_output/GCF_900752885.1_score_calibration                                               │
+│    ├── GCF_900752885.1_score_calibration.json (execution parameters)                                      │
+│    ├── GCF_900752885.1_compositions.tsv (estimated compositions: tabular format)                          │
+│    ├── GCF_900752885.1_compositions.npz (estimated compositions: binary format)                           │
+│    ├── GCF_900752885.1_calibrated_marker_classification.tsv (calibrated sequence marker-classification    │
+│    │   data: tabular format)                                                                              │
+│    ├── GCF_900752885.1_calibrated_marker_classification.npz (calibrated sequence marker-classification    │
+│    │   data: binary format)                                                                               │
+│    ├── GCF_900752885.1_calibrated_nn_classification.tsv (calibrated sequence nn-classification data:      │
+│    │   tabular format)                                                                                    │
+│    ├── GCF_900752885.1_calibrated_nn_classification.npz (calibrated sequence nn-classification data:      │
+│    │   binary format)                                                                                     │
+│    ├── GCF_900752885.1_calibrated_aggregated_classification.tsv (calibrated sequence                      │
+│    │   aggregated-classification data: tabular format)                                                    │
+│    ├── GCF_900752885.1_calibrated_aggregated_classification.npz (calibrated sequence                      │
+│    │   aggregated-classification data: binary format)                                                     │
+│    ├── GCF_900752885.1_provirus_calibrated_marker_classification.tsv (calibrated provirus                 │
+│    │   marker-classification data: tabular format)                                                        │
+│    ├── GCF_900752885.1_provirus_calibrated_marker_classification.npz (calibrated provirus                 │
+│    │   marker-classification data: binary format)                                                         │
+│    ├── GCF_900752885.1_provirus_calibrated_nn_classification.tsv (calibrated provirus nn-classification   │
+│    │   data: tabular format)                                                                              │
+│    ├── GCF_900752885.1_provirus_calibrated_nn_classification.npz (calibrated provirus nn-classification   │
+│    │   data: binary format)                                                                               │
+│    ├── GCF_900752885.1_provirus_calibrated_aggregated_classification.tsv (calibrated provirus             │
+│    │   aggregated-classification data: tabular format)                                                    │
+│    └── GCF_900752885.1_provirus_calibrated_aggregated_classification.npz (calibrated provirus             │
+│        aggregated-classification data: binary format)                                                     │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:15:15] Executing genomad score-calibration.                                                              
+[12:15:15] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_score_calibration directory.                            
+[12:15:15] The uncalibrated classification scores were loaded.                                               
+[12:15:15] Your sample has less than 1,000 sequences, which does not allow precise composition estimation.   
+           The 'metagenome' preset will be used instead. If you want to force the empirical sample           
+           composition estimation anyway, use the --force-auto option.                                       
+[12:15:15] Estimated compositions written to GCF_900752885.1_compositions.tsv and                            
+           GCF_900752885.1_compositions.npz.                                                                 
+[12:15:16] The calibrated scores were computed.                                                              
+[12:15:16] Calibrated scores in binary format written to                                                     
+           GCF_900752885.1_calibrated_marker_classification.npz.                                             
+[12:15:16] Calibrated scores in tabular format written to                                                    
+           GCF_900752885.1_calibrated_marker_classification.tsv.                                             
+[12:15:16] Calibrated scores in binary format written to                                                     
+           GCF_900752885.1_provirus_calibrated_marker_classification.npz.                                    
+[12:15:17] Calibrated scores in tabular format written to                                                    
+           GCF_900752885.1_provirus_calibrated_marker_classification.tsv.                                    
+[12:15:17] Calibrated scores in binary format written to GCF_900752885.1_calibrated_nn_classification.npz.   
+[12:15:17] Calibrated scores in tabular format written to GCF_900752885.1_calibrated_nn_classification.tsv.  
+[12:15:18] Calibrated scores in binary format written to                                                     
+           GCF_900752885.1_provirus_calibrated_nn_classification.npz.                                        
+[12:15:18] Calibrated scores in tabular format written to                                                    
+           GCF_900752885.1_provirus_calibrated_nn_classification.tsv.                                        
+[12:15:18] Calibrated scores in binary format written to                                                     
+           GCF_900752885.1_calibrated_aggregated_classification.npz.                                         
+[12:15:19] Calibrated scores in tabular format written to                                                    
+           GCF_900752885.1_calibrated_aggregated_classification.tsv.                                         
+[12:15:19] Calibrated scores in binary format written to                                                     
+           GCF_900752885.1_provirus_calibrated_aggregated_classification.npz.                                
+[12:15:19] Calibrated scores in tabular format written to                                                    
+           GCF_900752885.1_provirus_calibrated_aggregated_classification.tsv.                                
+[12:15:19] geNomad score-calibration finished!                                                               

@@ -1,0 +1,40 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad nn-classification (v1.7.0). This will classify the input sequences into chromosome,    │
+│  plasmid, or virus based on the nucleotide sequence.                                                      │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9007  │
+│    52885.1/genomad_output/GCF_900752885.1_nn_classification                                               │
+│    ├── GCF_900752885.1_nn_classification.json (execution parameters)                                      │
+│    ├── GCF_900752885.1_encoded_sequences (directory containing encoded sequence data)                     │
+│    ├── GCF_900752885.1_nn_classification.tsv (contig classification: tabular format)                      │
+│    ├── GCF_900752885.1_nn_classification.npz (contig classification: binary format)                       │
+│    ├── GCF_900752885.1_encoded_proviruses (directory containing encoded sequence data)                    │
+│    ├── GCF_900752885.1_provirus_nn_classification.tsv (provirus classification: tabular format)           │
+│    └── GCF_900752885.1_provirus_nn_classification.npz (provirus classification: binary format)            │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:14:51] Executing genomad nn-classification.                                                              
+[12:14:51] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_nn_classification directory.                            
+[12:14:51] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_nn_classification/GCF_900752885.1_encoded_sequences     
+           directory.                                                                                        
+[12:14:52] Encoded sequence data written to GCF_900752885.1_encoded_sequences.                               
+[12:14:52] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_nn_classification/GCF_900752885.1_encoded_proviruses    
+           directory.                                                                                        
+[12:14:53] Encoded provirus data written to GCF_900752885.1_encoded_proviruses.                              
+[12:15:06] Sequences classified.                                                                             
+[12:15:07] Sequence classification in binary format written to GCF_900752885.1_nn_classification.npz.        
+[12:15:07] Deleting encoded sequence data.                                                                   
+[12:15:08] Sequence classification in tabular format written to GCF_900752885.1_nn_classification.tsv.       
+[12:15:10] Proviruses classified.                                                                            
+[12:15:10] Provirus classification in binary format written to                                               
+           GCF_900752885.1_provirus_nn_classification.npz.                                                   
+[12:15:10] Deleting encoded provirus data.                                                                   
+[12:15:11] Provirus classification in tabular format written to                                              
+           GCF_900752885.1_provirus_nn_classification.tsv.                                                   
+[12:15:11] geNomad nn-classification finished!                                                               

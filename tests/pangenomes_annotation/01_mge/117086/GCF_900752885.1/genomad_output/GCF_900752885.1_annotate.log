@@ -1,0 +1,24 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad annotate (v1.7.0). This will perform gene calling in the input sequences and annotate  │
+│  the predicted proteins with geNomad's markers.                                                           │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9007  │
+│    52885.1/genomad_output/GCF_900752885.1_annotate                                                        │
+│    ├── GCF_900752885.1_annotate.json (execution parameters)                                               │
+│    ├── GCF_900752885.1_genes.tsv (gene annotation data)                                                   │
+│    ├── GCF_900752885.1_taxonomy.tsv (taxonomic assignment)                                                │
+│    ├── GCF_900752885.1_mmseqs2.tsv (MMseqs2 output file)                                                  │
+│    └── GCF_900752885.1_proteins.faa (protein FASTA file)                                                  │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:08:36] Executing genomad annotate.                                                                       
+[12:08:36] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_annotate directory.                                     
+[12:08:39] Proteins predicted with prodigal-gv were written to GCF_900752885.1_proteins.faa.                 
+[12:12:41] Proteins annotated with MMseqs2 and geNomad database (v1.5) were written to                       
+           GCF_900752885.1_mmseqs2.tsv.                                                                      
+[12:12:41] Deleting GCF_900752885.1_mmseqs2.                                                                 
+[12:12:48] Gene data was written to GCF_900752885.1_genes.tsv.                                               
+[12:12:48] Taxonomic assignment data was written to GCF_900752885.1_taxonomy.tsv.                            
+[12:12:48] geNomad annotate finished!                                                                        

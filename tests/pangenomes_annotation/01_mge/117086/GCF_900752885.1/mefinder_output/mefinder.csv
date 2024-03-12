@@ -1,0 +1,6 @@
+#date: 2024-03-11_13:36
+#sample: GCF_900752885.1
+#mge_finder version: 1.1.2
+#mgedb version: 1.1.1
+#blastn version: 2.14.1+
+mge_no,name,synonyms,prediction,type,allele_len,depth,e_value,identity,coverage,gaps,substitution,contig,start,stop,cigar

@@ -1,0 +1,2 @@
+seq_name	length	topology	n_genes	genetic_code	plasmid_score	fdr	n_hallmarks	marker_enrichment	conjugation_genes	amr_genes
+gnl|Prokka|GCA_007135585.1_395	7623	No terminal repeats	6	11	0.9254	0.0746	0	1.4745	NA	NA

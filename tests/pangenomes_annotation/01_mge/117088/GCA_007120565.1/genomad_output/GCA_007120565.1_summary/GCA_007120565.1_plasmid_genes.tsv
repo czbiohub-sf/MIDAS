@@ -1,0 +1,6 @@
+gene	start	end	length	strand	gc_content	genetic_code	rbs_motif	marker	evalue	bitscore	uscg	plasmid_hallmark	virus_hallmark	taxid	taxname	annotation_conjscan	annotation_amr	annotation_accessions	annotation_description
+gnl|Prokka|GCA_007120565.1_472_1	3	1376	1374	1	0.716	11	None	GENOMAD.024025.PP	7.169e-06	51	0	0	0	1	NA	NA	NA	PF02902;K18879	Ulp1 protease family, C-terminal catalytic domain
+gnl|Prokka|GCA_007120565.1_472_2	1416	2258	843	1	0.696	11	AGGAG	GENOMAD.123083.CP	6.116e-19	90	0	0	0	1	NA	NA	NA	PF00296;TIGR04027;K17228;COG2141	putative FMN-dependent luciferase-like monooxygenase, KPN_01858 family
+gnl|Prokka|GCA_007120565.1_472_3	2282	3958	1677	1	0.695	11	GGAG/GAGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007120565.1_472_4	3955	5073	1119	1	0.655	11	GGA/GAG/AGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007120565.1_472_5	5070	5237	168	1	0.732	11	GGxGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA

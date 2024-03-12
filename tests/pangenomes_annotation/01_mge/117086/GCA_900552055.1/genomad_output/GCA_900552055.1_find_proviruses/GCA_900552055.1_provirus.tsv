@@ -1,0 +1,2 @@
+seq_name	source_seq	start	end	length	n_genes	v_vs_c_score	in_seq_edge	integrases
+gnl|Prokka|GCA_900552055.1_4|provirus_46_26374	gnl|Prokka|GCA_900552055.1_4	46	26374	26329	36	11.2644	True	NA

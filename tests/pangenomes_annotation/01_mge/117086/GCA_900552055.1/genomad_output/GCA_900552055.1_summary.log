@@ -1,0 +1,32 @@
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad summary (v1.7.0). This will summarize the results across modules into a       │
+│  classification report.                                                                          │
+│  ──────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                        │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086  │
+│    /GCA_900552055.1/genomad_output/GCA_900552055.1_summary                                       │
+│    ├── GCA_900552055.1_summary.json (execution parameters)                                       │
+│    ├── GCA_900552055.1_virus_summary.tsv (virus classification summary)                          │
+│    ├── GCA_900552055.1_plasmid_summary.tsv (plasmid classification summary)                      │
+│    ├── GCA_900552055.1_virus.fna (virus nucleotide FASTA file)                                   │
+│    ├── GCA_900552055.1_plasmid.fna (plasmid nucleotide FASTA file)                               │
+│    ├── GCA_900552055.1_virus_proteins.faa (virus protein FASTA file)                             │
+│    ├── GCA_900552055.1_plasmid_proteins.faa (plasmid protein FASTA file)                         │
+│    ├── GCA_900552055.1_virus_genes.tsv (virus gene annotation data)                              │
+│    └── GCA_900552055.1_plasmid_genes.tsv (plasmid gene annotation data)                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+[11:46:38] Executing genomad summary.                                                               
+[11:46:38] Creating the                                                                             
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117
+           086/GCA_900552055.1/genomad_output/GCA_900552055.1_summary directory.                    
+[11:46:38] Using calibrated scores from aggregated-classification.                                  
+[11:46:39] 2 plasmid(s) and 4 virus(es) were identified.                                            
+[11:46:39] Nucleotide sequences were written to GCA_900552055.1_plasmid.fna and                     
+           GCA_900552055.1_virus.fna.                                                               
+[11:46:39] Protein sequences were written to GCA_900552055.1_plasmid_proteins.faa and               
+           GCA_900552055.1_virus_proteins.faa.                                                      
+[11:46:39] Gene annotation data was written to GCA_900552055.1_plasmid_genes.tsv and                
+           GCA_900552055.1_virus_genes.tsv.                                                         
+[11:46:40] Summary files were written to GCA_900552055.1_plasmid_summary.tsv and                    
+           GCA_900552055.1_virus_summary.tsv.                                                       
+[11:46:40] geNomad summary finished!                                                                

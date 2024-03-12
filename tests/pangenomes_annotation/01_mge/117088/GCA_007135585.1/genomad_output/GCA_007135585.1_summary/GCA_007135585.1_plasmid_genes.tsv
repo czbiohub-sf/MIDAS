@@ -1,0 +1,7 @@
+gene	start	end	length	strand	gc_content	genetic_code	rbs_motif	marker	evalue	bitscore	uscg	plasmid_hallmark	virus_hallmark	taxid	taxname	annotation_conjscan	annotation_amr	annotation_accessions	annotation_description
+gnl|Prokka|GCA_007135585.1_395_1	29	427	399	1	0.692	11	None	GENOMAD.169882.PP	9.655e-08	52	0	0	0	1	NA	NA	NA	PF14367;COG3744;TIGR00028;K18828	PIN domain nuclease, a component of toxin-antitoxin system (PIN domain)
+gnl|Prokka|GCA_007135585.1_395_2	857	3574	2718	1	0.666	11	AGGAG/GGAGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007135585.1_395_3	3769	5481	1713	1	0.660	11	GGAG/GAGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007135585.1_395_4	5493	5903	411	1	0.681	11	AGGAG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007135585.1_395_5	6102	6728	627	1	0.692	11	GGA/GAG/AGG	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA
+gnl|Prokka|GCA_007135585.1_395_6	6825	7622	798	1	0.674	11	AGGA	NA	NA	NA	0	0	0	1	NA	NA	NA	NA	NA

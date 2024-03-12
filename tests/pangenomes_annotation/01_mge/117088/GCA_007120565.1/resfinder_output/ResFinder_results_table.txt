@@ -1,0 +1,51 @@
+Aminoglycoside
+No hit found
+
+Beta-lactam
+No hit found
+
+Colistin
+No hit found
+
+Fosfomycin
+No hit found
+
+Fusidic Acid
+No hit found
+
+MLS - Macrolide, Lincosamide and Streptogramin B
+No hit found
+
+Misc
+No hit found
+
+Nitroimidazole
+No hit found
+
+Oxazolidinone
+No hit found
+
+Phenicol
+No hit found
+
+Fluoroquinolone
+No hit found
+
+Rifampicin
+No hit found
+
+Sulphonamide
+No hit found
+
+Tetracycline
+No hit found
+
+Trimethoprim
+No hit found
+
+Glycopeptide
+No hit found
+
+Pseudomonic Acid
+No hit found
+

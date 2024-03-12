@@ -1,0 +1,2 @@
+seq_name	n_genes_with_taxonomy	agreement	taxid	lineage
+gnl|Prokka|GCF_900752885.1_7|provirus_3_13983	6	1.0000	2561	Viruses;Duplodnaviria;Heunggongvirae;Uroviricota;Caudoviricetes

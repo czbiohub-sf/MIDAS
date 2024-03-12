@@ -1,0 +1,22 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad aggregated-classification (v1.7.0). This will aggregate the results of the             │
+│  marker-classification and nn-classification modules to classify the input sequences into chromosome,     │
+│  plasmid, or virus.                                                                                       │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0071  │
+│    35585.1/genomad_output/GCA_007135585.1_aggregated_classification                                       │
+│    ├── GCA_007135585.1_aggregated_classification.json (execution parameters)                              │
+│    ├── GCA_007135585.1_aggregated_classification.tsv (sequence classification: tabular format)            │
+│    └── GCA_007135585.1_aggregated_classification.npz (sequence classification: binary format)             │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:16:12] Executing genomad aggregated-classification.                                                      
+[12:16:12] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0
+           07135585.1/genomad_output/GCA_007135585.1_aggregated_classification directory.                    
+[12:16:12] The total marker frequencies of the input sequences were computed.                                
+[12:16:12] Sequences classified.                                                                             
+[12:16:13] Sequence classification in binary format written to GCA_007135585.1_aggregated_classification.npz.
+[12:16:13] Sequence classification in tabular format written to                                              
+           GCA_007135585.1_aggregated_classification.tsv.                                                    
+[12:16:13] geNomad aggregated-classification finished!                                                       

@@ -1,0 +1,45 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad score-calibration (v1.7.0). This will calibrate the classification scores based on     │
+│  the sample composition.                                                                                  │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0071  │
+│    35585.1/genomad_output/GCA_007135585.1_score_calibration                                               │
+│    ├── GCA_007135585.1_score_calibration.json (execution parameters)                                      │
+│    ├── GCA_007135585.1_compositions.tsv (estimated compositions: tabular format)                          │
+│    ├── GCA_007135585.1_compositions.npz (estimated compositions: binary format)                           │
+│    ├── GCA_007135585.1_calibrated_marker_classification.tsv (calibrated sequence marker-classification    │
+│    │   data: tabular format)                                                                              │
+│    ├── GCA_007135585.1_calibrated_marker_classification.npz (calibrated sequence marker-classification    │
+│    │   data: binary format)                                                                               │
+│    ├── GCA_007135585.1_calibrated_nn_classification.tsv (calibrated sequence nn-classification data:      │
+│    │   tabular format)                                                                                    │
+│    ├── GCA_007135585.1_calibrated_nn_classification.npz (calibrated sequence nn-classification data:      │
+│    │   binary format)                                                                                     │
+│    ├── GCA_007135585.1_calibrated_aggregated_classification.tsv (calibrated sequence                      │
+│    │   aggregated-classification data: tabular format)                                                    │
+│    └── GCA_007135585.1_calibrated_aggregated_classification.npz (calibrated sequence                      │
+│        aggregated-classification data: binary format)                                                     │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:16:13] Executing genomad score-calibration.                                                              
+[12:16:13] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117088/GCA_0
+           07135585.1/genomad_output/GCA_007135585.1_score_calibration directory.                            
+[12:16:14] The uncalibrated classification scores were loaded.                                               
+[12:16:14] Your sample has less than 1,000 sequences, which does not allow precise composition estimation.   
+           The 'metagenome' preset will be used instead. If you want to force the empirical sample           
+           composition estimation anyway, use the --force-auto option.                                       
+[12:16:14] Estimated compositions written to GCA_007135585.1_compositions.tsv and                            
+           GCA_007135585.1_compositions.npz.                                                                 
+[12:16:14] The calibrated scores were computed.                                                              
+[12:16:14] Calibrated scores in binary format written to                                                     
+           GCA_007135585.1_calibrated_marker_classification.npz.                                             
+[12:16:14] Calibrated scores in tabular format written to                                                    
+           GCA_007135585.1_calibrated_marker_classification.tsv.                                             
+[12:16:15] Calibrated scores in binary format written to GCA_007135585.1_calibrated_nn_classification.npz.   
+[12:16:15] Calibrated scores in tabular format written to GCA_007135585.1_calibrated_nn_classification.tsv.  
+[12:16:15] Calibrated scores in binary format written to                                                     
+           GCA_007135585.1_calibrated_aggregated_classification.npz.                                         
+[12:16:15] Calibrated scores in tabular format written to                                                    
+           GCA_007135585.1_calibrated_aggregated_classification.tsv.                                         
+[12:16:15] geNomad score-calibration finished!                                                               

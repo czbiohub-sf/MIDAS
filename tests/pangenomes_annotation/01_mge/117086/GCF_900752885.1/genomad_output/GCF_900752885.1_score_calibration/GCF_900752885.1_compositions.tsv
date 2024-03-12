@@ -1,0 +1,4 @@
+model	chromosome	plasmid	virus
+marker	0.8400	0.0500	0.1100
+nn	0.6700	0.2000	0.1300
+aggregated	0.7200	0.1700	0.1100

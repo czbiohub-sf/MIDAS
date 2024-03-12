@@ -1,0 +1,33 @@
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  Executing geNomad find-proviruses (v1.7.0). This will find putative proviral regions within the input    │
+│  sequences.                                                                                               │
+│  ───────────────────────────────────────────────────────────────────────────────────────────────────────  │
+│  Outputs:                                                                                                 │
+│    /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9007  │
+│    52885.1/genomad_output/GCF_900752885.1_find_proviruses                                                 │
+│    ├── GCF_900752885.1_find_proviruses.json (execution parameters)                                        │
+│    ├── GCF_900752885.1_provirus.tsv (provirus data)                                                       │
+│    ├── GCF_900752885.1_provirus.fna (provirus nucleotide sequences)                                       │
+│    ├── GCF_900752885.1_provirus_proteins.faa (provirus protein sequences)                                 │
+│    ├── GCF_900752885.1_provirus_genes.tsv (provirus gene annotation data)                                 │
+│    ├── GCF_900752885.1_provirus_taxonomy.tsv (provirus taxonomic assignment)                              │
+│    ├── GCF_900752885.1_provirus_mmseqs2.tsv (MMseqs2 output file)                                         │
+│    └── GCF_900752885.1_provirus_aragorn.tsv (Aragorn output file)                                         │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[12:12:48] Executing genomad find-proviruses.                                                                
+[12:12:48] Creating the                                                                                      
+           /pollard/home/czhao/projects/MIDAS2/tests/midasdb_newdb/pangenomes_annotations/01_mge/117086/GCF_9
+           00752885.1/genomad_output/GCF_900752885.1_find_proviruses directory.                              
+[12:14:29] Integrases identified with MMseqs2 and geNomad database (v1.5) were written to                    
+           GCF_900752885.1_provirus_mmseqs2.tsv.                                                             
+[12:14:29] Deleting GCF_900752885.1_provirus_mmseqs2.                                                        
+[12:14:41] Deleting GCF_900752885.1_provirus_mmseqs2_input.faa.                                              
+[12:14:41] tRNAs identified with Aragorn were written to GCF_900752885.1_provirus_aragorn.tsv.               
+[12:14:41] Deleting GCF_900752885.1_provirus_aragorn_input.fna.                                              
+[12:14:42] Provirus regions identified.                                                                      
+[12:14:42] Provirus data was written to GCF_900752885.1_provirus.tsv.                                        
+[12:14:43] Provirus nucleotide sequences were written to GCF_900752885.1_provirus.fna.                       
+[12:14:43] Provirus protein sequences were written to GCF_900752885.1_provirus_proteins.faa.                 
+[12:14:43] Provirus gene data was written to GCF_900752885.1_provirus_genes.tsv.                             
+[12:14:43] Taxonomic assignment data was written to GCF_900752885.1_provirus_taxonomy.tsv.                   
+[12:14:44] geNomad find-proviruses finished!                                                                 

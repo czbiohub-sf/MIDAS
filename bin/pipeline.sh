@@ -6,12 +6,9 @@
 #! /usr/bin/bash
 
 if [ $# -ne 5 ]; then
-    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEM script_dir "
+    echo "Usage: $0 SPECIES SPECIEDIR THREADS MEM SCRIPTDIR"
     exit 1
 fi
-
-#######
-#script_dir="/wynton/home/pollard/czhao/midasdb_wis/MIDAS2/bin" #<----
 
 species_id="$1"
 pangenome_dir="$2"

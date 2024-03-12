@@ -1,0 +1,10 @@
+{
+    "module": "score_calibration",
+    "input": "GCA_007135585.1.fna",
+    "input_md5": "694dab5c3f8b48e6fba2e9c1dc25c09e",
+    "start_time": "2024-03-11T12:16:13.835097-07:00",
+    "parameters": {
+        "composition": "auto",
+        "force_auto": false
+    }
+}

@@ -1,4 +1,4 @@
-name: midas2v2rc2
+name: midasv3rc3
 channels:
   - conda-forge
   - bioconda
