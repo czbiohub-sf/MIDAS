@@ -34,7 +34,7 @@ RUN conda config --add channels conda-forge
 
 
 RUN conda install -c anaconda python=3.9.18 numpy pandas lz4 -y
-RUN conda install -c conda-forge awscli biopython ncurses -y
+RUN conda install -c conda-forge awscli biopython ncurses time -y
 RUN conda install -c bioconda bowtie2 samtools pysam prokka hs-blastn=0.0.5 vsearch gffutils pybedtools cd-hit -y
 
 RUN pip3 install bottleneck==1.3.6 --upgrade
@@ -51,5 +51,6 @@ RUN s3mi
 
 
 RUN conda clean --all -y
+
 
 WORKDIR /
