@@ -5,8 +5,8 @@ igg = "s3://microbiome-pollardlab"
 server="https://midasdb.pollard.gladstone.org"
 
 MIDASDB_DICT = {
-    "uhgg": f"{server}/uhgg",
-    "gtdb": f"{server}/gtdb",
+    "uhgg": f"{server}/v3/uhgg",
+    "gtdb": f"{server}/v3/gtdb",
     "localdb": f"{server}/localdb", # reserved for building new MIDASDB locally
     "s3db": f"{igg}/testdb", # reserved for building new MIDASDB and upload to S3
 }
