@@ -198,7 +198,7 @@ def register_args(main_func):
                            dest='cluster_level',
                            type=str,
                            default=DEFAULT_CLUSTER_ID,
-                           choices=['75', '80', '85', '90', '95', '99'],
+                           choices=['99'],
                            help=f"Aggregate reads to cluster level other than {DEFAULT_CLUSTER_ID}. Only for debug purpose.")
 
     subparser.add_argument('--remove_bam',

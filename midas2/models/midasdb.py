@@ -10,8 +10,7 @@ from midas2.params.outputs import genomes as TABLE_OF_CONTENTS
 
 
 DEFAULT_SITE_CHUNK_SIZE = 1000000
-DEFAULT_GENE_CHUNK_SIZE = 50000
-DEFAULT_CHUNKS = [DEFAULT_GENE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE]
+DEFAULT_CHUNKS = [DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE/10]
 
 
 # The Target Layout of MIDAS Reference Database both on S3 and locally.
@@ -52,6 +51,8 @@ def get_midasdb_layout(species_id="", genome_id="", component=""):
         "pangenome_genes_annot":         f"pangenomes/{species_id}/genes_annotated.tsv",
         "cluster_xx_annot":              f"pangenomes/{species_id}/annotation/clusters_{component}_annot.tsv",
         "pangenome_cluster_xx":          f"pangenomes/{species_id}/clusters_{component}_info.tsv",
+        "pangenome_cluster_info":        f"pangenomes/{species_id}/clusters_99_info.tsv",
+        "pangenome_ogf75_info":          f"pangenomes/{species_id}/clusters_75_info.tsv",
 
         "augment_log":                   f"pangenomes/{species_id}/augment.log",
         "contig_length_log":             f"pangenomes/{species_id}/contig_length.log",
@@ -101,11 +102,10 @@ def get_tarball_layout(species_id="", genome_id=""): # target folder
     }
 
 
-# TODO: update the pangenome componenets
 tarball_mapping = {
     "toc":                           ["table_of_contents"],
     "repgenome":                     ["annotation_fna", "annotation_ffn", "annotation_genes"],
-    "pangenome":                     ["pangenome_centroids", "pangenome_genes_info"],
+    "pangenome":                     ["pangenome_centroids", "pangenome_cluster_info", "pangenome_ogf75_info"],
     "markerdb":                      MARKER_FILE_EXTS,
     "markerdb_models":               ["hmm", "hmm_cutoffs"],
     "chunks":                        ["chunks_centroids", "chunks_sites_run", "chunks_sites_merge"],

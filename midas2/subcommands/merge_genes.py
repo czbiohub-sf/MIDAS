@@ -75,7 +75,7 @@ def register_args(main_func):
                            dest='cluster_level_in',
                            type=str,
                            default=DEFAULT_CLUSTER_IN_ID,
-                           choices=['75', '80', '85', '90', '95', '99'],
+                           choices=['99'],
                            help=f"Single-sample reported operational cluster level. Should be consistent with run_genes command ({DEFAULT_CLUSTER_IN_ID})")
     subparser.add_argument('--cluster_level_out',
                            dest='cluster_level_out',
