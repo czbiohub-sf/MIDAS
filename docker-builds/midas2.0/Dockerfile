@@ -38,8 +38,8 @@ RUN conda install -c conda-forge awscli biopython ncurses time -y
 RUN conda install -c bioconda bowtie2 samtools pysam prokka hs-blastn=0.0.5 vsearch gffutils pybedtools cd-hit -y
 
 RUN pip3 install bottleneck==1.3.6 --upgrade
-RUN pip3 install midas2==2.0.0rc3
-RUN midas2 --version
+RUN pip3 install midas==2.0.0rc4
+RUN midas --version
 
 
 # For aegea

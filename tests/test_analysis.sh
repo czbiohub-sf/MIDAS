@@ -11,7 +11,7 @@ num_cores=$1
 basedir=`pwd`
 testdir="${basedir}/tests"
 
-outdir="${testdir}/midas2_output"
+outdir="${testdir}/midas_output"
 rm -rf ${outdir}
 mkdir -p ${outdir}
 
@@ -32,7 +32,7 @@ rm -rf ${pool_fp}
 
 ls "${testdir}/reads" | awk -F '_' '{print $1}' > ${samples_fp}
 
-echo "MIDAS2 Unit Testing Start"
+echo "MIDASv3 Unit Testing Start"
 
 echo -e "sample_name\tmidas_outdir" > ${pool_fp}
 cat ${samples_fp} | awk -v OFS='\t' -v dir=$midas_outdir '{print $1, dir}' >> ${pool_fp}
@@ -40,18 +40,18 @@ cat ${samples_fp} | awk -v OFS='\t' -v dir=$midas_outdir '{print $1, dir}' >> ${
 
 echo "Testing Single-Sample Species Module"
 cat ${samples_fp} | xargs -Ixx bash -c \
-    "midas2 run_species --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
+    "midas run_species --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
      --num_cores ${num_cores} --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     ${midas_outdir} &> ${logs_dir}/xx_species_${num_cores}.log"
 
 
 echo "Testing Across-Samples Species Module"
-midas2 merge_species --samples_list ${pool_fp} --min_cov 2  ${merge_midas_outdir} &> ${logs_dir}/merge_species_${num_cores}.log
+midas merge_species --samples_list ${pool_fp} --min_cov 2  ${merge_midas_outdir} &> ${logs_dir}/merge_species_${num_cores}.log
 
 
 echo "Testing Single-Sample SNV Module"
 cat ${samples_fp} | xargs -Ixx bash -c \
-    "midas2 run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
+    "midas run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
     --num_cores ${num_cores} --chunk_size 500000 \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --advanced --ignore_ambiguous \
@@ -61,7 +61,7 @@ cat ${samples_fp} | xargs -Ixx bash -c \
 
 
 echo "Testing Across-Samples SNV Module"
-midas2 merge_snps --samples_list ${pool_fp} \
+midas merge_snps --samples_list ${pool_fp} \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --advanced --num_cores ${num_cores} --chunk_size 1000000 \
     --genome_coverage 0.7 ${merge_midas_outdir} \
@@ -69,7 +69,7 @@ midas2 merge_snps --samples_list ${pool_fp} \
 
 
 echo "Testing Build Pan-Genome Bowtie2 Databases"
-midas2 build_bowtie2db --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
+midas build_bowtie2db --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --species_profile  ${merge_midas_outdir}/species/species_prevalence.tsv \
     --select_by sample_counts --select_threshold 1 --num_cores ${num_cores} \
     --bt2_indexes_name pangenomes --bt2_indexes_dir ${merge_midas_outdir}/bt2_indexes \
@@ -78,7 +78,7 @@ midas2 build_bowtie2db --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} 
 
 echo "Testing Single-Sample CNV Module With Existing Bowtie Database"
 head -n 2 ${samples_fp} | xargs -Ixx bash -c \
-    "midas2 run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} \
+    "midas run_genes --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz --num_cores ${num_cores} \
      --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} --select_threshold=-1 \
      --prebuilt_bowtie2_indexes ${merge_midas_outdir}/bt2_indexes/pangenomes \
      --prebuilt_bowtie2_species ${merge_midas_outdir}/bt2_indexes/pangenomes.species \
@@ -86,10 +86,10 @@ head -n 2 ${samples_fp} | xargs -Ixx bash -c \
 
 
 echo "Testing Across-Samples CNV Module"
-midas2 merge_genes --samples_list ${pool_fp} --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
+midas merge_genes --samples_list ${pool_fp} --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
      --num_cores ${num_cores} --sample_counts 2 ${merge_midas_outdir} \
      --cluster_level_in 99 --genome_depth 0.4 \
      &> ${logs_dir}/merge_genes_${num_cores}.log
 
 
-echo "MIDAS2 Unit Testing SUCCESS"
+echo "MIDASv3 Unit Testing SUCCESS"

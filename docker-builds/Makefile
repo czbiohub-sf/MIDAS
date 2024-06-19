@@ -1,5 +1,5 @@
-NAME=midas2
-VERSION:=$(shell cat ../midas2/__init__.py  | grep "^version" | awk -F '\"' '{print "v"v$2}')
+NAME=midas
+VERSION:=$(shell cat ../midas/__init__.py  | grep "^version" | awk -F '\"' '{print "v"v$2}')
 
 REGISTRY=zhaoc1/$(NAME)
 
