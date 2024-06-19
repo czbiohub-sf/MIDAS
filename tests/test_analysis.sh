@@ -19,7 +19,9 @@ midas_outdir="${outdir}/single_sample"
 merge_midas_outdir="${outdir}/across_samples"
 
 midas_dbname="uhgg"
-midas_db="${outdir}/midasdb_${midas_dbname}"
+midas_dbname="gtdb"
+#midas_db="${outdir}/midasdb_${midas_dbname}"
+midas_db="/pollard/scratch/czhao/midasdb-gtdb-r202"
 
 logs_dir="${outdir}/logs"
 mkdir -p "${logs_dir}"
@@ -54,7 +56,7 @@ cat ${samples_fp} | xargs -Ixx bash -c \
     "midas run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
     --num_cores ${num_cores} --chunk_size 500000 \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
-    --advanced --ignore_ambiguous \
+    --ignore_ambiguous \
     --select_by median_marker_coverage,unique_fraction_covered \
     --select_threshold=5,0.5 \
     ${midas_outdir} &> ${logs_dir}/xx_snps_${num_cores}.log"
@@ -63,7 +65,7 @@ cat ${samples_fp} | xargs -Ixx bash -c \
 echo "Testing Across-Samples SNV Module"
 midas merge_snps --samples_list ${pool_fp} \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
-    --advanced --num_cores ${num_cores} --chunk_size 1000000 \
+    --num_cores ${num_cores} --chunk_size 1000000 \
     --genome_coverage 0.7 ${merge_midas_outdir} \
     &> ${logs_dir}/merge_snps_${num_cores}.log
 
