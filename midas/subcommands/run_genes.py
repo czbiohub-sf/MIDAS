@@ -82,7 +82,7 @@ def register_args(main_func):
     subparser.add_argument('--select_by',
                            dest='select_by',
                            type=str,
-                           default="median_marker_depth",
+                           default="median_marker_coverage",
                            help="Comma separated columns from species_profile to filter species.")
     subparser.add_argument('--select_threshold',
                            dest='select_threshold',
