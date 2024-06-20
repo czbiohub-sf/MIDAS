@@ -21,6 +21,8 @@ conda create -n midas2 -c zhaoc1 -c conda-forge -c bioconda -c anaconda -c defau
 
 ## MIDAS version 3
 
+[![DOI](https://zenodo.org/badge/195910808.svg)](https://zenodo.org/doi/10.5281/zenodo.6637089)
+
 MIDAS version 3, previously known as MIDAS2, features major updates to its pangenome database. These updates include a refinded curation process and a comprehensive functional annotation pipeline. MIDASDB can construct species-level pangenome databases from external reference genome collections, e.g. UHGG or GTDB, by clustering predicted genes into operational gene families (OGFs) at various average nucleotide identity (ANI) thresholds, with representative gene sequences of each OGF assigned as the centroids by vsearch.
 
 1. MIDAS v3 made significant changes to the curation pipeline aiming to minimize the impact of fragmented gene sequences, spurious gene calls, chimeric assemblies, and redundant OGFs resulting from errors from cross-species contamination and highly fragmented MAGs.
