@@ -1,5 +1,5 @@
-{% set name = "midas" %}
-{% set version = "3.0.0" %}
+{% set name = "midasv3" %}
+{% set version = "1.0.0" %}
 
 package:
   name: {{ name }}

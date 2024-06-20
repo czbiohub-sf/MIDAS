@@ -1,7 +1,7 @@
 from setuptools import setup
 from midas import version
 
-setup(name='midas',
+setup(name='midasv3',
       version=version,
       description='https://midas2.readthedocs.io/en/latest/',
       url='https://github.com/czbiohub/MIDAS',
