@@ -1,5 +1,5 @@
-{% set name = "midas2" %}
-{% set version = "2.0.0.rc3" %}
+{% set name = "midas" %}
+{% set version = "3.0.0" %}
 
 package:
   name: {{ name }}
@@ -41,13 +41,13 @@ requirements:
 
 test:
   imports:
-    - midas2
+    - midas
   commands:
-    - midas2 --version
-    - midas2 run_snps --help
+    - midas --version
+    - midas run_snps --help
 
 about:
-  home: "https://github.com/czbiohub/MIDAS2"
+  home: "https://github.com/czbiohub/MIDAS"
   license: MIT License
   license_family: MIT
-  summary: "Metagenomic Intra-Species Diversity Analysis 2"
+  summary: "Metagenomic Intra-Species Diversity Analysis Version 3"

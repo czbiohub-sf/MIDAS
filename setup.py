@@ -1,14 +1,14 @@
 from setuptools import setup
-from midas2 import version
+from midas import version
 
-setup(name='midas2',
+setup(name='midas',
       version=version,
       description='https://midas2.readthedocs.io/en/latest/',
-      url='https://github.com/czbiohub/MIDAS2',
+      url='https://github.com/czbiohub/MIDAS',
       author='Chunyu Zhao and Boris Dimitrov',
       author_email='chunyu.zhao@czbiohub.org',
       license='MIT',
-      packages=['midas2', 'midas2/subcommands', 'midas2/common', 'midas2/params', 'midas2/models'],
+      packages=['midas', 'midas/subcommands', 'midas/common', 'midas/params', 'midas/models'],
       install_requires=[
         'biopython <= 1.83',
         'numpy >= 1.26.4',
@@ -20,7 +20,7 @@ setup(name='midas2',
       dependency_links=[],
       entry_points={
         'console_scripts': [
-          'midas2 = midas2.__main__:main'
+          'midas = midas.__main__:main'
         ]
       },
       zip_safe=False

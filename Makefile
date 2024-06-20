@@ -1,2 +1,2 @@
 all:
-	pylint midas2
+	pylint midas
