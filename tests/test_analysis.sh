@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -x
 
 if [ $# -ne 1 ]; then
     echo "Usage: $0 NUMCORES"
@@ -20,8 +21,8 @@ merge_midas_outdir="${outdir}/across_samples"
 
 midas_dbname="uhgg"
 midas_dbname="gtdb"
-#midas_db="${outdir}/midasdb_${midas_dbname}"
-midas_db="/pollard/scratch/czhao/midasdb-gtdb-r202"
+midas_db="${outdir}/midasdb_${midas_dbname}"
+
 
 logs_dir="${outdir}/logs"
 mkdir -p "${logs_dir}"
@@ -54,7 +55,7 @@ midas merge_species --samples_list ${pool_fp} --min_cov 2  ${merge_midas_outdir}
 echo "Testing Single-Sample SNV Module"
 cat ${samples_fp} | xargs -Ixx bash -c \
     "midas run_snps --sample_name xx -1 ${testdir}/reads/xx_R1.fastq.gz \
-    --num_cores ${num_cores} --chunk_size 500000 \
+    --num_cores ${num_cores} --chunk_size 1000000 \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
     --ignore_ambiguous \
     --select_by median_marker_coverage,unique_fraction_covered \
@@ -65,7 +66,7 @@ cat ${samples_fp} | xargs -Ixx bash -c \
 echo "Testing Across-Samples SNV Module"
 midas merge_snps --samples_list ${pool_fp} \
     --midasdb_name ${midas_dbname} --midasdb_dir ${midas_db} \
-    --num_cores ${num_cores} --chunk_size 1000000 \
+    --num_cores ${num_cores} --chunk_size 100000 \
     --genome_coverage 0.7 ${merge_midas_outdir} \
     &> ${logs_dir}/merge_snps_${num_cores}.log
 
