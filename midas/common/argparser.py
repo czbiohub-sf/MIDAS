@@ -11,7 +11,7 @@ BATCH_FLAGS_IN_SUBCOMMANDS = False
 def _new(_):
     """Create a single command line parser for all MIDAS subcommands."""
     wiki = "https://midas2.readthedocs.io/en/latest/#"
-    summary = f"Metagenomic Intra-Species Diversity Analysis System (MIDAS), Version 3 {version}"
+    summary = f"Metagenomic Intra-Species Diversity Analysis System (MIDAS), Version {version}"
     parser = ArgumentParser(
         prog="midas",
         description=summary,
