@@ -19,7 +19,7 @@ mkdir -p ${outdir}
 midas_outdir="${outdir}/single_sample"
 merge_midas_outdir="${outdir}/across_samples"
 
-midas_dbname="uhgg"
+midas_dbname="gtdb"
 midas_db="${outdir}/midasdb_${midas_dbname}"
 
 logs_dir="${outdir}/logs"

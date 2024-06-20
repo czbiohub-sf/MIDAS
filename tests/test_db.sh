@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -x
 
 if [ $# -ne 1 ]; then
     echo "Usage: $0 NUMCORES"
@@ -12,8 +13,8 @@ basedir=`pwd`
 testdir="${basedir}/tests"
 echo ${testdir}
 
-db_name="newdb"
-db_dir="$testdir/midasdb_newdb"
+db_name="localdb"
+db_dir="$testdir/midasdb_localdb"
 
 echo "START MIDASv3 Database Build Testing"
 echo "MIDASDB $db_name is built locally at $db_dir"

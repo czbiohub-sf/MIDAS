@@ -46,6 +46,6 @@ dmypy.json
 
 \*.DS_Store
 
-tests/midas2_output/
-tests/midasdb_newdb/
+tests/midas_output/
+tests/midasdb_localdb/
 *scratch/
