@@ -41,3 +41,11 @@ midas run_genes --midasdb_name localdb --midasdb_dir /path/to/midasdb-uhgg-v2 --
 
 
 Details of these updates can be found at the provided [link](https://www.biorxiv.org/content/10.1101/2024.04.10.588779v1).
+
+Quick Installation:
+
+```
+conda config --set channel_priority flexible
+conda create -n midasv3 -c zhaoc1 -c conda-forge -c bioconda -c anaconda -c defaults midasv3=1.0.0
+bash tests/test_analysis.sh 8
+```
