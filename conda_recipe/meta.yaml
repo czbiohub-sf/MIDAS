@@ -6,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  url: https://files.pythonhosted.org/packages/9b/d9/1483cf0910daf7153f89d32a3808400095c58c2ac04e3c4cf27a2fc4be6b/midas2-2.0.0rc3.tar.gz
-  sha256: 2f53490d3e1235b1788a530999da463e301106493cad9a91f96d1cb036f1fa0f
+  url: https://files.pythonhosted.org/packages/e8/d0/e9e385d256f10d7ff8900e33e027cf5463d34a6abc36e2a0af13e853aeb6/midasv3-1.0.0.tar.gz
+  sha256: 66c26cc4456862ac6992bad3662be3adf4364ec6118c43f2dceaa4fdcc3a254d
 
 build:
   noarch: python
