@@ -10,7 +10,7 @@ from midas.params.outputs import genomes as TABLE_OF_CONTENTS
 
 
 DEFAULT_SITE_CHUNK_SIZE = 1000000
-DEFAULT_CHUNKS = [DEFAULT_SITE_CHUNK_SIZE, DEFAULT_SITE_CHUNK_SIZE/10]
+DEFAULT_CHUNKS = [DEFAULT_SITE_CHUNK_SIZE, int(DEFAULT_SITE_CHUNK_SIZE/10)]
 
 
 # The Target Layout of MIDAS Reference Database both on S3 and locally.
@@ -108,7 +108,7 @@ tarball_mapping = {
     "pangenome":                     ["pangenome_centroids", "pangenome_cluster_info", "pangenome_ogf75_info"],
     "markerdb":                      MARKER_FILE_EXTS,
     "markerdb_models":               ["hmm", "hmm_cutoffs"],
-    "chunks":                        ["chunks_centroids", "chunks_sites_run", "chunks_sites_merge"],
+    "chunks":                        ["chunks_sites_run", "chunks_sites_merge"],
 }
 
 

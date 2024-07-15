@@ -1,8 +1,8 @@
 from setuptools import setup
-from midas import version
+#from midas import version
 
 setup(name='midasv3',
-      version=version,
+      version='1.0.1',
       description='https://midas2.readthedocs.io/en/latest/',
       url='https://github.com/czbiohub/MIDAS',
       author='Chunyu Zhao and Boris Dimitrov',
