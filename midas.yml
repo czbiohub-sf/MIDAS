@@ -1,4 +1,4 @@
-name: midasv3.0.0
+name: midasv3.0.1
 channels:
   - conda-forge
   - bioconda
