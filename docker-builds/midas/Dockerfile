@@ -38,7 +38,7 @@ RUN conda install -c conda-forge awscli biopython ncurses time -y
 RUN conda install -c bioconda bowtie2 samtools pysam prokka hs-blastn=0.0.5 vsearch gffutils pybedtools cd-hit -y
 
 RUN pip3 install bottleneck==1.3.6 --upgrade
-RUN pip3 install midas==3.0.0
+RUN pip3 install midasv3
 RUN midas --version
 
 
